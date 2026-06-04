@@ -17,7 +17,7 @@ const NAV_ALL = [
   { href: '/platform',             label: '儀表板',   icon: '📊', roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'SUB_ADMIN'] },
   { href: '/platform/users',       label: '會員管理', icon: '👥', roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'] },
   { href: '/platform/groups',      label: '社群管理', icon: '🏘️', roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'SUB_ADMIN'] },
-  { href: '/platform/products',    label: '商品管理', icon: '📦', roles: ['SUPER_ADMIN'] },
+  { href: '/platform/products',    label: '商品管理', icon: '📦', roles: ['PLATFORM_ADMIN', 'SUB_ADMIN'] },
   { href: '/platform/orders',      label: '訂單管理', icon: '🧾', roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'SUB_ADMIN'] },
   { href: '/platform/commissions', label: '分潤管理', icon: '💰', roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'SUB_ADMIN'] },
   { href: '/platform/finance',     label: '財務總覽', icon: '📈', roles: ['SUPER_ADMIN'] },

@@ -7,7 +7,11 @@ export async function GET(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
 
-  const products = await getAllProductsAdmin()
+  const tenantAdminId = auth.role === 'PLATFORM_ADMIN' ? auth.tenantAdminId
+    : auth.role === 'SUB_ADMIN' ? auth.tenantAdminId
+    : null  // SUPER_ADMIN gets empty list (shouldn't be here)
+
+  const products = await getAllProductsAdmin(tenantAdminId)
   return NextResponse.json({ products })
 }
 
@@ -17,6 +21,6 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth
 
   const body = await req.json()
-  const product = await upsertProduct(undefined, body)
+  const product = await upsertProduct(undefined, { ...body, tenantAdminId: auth.tenantAdminId })
   return NextResponse.json({ product }, { status: 201 })
 }

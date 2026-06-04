@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await batchCreateProducts(rows)
+    const result = await batchCreateProducts(rows, auth.tenantAdminId)
     return NextResponse.json({ message: `成功匯入 ${result.count} 筆商品` })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : '匯入失敗'

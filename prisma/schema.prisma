@@ -146,6 +146,8 @@ model Product {
   costPrice        Int           @map("cost_price")     // 同步自供應商，僅後台可見
   status           ProductStatus @default(ACTIVE)
   sortOrder        Int           @default(0) @map("sort_order")
+  tenantAdminId    String?       @map("tenant_admin_id")
+  tenantAdmin      PlatformAdmin? @relation(fields: [tenantAdminId], references: [id])
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
@@ -421,6 +423,7 @@ model PlatformAdmin {
   createdBy   PlatformAdmin?  @relation("AdminCreated", fields: [createdById], references: [id])
   created     PlatformAdmin[] @relation("AdminCreated")
   ownedGroups Group[]         @relation("TenantGroups")
+  products    Product[]
 
   // Per-tenant integrations
   esimConfig     TenantEsimConfig?

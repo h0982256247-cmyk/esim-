@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useLiff } from '@/components/liff/LiffProvider'
 
 type Country = {
   countryCode: string
@@ -32,24 +33,42 @@ function ProductsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const selectedCountry = searchParams.get('country')
+  const { liff, isReady } = useLiff()
 
   const [countries, setCountries] = useState<Country[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const url = selectedCountry
-      ? `/api/products?country=${selectedCountry}`
-      : '/api/products'
+    if (!isReady) return
 
-    fetch(url)
-      .then(r => r.json())
-      .then(data => {
-        setCountries(data.countries ?? [])
-        setProducts(data.products ?? [])
-      })
-      .finally(() => setLoading(false))
-  }, [selectedCountry])
+    async function loadProducts() {
+      let lineUid: string | undefined
+      try {
+        if (liff) {
+          const profile = await liff.getProfile()
+          lineUid = profile.userId
+        }
+      } catch {
+        // ignore profile fetch error — fall back to no tenant filter
+      }
+
+      const params = new URLSearchParams()
+      if (selectedCountry) params.set('country', selectedCountry)
+      if (lineUid) params.set('lineUid', lineUid)
+      const url = `/api/products${params.toString() ? `?${params.toString()}` : ''}`
+
+      fetch(url)
+        .then(r => r.json())
+        .then(data => {
+          setCountries(data.countries ?? [])
+          setProducts(data.products ?? [])
+        })
+        .finally(() => setLoading(false))
+    }
+
+    loadProducts()
+  }, [selectedCountry, isReady, liff])
 
   if (loading) {
     return (

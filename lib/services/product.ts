@@ -1,11 +1,12 @@
 import { prisma } from '@/lib/db/prisma'
 import { ProductStatus } from '@prisma/client'
 
-export async function getActiveProducts(countryCode?: string) {
+export async function getActiveProducts(countryCode?: string, tenantAdminId?: string | null) {
   return prisma.product.findMany({
     where: {
       status: ProductStatus.ACTIVE,
       ...(countryCode ? { countryCode } : {}),
+      ...(tenantAdminId != null ? { tenantAdminId } : {}),
     },
     orderBy: [{ countryCode: 'asc' }, { displayDays: 'asc' }],
     select: {
@@ -42,9 +43,12 @@ export async function getProductById(id: string) {
   })
 }
 
-export async function getAvailableCountries() {
+export async function getAvailableCountries(tenantAdminId?: string | null) {
   const products = await prisma.product.findMany({
-    where: { status: ProductStatus.ACTIVE },
+    where: {
+      status: ProductStatus.ACTIVE,
+      ...(tenantAdminId != null ? { tenantAdminId } : {}),
+    },
     select: {
       countryCode: true,
       countryNameZh: true,
@@ -59,8 +63,9 @@ export async function getAvailableCountries() {
 
 // ─── Admin operations ────────────────────────────────────────────
 
-export async function getAllProductsAdmin() {
+export async function getAllProductsAdmin(tenantAdminId?: string | null) {
   return prisma.product.findMany({
+    where: tenantAdminId ? { tenantAdminId } : undefined,
     orderBy: [{ countryCode: 'asc' }, { displayDays: 'asc' }],
     include: {
       supplierProduct: {
@@ -75,13 +80,14 @@ export type ProductUpsertInput = {
   countryCode: string
   countryNameZh: string
   countryNameEn: string
-  countryFlag?: string
+  countryFlag?: string | null
   displayDays: number
-  dataCapacity?: string
-  description?: string
+  dataCapacity?: string | null
+  description?: string | null
   sellPrice: number
   costPrice: number
   sortOrder?: number
+  tenantAdminId?: string | null
 }
 
 export async function upsertProduct(id: string | undefined, input: ProductUpsertInput) {
@@ -112,11 +118,11 @@ export type CsvProductRow = {
 }
 
 // All-or-nothing: any DB error rolls back the entire batch
-export async function batchCreateProducts(rows: CsvProductRow[]): Promise<{ count: number }> {
+export async function batchCreateProducts(rows: CsvProductRow[], tenantAdminId?: string | null): Promise<{ count: number }> {
   return prisma.$transaction(async tx => {
     let count = 0
     for (const row of rows) {
-      await tx.product.create({ data: row })
+      await tx.product.create({ data: { ...row, tenantAdminId: tenantAdminId ?? null } })
       count++
     }
     return { count }
