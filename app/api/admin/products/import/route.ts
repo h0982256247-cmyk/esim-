@@ -8,7 +8,6 @@ const HEADER_ALIAS: Record<string, string> = {
   '供應商方案id':   'supplierSkuId',
   '供應商方案ID':   'supplierSkuId',
   'plan_code':      'planCode',
-  'plancode':       'planCode',
   '商品名稱':       'productName',
   '適用地區':       'countryNameZh',
   '是否為原生卡':   'isNativeSim',
