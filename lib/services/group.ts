@@ -87,6 +87,33 @@ export async function setRebateRate(groupId: string, ownerId: string, rebateRate
   })
 }
 
+// ─── 平台後台管理員設定讓利（受 maxRebateRate 限制）─────────────────
+
+export async function adminSetRebateRate(
+  groupId: string,
+  rebateRate: number,
+  tenantAdminId: string | null,
+) {
+  // 取得該 Platform Admin 的讓利上限
+  let ceiling = 0.30
+  if (tenantAdminId) {
+    const admin = await prisma.platformAdmin.findUnique({
+      where: { id: tenantAdminId },
+      select: { maxRebateRate: true },
+    })
+    if (admin) ceiling = Number(admin.maxRebateRate)
+  }
+
+  if (rebateRate < 0 || rebateRate > ceiling) {
+    throw new Error(`讓利比例不可超過上限 ${(ceiling * 100).toFixed(0)}%`)
+  }
+
+  return prisma.group.update({
+    where: { id: groupId },
+    data: { rebateRate },
+  })
+}
+
 // ─── 社群主後台：發送活動券 ───────────────────────────────────────
 
 export async function issueActivityCoupon(

@@ -12,9 +12,22 @@ export async function GET(req: NextRequest) {
   const statusParam = req.nextUrl.searchParams.get('status')
   const pageSize = 20
 
-  const where = statusParam && Object.values(OrderStatus).includes(statusParam as OrderStatus)
-    ? { status: statusParam as OrderStatus }
-    : {}
+  const tenantAdminId = auth.tenantAdminId
+  const tenantWhere = tenantAdminId ? {
+    user: {
+      OR: [
+        { groupMembership: { group: { tenantAdminId } } },
+        { ownedGroup: { tenantAdminId } },
+      ],
+    },
+  } : {}
+
+  const where = {
+    ...(statusParam && Object.values(OrderStatus).includes(statusParam as OrderStatus)
+      ? { status: statusParam as OrderStatus }
+      : {}),
+    ...tenantWhere,
+  }
 
   const [orders, total] = await Promise.all([
     prisma.order.findMany({

@@ -158,9 +158,12 @@ export async function cancelCommission(orderId: string): Promise<void> {
 
 // ─── Admin：所有待結算分潤 ────────────────────────────────────────
 
-export async function getAllPendingCommissions() {
+export async function getAllPendingCommissions(tenantAdminId?: string | null) {
   return prisma.commission.findMany({
-    where: { status: CommissionStatus.PENDING },
+    where: {
+      status: CommissionStatus.PENDING,
+      ...(tenantAdminId ? { group: { tenantAdminId } } : {}),
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       group: { select: { name: true } },

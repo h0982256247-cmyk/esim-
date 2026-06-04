@@ -14,6 +14,11 @@ type Group = {
   _count: { members: number }
 }
 
+type CurrentUser = {
+  role: string
+  maxRebateRate: number
+}
+
 const STATUS_OPTS = ['', 'PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']
 const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   PENDING: { text: '審核中', color: 'text-yellow-600 bg-yellow-50' },
@@ -34,6 +39,13 @@ function GroupsContent() {
   const [groups, setGroups] = useState<Group[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+
+  // Inline rebate edit
+  const [editingRebate, setEditingRebate] = useState<string | null>(null)
+  const [rebateInput, setRebateInput] = useState('')
+  const [savingRebate, setSavingRebate] = useState(false)
+  const [rebateError, setRebateError] = useState<string | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -44,6 +56,19 @@ function GroupsContent() {
   }
 
   useEffect(load, [statusFilter, router])
+
+  useEffect(() => {
+    fetch('/api/platform/auth/me')
+      .then(r => r.json())
+      .then(d => {
+        if (d.admin) {
+          setCurrentUser({
+            role: d.admin.role,
+            maxRebateRate: d.admin.maxRebateRate != null ? Number(d.admin.maxRebateRate) : 0.30,
+          })
+        }
+      })
+  }, [])
 
   const handleApprove = async (id: string) => {
     setActionLoading(id + '_approve')
@@ -58,6 +83,38 @@ function GroupsContent() {
     setActionLoading(null)
     load()
   }
+
+  const startEditRebate = (g: Group) => {
+    setEditingRebate(g.id)
+    setRebateInput(String(Math.round(Number(g.rebateRate) * 100)))
+    setRebateError(null)
+  }
+
+  const handleSaveRebate = async (groupId: string) => {
+    setSavingRebate(true)
+    setRebateError(null)
+    const pct = parseFloat(rebateInput)
+    const ceiling = currentUser?.maxRebateRate ?? 0.30
+    if (isNaN(pct) || pct < 0 || pct > ceiling * 100) {
+      setRebateError(`請輸入 0 ~ ${Math.round(ceiling * 100)} 之間的數值`)
+      setSavingRebate(false)
+      return
+    }
+    const r = await fetch(`/api/admin/groups/${groupId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rebateRate: pct / 100 }),
+    }).then(x => x.json())
+    setSavingRebate(false)
+    if (r.ok) {
+      setEditingRebate(null)
+      load()
+    } else {
+      setRebateError(r.error ?? '設定失敗')
+    }
+  }
+
+  const canEditRebate = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'PLATFORM_ADMIN'
 
   return (
     <div>
@@ -81,7 +138,7 @@ function GroupsContent() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                {['社群', '社群主', '成員', '讓利', '狀態', '操作'].map(h => (
+                {['社群', '社群主', '成員', '讓利比例', '狀態', '操作'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500">{h}</th>
                 ))}
               </tr>
@@ -89,6 +146,7 @@ function GroupsContent() {
             <tbody className="divide-y">
               {groups.map(g => {
                 const s = STATUS_LABEL[g.status] ?? { text: g.status, color: 'text-gray-500 bg-gray-100' }
+                const ceiling = currentUser?.maxRebateRate ?? 0.30
                 return (
                   <tr key={g.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
@@ -97,7 +155,55 @@ function GroupsContent() {
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{g.owner.displayName}</td>
                     <td className="px-4 py-3 text-xs">{g._count.members} 人</td>
-                    <td className="px-4 py-3 text-xs">{Math.round(Number(g.rebateRate) * 100)}%</td>
+
+                    {/* 讓利比例欄位 */}
+                    <td className="px-4 py-3 text-xs">
+                      {editingRebate === g.id ? (
+                        <div className="flex flex-col gap-1 min-w-[160px]">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={Math.round(ceiling * 100)}
+                              step={1}
+                              value={rebateInput}
+                              onChange={e => setRebateInput(e.target.value)}
+                              className="w-14 border rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <span className="text-gray-400">%</span>
+                            <button
+                              onClick={() => handleSaveRebate(g.id)}
+                              disabled={savingRebate}
+                              className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded disabled:opacity-50"
+                            >
+                              {savingRebate ? '…' : '存'}
+                            </button>
+                            <button
+                              onClick={() => { setEditingRebate(null); setRebateError(null) }}
+                              className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <p className="text-gray-400" style={{ fontSize: '10px' }}>上限：{Math.round(ceiling * 100)}%</p>
+                          {rebateError && <p className="text-red-500" style={{ fontSize: '10px' }}>{rebateError}</p>}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium">{Math.round(Number(g.rebateRate) * 100)}%</span>
+                          {canEditRebate && g.status === 'APPROVED' && (
+                            <button
+                              onClick={() => startEditRebate(g)}
+                              className="text-gray-300 hover:text-blue-500 transition text-xs leading-none"
+                              title="設定讓利比例"
+                            >
+                              ✏️
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.color}`}>{s.text}</span>
                     </td>

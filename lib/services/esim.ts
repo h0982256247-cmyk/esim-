@@ -11,7 +11,17 @@ function buildWmSignature(merchantId: string, deptId: string, token: string, bod
   return crypto.createHash('sha1').update(raw).digest('hex')
 }
 
-function getWmConfig() {
+async function getWmConfig(tenantAdminId?: string | null) {
+  if (tenantAdminId) {
+    const cfg = await prisma.tenantEsimConfig.findUnique({
+      where: { adminId: tenantAdminId },
+      select: { apiUrl: true, merchantId: true, deptId: true, token: true, isActive: true },
+    })
+    if (cfg && cfg.isActive) {
+      return { apiUrl: cfg.apiUrl, merchantId: cfg.merchantId, deptId: cfg.deptId, token: cfg.token }
+    }
+  }
+
   const apiUrl = process.env.NODE_ENV === 'production'
     ? process.env.ESIM_SUPPLIER_API_URL!
     : (process.env.ESIM_SUPPLIER_API_URL_TEST ?? process.env.ESIM_SUPPLIER_API_URL!)
@@ -23,8 +33,8 @@ function getWmConfig() {
   return { apiUrl, merchantId, deptId, token }
 }
 
-async function wmPost(endpoint: string, payload: object): Promise<unknown> {
-  const { apiUrl, merchantId, deptId, token } = getWmConfig()
+async function wmPost(endpoint: string, payload: object, tenantAdminId?: string | null): Promise<unknown> {
+  const { apiUrl, merchantId, deptId, token } = await getWmConfig(tenantAdminId)
   const body = JSON.stringify(payload)
   const sign = buildWmSignature(merchantId, deptId, token, body)
 
@@ -63,9 +73,9 @@ interface WmEsimResult {
   activationEnd?: Date
 }
 
-async function fetchEsimCodes(wmOrderId: string): Promise<WmEsimResult | null> {
+async function fetchEsimCodes(wmOrderId: string, tenantAdminId?: string | null): Promise<WmEsimResult | null> {
   try {
-    const data = await wmPost('/api/order/esim/query', { orderId: wmOrderId }) as Record<string, unknown>
+    const data = await wmPost('/api/order/esim/query', { orderId: wmOrderId }, tenantAdminId) as Record<string, unknown>
 
     if (!data || data.code !== '0000') return null
 
@@ -96,7 +106,7 @@ async function fetchEsimCodes(wmOrderId: string): Promise<WmEsimResult | null> {
 
 // ─── 下單到世界移動 ───────────────────────────────────────────────
 
-async function placeWmOrder(orderId: string): Promise<string | null> {
+async function placeWmOrder(orderId: string, tenantAdminId?: string | null): Promise<string | null> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { orderItems: { include: { product: true } } },
@@ -109,7 +119,7 @@ async function placeWmOrder(orderId: string): Promise<string | null> {
       outOrderId: orderId,
       skuId: item.product.supplierSkuId,
       qty: item.qty,
-    }) as Record<string, unknown>
+    }, tenantAdminId) as Record<string, unknown>
 
     if (data.code !== '0000') return null
     return (data.data as Record<string, unknown>)?.orderId as string ?? null
@@ -128,16 +138,28 @@ async function sleep(ms: number) {
 }
 
 export async function triggerEsimActivation(orderId: string): Promise<void> {
-  // 取得 userId 和商品名稱供通知用
+  // 取得 userId 和商品名稱供通知用，以及 tenantAdminId 供 API 選擇用
   const orderInfo = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { userId: true, orderItems: { select: { productName: true } } },
+    select: {
+      userId: true,
+      orderItems: { select: { productName: true } },
+      user: {
+        select: {
+          groupMembership: { select: { group: { select: { tenantAdminId: true } } } },
+          ownedGroup: { select: { tenantAdminId: true } },
+        },
+      },
+    },
   })
   const userId = orderInfo?.userId ?? ''
   const productName = orderInfo?.orderItems[0]?.productName ?? 'eSIM'
+  const tenantAdminId = orderInfo?.user?.groupMembership?.group?.tenantAdminId
+    ?? orderInfo?.user?.ownedGroup?.tenantAdminId
+    ?? null
 
   // 1. 下單到世界移動
-  const wmOrderId = await placeWmOrder(orderId)
+  const wmOrderId = await placeWmOrder(orderId, tenantAdminId)
   if (!wmOrderId) {
     await markOrderEsimPending(orderId)
     notifyEsimPending(userId, productName).catch(() => {})
@@ -157,7 +179,7 @@ export async function triggerEsimActivation(orderId: string): Promise<void> {
       await incrementRetryCount(orderId)
     }
 
-    const esimData = await fetchEsimCodes(wmOrderId)
+    const esimData = await fetchEsimCodes(wmOrderId, tenantAdminId)
     if (esimData) {
       await markOrderCompleted(orderId, esimData)
       notifyEsimReady(userId, productName).catch(() => {})

@@ -1,5 +1,7 @@
 // TapPay Pay by Prime API
 
+import { prisma } from '@/lib/db/prisma'
+
 export interface TapPayChargeInput {
   prime: string
   orderId: string
@@ -16,7 +18,22 @@ export type TapPayChargeResult =
   | { ok: true; recTradeId: string; bankTransactionId: string }
   | { ok: false; message: string }
 
-function getConfig() {
+async function getConfig(tenantAdminId?: string | null, gateway: string = 'tappay_credit') {
+  if (tenantAdminId) {
+    const cfg = await prisma.tenantPaymentConfig.findFirst({
+      where: { adminId: tenantAdminId, gateway, isActive: true },
+    })
+    if (cfg) {
+      return {
+        partnerKey: cfg.partnerKey,
+        merchantId: cfg.merchantId,
+        baseUrl: cfg.env === 'production'
+          ? 'https://prod.tappaysdk.com/tpc'
+          : 'https://sandbox.tappaysdk.com/tpc',
+      }
+    }
+  }
+
   const partnerKey = process.env.TAPPAY_PARTNER_KEY
   const merchantId = process.env.TAPPAY_MERCHANT_ID
   const env = process.env.TAPPAY_ENV === 'production' ? 'production' : 'sandbox'
@@ -30,8 +47,8 @@ function getConfig() {
   return { partnerKey, merchantId, baseUrl }
 }
 
-export async function tapPayCharge(input: TapPayChargeInput): Promise<TapPayChargeResult> {
-  const { partnerKey, merchantId, baseUrl } = getConfig()
+export async function tapPayCharge(input: TapPayChargeInput, tenantAdminId?: string | null): Promise<TapPayChargeResult> {
+  const { partnerKey, merchantId, baseUrl } = await getConfig(tenantAdminId, 'tappay_credit')
 
   const body = {
     prime: input.prime,
@@ -69,8 +86,18 @@ export async function tapPayCharge(input: TapPayChargeInput): Promise<TapPayChar
 // ─── Webhook 驗章 ─────────────────────────────────────────────────
 // TapPay 未提供 HMAC signature；防偽靠 partner_key header 比對
 
-export function verifyTapPayWebhook(req: Request): boolean {
+export async function verifyTapPayWebhook(req: Request, tenantAdminId?: string | null): Promise<boolean> {
   const key = req.headers.get('x-api-key')
+
+  if (tenantAdminId) {
+    const cfg = await prisma.tenantPaymentConfig.findFirst({
+      where: { adminId: tenantAdminId, gateway: 'tappay_credit', isActive: true },
+    })
+    if (cfg) {
+      return key === cfg.partnerKey
+    }
+  }
+
   return key === process.env.TAPPAY_PARTNER_KEY
 }
 

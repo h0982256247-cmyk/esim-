@@ -11,14 +11,27 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q') ?? ''
   const pageSize = 20
 
+  const tenantAdminId = auth.tenantAdminId
+  const tenantWhere = tenantAdminId ? {
+    OR: [
+      { groupMembership: { group: { tenantAdminId } } },
+      { ownedGroup: { tenantAdminId } },
+    ],
+  } : {}
+
   const where = q
     ? {
-        OR: [
-          { displayName: { contains: q, mode: 'insensitive' as const } },
-          { lineUid: { contains: q } },
+        AND: [
+          tenantWhere,
+          {
+            OR: [
+              { displayName: { contains: q, mode: 'insensitive' as const } },
+              { lineUid: { contains: q } },
+            ],
+          },
         ],
       }
-    : {}
+    : tenantWhere
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({

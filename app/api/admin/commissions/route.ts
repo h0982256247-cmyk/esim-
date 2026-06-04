@@ -7,6 +7,6 @@ export async function GET(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
 
-  const commissions = await getAllPendingCommissions()
+  const commissions = await getAllPendingCommissions(auth.tenantAdminId)
   return NextResponse.json({ commissions })
 }

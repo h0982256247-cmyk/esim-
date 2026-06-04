@@ -405,6 +405,8 @@ model PlatformAdmin {
   modules      Json              @default("[]") // 可存取的模組清單
   isActive     Boolean           @default(true) @map("is_active")
   createdById  String?           @map("created_by_id")
+  // 讓利上限（由 Super Admin 設定，Platform Admin 不可超過此值）
+  maxRebateRate Decimal          @default(0.30) @db.Decimal(4, 2) @map("max_rebate_rate")
   // 白牌品牌設定（僅 PLATFORM_ADMIN 有效）
   tenantSlug   String?           @unique @map("tenant_slug")   // URL 識別碼，如 bii-travel
   brandName    String?           @map("brand_name")            // 顯示名稱，如「Bii旅」
@@ -419,7 +421,49 @@ model PlatformAdmin {
   created     PlatformAdmin[] @relation("AdminCreated")
   ownedGroups Group[]         @relation("TenantGroups")
 
+  // Per-tenant integrations
+  esimConfig     TenantEsimConfig?
+  paymentConfigs TenantPaymentConfig[]
+
   @@map("platform_admins")
+}
+
+// ============================================================
+// 白牌整合設定
+// ============================================================
+
+model TenantEsimConfig {
+  id         String   @id @default(cuid())
+  adminId    String   @unique @map("admin_id")
+  provider   String   @default("worldmove")
+  apiUrl     String   @map("api_url")
+  merchantId String   @map("merchant_id")
+  deptId     String   @map("dept_id")
+  token      String
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  admin PlatformAdmin @relation(fields: [adminId], references: [id])
+
+  @@map("tenant_esim_configs")
+}
+
+model TenantPaymentConfig {
+  id         String   @id @default(cuid())
+  adminId    String   @map("admin_id")
+  gateway    String   // "tappay_credit" | "tappay_linepay"
+  partnerKey String   @map("partner_key")
+  merchantId String   @map("merchant_id")
+  env        String   @default("sandbox") // "sandbox" | "production"
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  admin PlatformAdmin @relation(fields: [adminId], references: [id])
+
+  @@unique([adminId, gateway])
+  @@map("tenant_payment_configs")
 }
 
 enum PlatformAdminRole {

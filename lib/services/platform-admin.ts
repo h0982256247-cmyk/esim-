@@ -60,6 +60,17 @@ export async function toggleAdminActive(adminId: string, isActive: boolean) {
   })
 }
 
+// 僅 SUPER_ADMIN 可調整某個 Platform Admin 的讓利上限
+export async function updateMaxRebateRate(adminId: string, maxRebateRate: number) {
+  if (maxRebateRate < 0 || maxRebateRate > 0.30) {
+    throw new Error('讓利上限須介於 0 ~ 0.30')
+  }
+  return prisma.platformAdmin.update({
+    where: { id: adminId },
+    data: { maxRebateRate },
+  })
+}
+
 export async function getAllAdmins(callerId: string, callerRole: string) {
   const where = callerRole === 'SUPER_ADMIN'
     ? undefined
@@ -71,6 +82,7 @@ export async function getAllAdmins(callerId: string, callerRole: string) {
     select: {
       id: true, email: true, name: true, role: true,
       isActive: true, modules: true, createdAt: true,
+      maxRebateRate: true,
       parent: { select: { name: true } },
     },
   })
@@ -83,6 +95,22 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     ? { status: 'PENDING' as const, tenantAdminId }
     : { status: 'PENDING' as const }
 
+  const userTenantWhere = tenantAdminId != null ? {
+    OR: [
+      { groupMembership: { group: { tenantAdminId } } },
+      { ownedGroup: { tenantAdminId } },
+    ],
+  } : undefined
+
+  const orderTenantWhere = tenantAdminId != null ? {
+    user: {
+      OR: [
+        { groupMembership: { group: { tenantAdminId } } },
+        { ownedGroup: { tenantAdminId } },
+      ],
+    },
+  } : {}
+
   const [
     totalUsers,
     totalOrders,
@@ -91,18 +119,21 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     pendingCommissions,
     esimPendingOrders,
   ] = await Promise.all([
-    prisma.user.count(),
-    prisma.order.count(),
+    prisma.user.count({ where: userTenantWhere }),
+    prisma.order.count({ where: orderTenantWhere }),
     prisma.order.aggregate({
-      where: { status: { in: ['PAID', 'COMPLETED'] } },
+      where: { status: { in: ['PAID', 'COMPLETED'] }, ...orderTenantWhere },
       _sum: { totalPaid: true },
     }),
     prisma.group.count({ where: pendingGroupsWhere }),
     prisma.commission.aggregate({
-      where: { status: 'PENDING' },
+      where: {
+        status: 'PENDING',
+        ...(tenantAdminId ? { group: { tenantAdminId } } : {}),
+      },
       _sum: { commissionAmount: true },
     }),
-    prisma.order.count({ where: { status: 'ESIM_PENDING' } }),
+    prisma.order.count({ where: { status: 'ESIM_PENDING', ...orderTenantWhere } }),
   ])
 
   return {
