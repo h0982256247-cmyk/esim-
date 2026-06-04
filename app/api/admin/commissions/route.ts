@@ -7,6 +7,10 @@ export async function GET(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
 
-  const commissions = await getAllPendingCommissions(auth.tenantAdminId)
+  const tenantAdminId = auth.role === 'SUPER_ADMIN'
+    ? (req.nextUrl.searchParams.get('tenantAdminId') || null)
+    : auth.tenantAdminId
+
+  const commissions = await getAllPendingCommissions(tenantAdminId)
   return NextResponse.json({ commissions })
 }

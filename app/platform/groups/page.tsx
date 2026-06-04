@@ -12,6 +12,7 @@ type Group = {
   createdAt: string
   owner: { displayName: string; lineUid: string }
   _count: { members: number }
+  tenantAdmin: { name: string; brandName: string | null } | null
 }
 
 type CurrentUser = {
@@ -41,6 +42,9 @@ function GroupsContent() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
 
+  const [platformAdmins, setPlatformAdmins] = useState<{ id: string; name: string; brandName: string | null }[]>([])
+  const [filterTenantId, setFilterTenantId] = useState<string>('')
+
   // Inline rebate edit
   const [editingRebate, setEditingRebate] = useState<string | null>(null)
   const [rebateInput, setRebateInput] = useState('')
@@ -49,13 +53,13 @@ function GroupsContent() {
 
   const load = () => {
     setLoading(true)
-    fetch(`/api/admin/groups${statusFilter ? `?status=${statusFilter}` : ''}`)
+    fetch(`/api/admin/groups${statusFilter ? `?status=${statusFilter}` : ''}${filterTenantId ? `${statusFilter ? '&' : '?'}tenantAdminId=${filterTenantId}` : ''}`)
       .then(r => r.status === 401 ? (router.replace('/platform/login'), null) : r.json())
       .then(d => { if (d) setGroups(d.groups) })
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [statusFilter, router])
+  useEffect(load, [statusFilter, filterTenantId, router])
 
   useEffect(() => {
     fetch('/api/platform/auth/me')
@@ -66,6 +70,11 @@ function GroupsContent() {
             role: d.admin.role,
             maxRebateRate: d.admin.maxRebateRate != null ? Number(d.admin.maxRebateRate) : 0.30,
           })
+          if (d.admin.role === 'SUPER_ADMIN') {
+            fetch('/api/platform/admins').then(r => r.json()).then(a => {
+              setPlatformAdmins((a.admins ?? []).filter((x: { role: string }) => x.role === 'PLATFORM_ADMIN'))
+            })
+          }
         }
       })
   }, [])
@@ -120,7 +129,19 @@ function GroupsContent() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">社群管理</h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {currentUser?.role === 'SUPER_ADMIN' && platformAdmins.length > 0 && (
+            <select
+              value={filterTenantId}
+              onChange={e => { setFilterTenantId(e.target.value) }}
+              className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">全部平台</option>
+              {platformAdmins.map(a => (
+                <option key={a.id} value={a.id}>{a.brandName ?? a.name}</option>
+              ))}
+            </select>
+          )}
           {STATUS_OPTS.map(s => (
             <button
               key={s}
@@ -141,6 +162,9 @@ function GroupsContent() {
                 {['社群', '社群主', '成員', '讓利比例', '狀態', '操作'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500">{h}</th>
                 ))}
+                {currentUser?.role === 'SUPER_ADMIN' && (
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">所屬平台</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -227,6 +251,11 @@ function GroupsContent() {
                         </div>
                       )}
                     </td>
+                    {currentUser?.role === 'SUPER_ADMIN' && (
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {g.tenantAdmin?.brandName ?? g.tenantAdmin?.name ?? '—'}
+                      </td>
+                    )}
                   </tr>
                 )
               })}

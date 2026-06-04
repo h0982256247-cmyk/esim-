@@ -241,6 +241,7 @@ export async function getAllGroups(status?: GroupStatus, tenantAdminId?: string 
     orderBy: { createdAt: 'desc' },
     include: {
       owner: { select: { displayName: true, lineUid: true } },
+      tenantAdmin: { select: { name: true, brandName: true } },
       _count: { select: { members: true } },
     },
   })

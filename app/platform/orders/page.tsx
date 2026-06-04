@@ -41,15 +41,32 @@ function OrdersContent() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
+  const [currentRole, setCurrentRole] = useState<string | null>(null)
+  const [platformAdmins, setPlatformAdmins] = useState<{ id: string; name: string; brandName: string | null }[]>([])
+  const [filterTenantId, setFilterTenantId] = useState<string>('')
+
+  useEffect(() => {
+    fetch('/api/platform/auth/me').then(r => r.json()).then(d => {
+      if (d.admin) {
+        setCurrentRole(d.admin.role)
+        if (d.admin.role === 'SUPER_ADMIN') {
+          fetch('/api/platform/admins').then(r => r.json()).then(a => {
+            setPlatformAdmins((a.admins ?? []).filter((x: { role: string }) => x.role === 'PLATFORM_ADMIN'))
+          })
+        }
+      }
+    })
+  }, [])
+
   const load = () => {
     setLoading(true)
-    fetch(`/api/platform/orders?page=${page}${statusFilter ? `&status=${statusFilter}` : ''}`)
+    fetch(`/api/platform/orders?page=${page}${statusFilter ? `&status=${statusFilter}` : ''}${filterTenantId ? `&tenantAdminId=${filterTenantId}` : ''}`)
       .then(r => r.status === 401 ? (router.replace('/platform/login'), null) : r.json())
       .then(d => { if (d) { setOrders(d.orders); setTotal(d.total) } })
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [page, statusFilter, router])
+  useEffect(load, [page, statusFilter, filterTenantId, router])
 
   const handleRetry = async (id: string) => {
     setActionLoading(id)
@@ -83,8 +100,8 @@ function OrdersContent() {
         <span className="text-sm text-gray-400">共 {total} 筆</span>
       </div>
 
-      {/* 狀態篩選 */}
-      <div className="flex flex-wrap gap-2 mb-5">
+      {/* 篩選列 */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
         {STATUS_OPTS.map(s => (
           <button
             key={s}
@@ -94,6 +111,18 @@ function OrdersContent() {
             {s ? (STATUS_LABEL[s]?.text ?? s) : '全部'}
           </button>
         ))}
+        {currentRole === 'SUPER_ADMIN' && platformAdmins.length > 0 && (
+          <select
+            value={filterTenantId}
+            onChange={e => { setFilterTenantId(e.target.value) }}
+            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="">全部平台</option>
+            {platformAdmins.map(a => (
+              <option key={a.id} value={a.id}>{a.brandName ?? a.name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {loading ? <p className="text-gray-400 text-sm">載入中…</p> : (

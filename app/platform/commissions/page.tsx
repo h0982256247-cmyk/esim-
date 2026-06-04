@@ -21,12 +21,29 @@ export default function PlatformCommissionsPage() {
   const [settling, setSettling] = useState(false)
   const [settleMsg, setSettleMsg] = useState<string | null>(null)
 
+  const [currentRole, setCurrentRole] = useState<string | null>(null)
+  const [platformAdmins, setPlatformAdmins] = useState<{ id: string; name: string; brandName: string | null }[]>([])
+  const [filterTenantId, setFilterTenantId] = useState<string>('')
+
   useEffect(() => {
-    fetch('/api/admin/commissions')
+    fetch('/api/platform/auth/me').then(r => r.json()).then(d => {
+      if (d.admin) {
+        setCurrentRole(d.admin.role)
+        if (d.admin.role === 'SUPER_ADMIN') {
+          fetch('/api/platform/admins').then(r => r.json()).then(a => {
+            setPlatformAdmins((a.admins ?? []).filter((x: { role: string }) => x.role === 'PLATFORM_ADMIN'))
+          })
+        }
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    fetch(`/api/admin/commissions${filterTenantId ? `?tenantAdminId=${filterTenantId}` : ''}`)
       .then(r => r.status === 401 ? (router.replace('/platform/login'), null) : r.json())
       .then(d => { if (d) setCommissions(d.commissions) })
       .finally(() => setLoading(false))
-  }, [router])
+  }, [filterTenantId, router])
 
   const handleSettle = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,7 +62,21 @@ export default function PlatformCommissionsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">分潤管理</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">分潤管理</h1>
+        {currentRole === 'SUPER_ADMIN' && platformAdmins.length > 0 && (
+          <select
+            value={filterTenantId}
+            onChange={e => { setFilterTenantId(e.target.value) }}
+            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="">全部平台</option>
+            {platformAdmins.map(a => (
+              <option key={a.id} value={a.id}>{a.brandName ?? a.name}</option>
+            ))}
+          </select>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="bg-white rounded-2xl border p-5 shadow-sm">

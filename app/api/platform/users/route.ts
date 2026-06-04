@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q') ?? ''
   const pageSize = 20
 
-  const tenantAdminId = auth.tenantAdminId
+  // SUPER_ADMIN 可透過 query param 指定要查哪個 Platform Admin
+  const tenantAdminId = auth.role === 'SUPER_ADMIN'
+    ? (req.nextUrl.searchParams.get('tenantAdminId') || null)
+    : auth.tenantAdminId
   const tenantWhere: Prisma.UserWhereInput = tenantAdminId ? {
     OR: [
       { groupMembership: { group: { tenantAdminId } } },

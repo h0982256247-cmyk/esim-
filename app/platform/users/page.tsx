@@ -31,13 +31,30 @@ function UsersContent() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState(q)
 
+  const [currentRole, setCurrentRole] = useState<string | null>(null)
+  const [platformAdmins, setPlatformAdmins] = useState<{ id: string; name: string; brandName: string | null }[]>([])
+  const [filterTenantId, setFilterTenantId] = useState<string>('')
+
+  useEffect(() => {
+    fetch('/api/platform/auth/me').then(r => r.json()).then(d => {
+      if (d.admin) {
+        setCurrentRole(d.admin.role)
+        if (d.admin.role === 'SUPER_ADMIN') {
+          fetch('/api/platform/admins').then(r => r.json()).then(a => {
+            setPlatformAdmins((a.admins ?? []).filter((x: { role: string }) => x.role === 'PLATFORM_ADMIN'))
+          })
+        }
+      }
+    })
+  }, [])
+
   useEffect(() => {
     setLoading(true)
-    fetch(`/api/platform/users?page=${page}&q=${encodeURIComponent(q)}`)
+    fetch(`/api/platform/users?page=${page}&q=${encodeURIComponent(q)}${filterTenantId ? `&tenantAdminId=${filterTenantId}` : ''}`)
       .then(r => r.status === 401 ? (router.replace('/platform/login'), null) : r.json())
       .then(d => { if (d) { setUsers(d.users); setTotal(d.total) } })
       .finally(() => setLoading(false))
-  }, [page, q, router])
+  }, [page, q, filterTenantId, router])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,7 +67,21 @@ function UsersContent() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">會員管理</h1>
-        <span className="text-sm text-gray-400">共 {total} 位</span>
+        <div className="flex items-center gap-3">
+          {currentRole === 'SUPER_ADMIN' && platformAdmins.length > 0 && (
+            <select
+              value={filterTenantId}
+              onChange={e => { setFilterTenantId(e.target.value); router.push(`/platform/users?page=1&q=${encodeURIComponent(q)}`) }}
+              className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">全部平台</option>
+              {platformAdmins.map(a => (
+                <option key={a.id} value={a.id}>{a.brandName ?? a.name}</option>
+              ))}
+            </select>
+          )}
+          <span className="text-sm text-gray-400">共 {total} 位</span>
+        </div>
       </div>
 
       <form onSubmit={handleSearch} className="flex gap-2 mb-5">

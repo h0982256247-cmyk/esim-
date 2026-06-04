@@ -13,6 +13,10 @@ export async function GET(req: NextRequest) {
     ? (statusParam as GroupStatus)
     : undefined
 
-  const groups = await getAllGroups(status, auth.tenantAdminId)
+  const tenantAdminId = auth.role === 'SUPER_ADMIN'
+    ? (req.nextUrl.searchParams.get('tenantAdminId') || null)
+    : auth.tenantAdminId
+
+  const groups = await getAllGroups(status, tenantAdminId)
   return NextResponse.json({ groups })
 }

@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
   const statusParam = req.nextUrl.searchParams.get('status')
   const pageSize = 20
 
-  const tenantAdminId = auth.tenantAdminId
+  const tenantAdminId = auth.role === 'SUPER_ADMIN'
+    ? (req.nextUrl.searchParams.get('tenantAdminId') || null)
+    : auth.tenantAdminId
   const tenantWhere: Prisma.OrderWhereInput = tenantAdminId ? {
     user: {
       OR: [
