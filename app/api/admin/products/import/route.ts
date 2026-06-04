@@ -60,6 +60,14 @@ function parseCountryFromPlanCode(planCode: string): string | null {
   return m ? m[1].toUpperCase() : null
 }
 
+// ISO 3166-1 alpha-2 → 國旗 emoji（Regional Indicator）
+function countryCodeToFlag(code: string): string {
+  if (!code || code.length !== 2) return ''
+  const [a, b] = code.toUpperCase().split('')
+  const toRI = (c: string) => String.fromCodePoint(c.codePointAt(0)! + 127397)
+  return toRI(a) + toRI(b)
+}
+
 // 正規化 header（去空白、小寫、去括號）
 function normalizeHeader(h: string): string {
   return h.trim().toLowerCase().replace(/[\s()（）]/g, '')
@@ -115,7 +123,8 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
     if (!countryCode && planCode) countryCode = parseCountryFromPlanCode(planCode) ?? ''
 
     const countryNameEn = get('countryNameEn') || ''
-    const countryFlag   = get('countryFlag') || ''
+    // countryFlag: explicit → auto-derive from countryCode
+    const countryFlag   = get('countryFlag') || countryCodeToFlag(countryCode) || ''
 
     // displayDays: explicit field → parse from productName
     const explicitDays = get('displayDays')
