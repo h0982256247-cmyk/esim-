@@ -136,6 +136,45 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     prisma.order.count({ where: { status: 'ESIM_PENDING', ...orderTenantWhere } }),
   ])
 
+  // Recent 6 months revenue (for chart)
+  const now = new Date()
+  const monthlyRevenue: { month: string; revenue: number }[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const nextD = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
+    const agg = await prisma.order.aggregate({
+      where: {
+        status: { in: ['PAID', 'COMPLETED'] },
+        createdAt: { gte: d, lt: nextD },
+        ...orderTenantWhere,
+      },
+      _sum: { totalPaid: true },
+    })
+    monthlyRevenue.push({
+      month: `${d.getMonth() + 1}月`,
+      revenue: agg._sum.totalPaid ?? 0,
+    })
+  }
+
+  // Recent 5 orders
+  const recentOrders = await prisma.order.findMany({
+    where: orderTenantWhere,
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+    select: {
+      id: true,
+      wmOrderSn: true,
+      totalPaid: true,
+      status: true,
+      createdAt: true,
+      user: { select: { displayName: true } },
+      items: {
+        take: 1,
+        select: { productName: true },
+      },
+    },
+  })
+
   return {
     totalUsers,
     totalOrders,
@@ -143,5 +182,15 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     pendingGroups,
     pendingCommissions: pendingCommissions._sum.commissionAmount ?? 0,
     esimPendingOrders,
+    monthlyRevenue,
+    recentOrders: recentOrders.map(o => ({
+      id: o.id,
+      orderNo: o.wmOrderSn ?? o.id.slice(-8).toUpperCase(),
+      totalPaid: o.totalPaid,
+      status: o.status,
+      createdAt: o.createdAt.toISOString(),
+      userName: o.user?.displayName ?? '—',
+      productName: o.items[0]?.productName ?? '—',
+    })),
   }
 }
