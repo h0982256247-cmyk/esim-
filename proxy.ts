@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 
 // API 路由白名單（不需要驗證）
-const PUBLIC_API = ['/api/auth/line', '/api/tenant/']
+const PUBLIC_API = ['/api/auth/line', '/api/tenant/', '/api/platform/auth/']
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
