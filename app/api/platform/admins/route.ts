@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: '權限不足' }, { status: 403 })
   }
 
-  const admins = await getAllAdmins()
+  const admins = await getAllAdmins(auth.adminId, auth.role)
   return NextResponse.json({ admins })
 }
 

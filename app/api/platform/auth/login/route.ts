@@ -15,13 +15,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '帳號或密碼錯誤' }, { status: 401 })
   }
 
+  let tenantAdminId: string | null = null
+  if (admin.role === 'PLATFORM_ADMIN') tenantAdminId = admin.id
+  else if (admin.role === 'SUB_ADMIN') tenantAdminId = admin.parentId ?? null
+
   const token = await createPlatformSession({
     adminId: admin.id,
     role: admin.role,
+    tenantAdminId,
   })
 
   const res = NextResponse.json({
-    admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role },
+    admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role, tenantAdminId },
   })
 
   res.cookies.set(PLATFORM_COOKIE, token, {

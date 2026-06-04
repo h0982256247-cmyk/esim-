@@ -54,12 +54,14 @@ model Group {
   bankHolderName String?  @map("bank_holder_name")
   activityCouponQuota Int @default(4) @map("activity_coupon_quota") // 每月活動券剩餘次數
   quotaResetAt DateTime?  @map("quota_reset_at")
+  tenantAdminId String?   @map("tenant_admin_id")
   approvedAt  DateTime?   @map("approved_at")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
   // 關聯
   owner               User                  @relation("GroupOwner", fields: [ownerId], references: [id])
+  tenantAdmin         PlatformAdmin?        @relation("TenantGroups", fields: [tenantAdminId], references: [id])
   members             GroupMember[]
   couponsIssued       Coupon[]              @relation("SourceGroup")
   commissions         Commission[]
@@ -406,10 +408,11 @@ model PlatformAdmin {
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
 
-  parent     PlatformAdmin?  @relation("AdminHierarchy", fields: [parentId], references: [id])
-  children   PlatformAdmin[] @relation("AdminHierarchy")
-  createdBy  PlatformAdmin?  @relation("AdminCreated", fields: [createdById], references: [id])
-  created    PlatformAdmin[] @relation("AdminCreated")
+  parent      PlatformAdmin?  @relation("AdminHierarchy", fields: [parentId], references: [id])
+  children    PlatformAdmin[] @relation("AdminHierarchy")
+  createdBy   PlatformAdmin?  @relation("AdminCreated", fields: [createdById], references: [id])
+  created     PlatformAdmin[] @relation("AdminCreated")
+  ownedGroups Group[]         @relation("TenantGroups")
 
   @@map("platform_admins")
 }

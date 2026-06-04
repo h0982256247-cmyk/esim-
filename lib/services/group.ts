@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db/prisma'
 import { GroupStatus } from '@prisma/client'
 import { issueCoupon } from './coupon'
 import { notifyGroupApproved, notifyGroupRejected } from './notification'
-import { nanoid } from 'nanoid'
+import { randomBytes } from 'crypto'
 
 // ─── 申請社群主 ───────────────────────────────────────────────────
 
@@ -11,6 +11,7 @@ export interface ApplyGroupInput {
   name: string
   description?: string
   type?: string
+  tenantAdminId?: string
 }
 
 export async function applyGroup(input: ApplyGroupInput) {
@@ -24,7 +25,8 @@ export async function applyGroup(input: ApplyGroupInput) {
       description: input.description,
       type: input.type,
       status: GroupStatus.PENDING,
-      inviteCode: nanoid(8).toUpperCase(),
+      inviteCode: randomBytes(4).toString('hex').toUpperCase(),
+      tenantAdminId: input.tenantAdminId ?? null,
     },
   })
 }
@@ -161,7 +163,12 @@ export async function getUserGroup(userId: string) {
 
 // ─── Admin：審核社群申請 ──────────────────────────────────────────
 
-export async function approveGroup(groupId: string) {
+export async function approveGroup(groupId: string, tenantAdminId?: string | null) {
+  if (tenantAdminId != null) {
+    const existing = await prisma.group.findUnique({ where: { id: groupId }, select: { tenantAdminId: true } })
+    if (!existing || existing.tenantAdminId !== tenantAdminId) throw new Error('無權操作此社群')
+  }
+
   const group = await prisma.group.update({
     where: { id: groupId },
     data: { status: GroupStatus.APPROVED, approvedAt: new Date() },
@@ -182,7 +189,12 @@ export async function approveGroup(groupId: string) {
   return group
 }
 
-export async function rejectGroup(groupId: string, note?: string) {
+export async function rejectGroup(groupId: string, note?: string, tenantAdminId?: string | null) {
+  if (tenantAdminId != null) {
+    const existing = await prisma.group.findUnique({ where: { id: groupId }, select: { tenantAdminId: true } })
+    if (!existing || existing.tenantAdminId !== tenantAdminId) throw new Error('無權操作此社群')
+  }
+
   const group = await prisma.group.update({
     where: { id: groupId },
     data: { status: GroupStatus.REJECTED },
@@ -192,9 +204,13 @@ export async function rejectGroup(groupId: string, note?: string) {
   return group
 }
 
-export async function getAllGroups(status?: GroupStatus) {
+export async function getAllGroups(status?: GroupStatus, tenantAdminId?: string | null) {
+  const where: Record<string, unknown> = {}
+  if (status) where.status = status
+  if (tenantAdminId !== undefined && tenantAdminId !== null) where.tenantAdminId = tenantAdminId
+
   return prisma.group.findMany({
-    where: status ? { status } : undefined,
+    where: Object.keys(where).length > 0 ? where : undefined,
     orderBy: { createdAt: 'desc' },
     include: {
       owner: { select: { displayName: true, lineUid: true } },

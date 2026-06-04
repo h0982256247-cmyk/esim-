@@ -7,7 +7,7 @@ import { PlatformAdminRole } from '@prisma/client'
 export async function verifyAdminCredentials(email: string, password: string) {
   const admin = await prisma.platformAdmin.findUnique({
     where: { email },
-    select: { id: true, email: true, passwordHash: true, name: true, role: true, isActive: true, modules: true },
+    select: { id: true, email: true, passwordHash: true, name: true, role: true, isActive: true, modules: true, parentId: true },
   })
 
   if (!admin || !admin.isActive) return null
@@ -15,7 +15,7 @@ export async function verifyAdminCredentials(email: string, password: string) {
   const valid = await bcrypt.compare(password, admin.passwordHash)
   if (!valid) return null
 
-  return { id: admin.id, email: admin.email, name: admin.name, role: admin.role, modules: admin.modules }
+  return { id: admin.id, email: admin.email, name: admin.name, role: admin.role, modules: admin.modules, parentId: admin.parentId }
 }
 
 // ─── 建立帳號（Super Admin 建 Platform Admin，Platform Admin 建 Sub Admin）
@@ -60,8 +60,13 @@ export async function toggleAdminActive(adminId: string, isActive: boolean) {
   })
 }
 
-export async function getAllAdmins() {
+export async function getAllAdmins(callerId: string, callerRole: string) {
+  const where = callerRole === 'SUPER_ADMIN'
+    ? undefined
+    : { parentId: callerId }
+
   return prisma.platformAdmin.findMany({
+    where,
     orderBy: { createdAt: 'asc' },
     select: {
       id: true, email: true, name: true, role: true,
@@ -73,7 +78,11 @@ export async function getAllAdmins() {
 
 // ─── Dashboard 統計 ───────────────────────────────────────────────
 
-export async function getDashboardStats() {
+export async function getDashboardStats(tenantAdminId: string | null) {
+  const pendingGroupsWhere = tenantAdminId != null
+    ? { status: 'PENDING' as const, tenantAdminId }
+    : { status: 'PENDING' as const }
+
   const [
     totalUsers,
     totalOrders,
@@ -88,7 +97,7 @@ export async function getDashboardStats() {
       where: { status: { in: ['PAID', 'COMPLETED'] } },
       _sum: { totalPaid: true },
     }),
-    prisma.group.count({ where: { status: 'PENDING' } }),
+    prisma.group.count({ where: pendingGroupsWhere }),
     prisma.commission.aggregate({
       where: { status: 'PENDING' },
       _sum: { commissionAmount: true },

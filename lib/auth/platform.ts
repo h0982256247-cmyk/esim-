@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export interface PlatformSessionPayload extends JWTPayload {
   adminId: string
   role: string
+  tenantAdminId: string | null
 }
 
 export const PLATFORM_COOKIE = 'platform_session'

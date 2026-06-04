@@ -6,6 +6,6 @@ export async function GET(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
 
-  const stats = await getDashboardStats()
+  const stats = await getDashboardStats(auth.tenantAdminId)
   return NextResponse.json(stats)
 }

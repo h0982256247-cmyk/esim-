@@ -30,11 +30,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
 
-  const { name, description, type } = await req.json()
+  const { name, description, type, tenantAdminId } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'name 必填' }, { status: 400 })
 
   try {
-    const group = await applyGroup({ userId: session.userId, name, description, type })
+    const group = await applyGroup({ userId: session.userId, name, description, type, tenantAdminId })
     return NextResponse.json({ group }, { status: 201 })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : '申請失敗' }, { status: 422 })

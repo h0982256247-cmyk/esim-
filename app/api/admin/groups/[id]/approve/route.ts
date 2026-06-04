@@ -10,9 +10,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
 
   try {
-    const group = await approveGroup(id)
+    const group = await approveGroup(id, auth.tenantAdminId)
     return NextResponse.json({ group })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : '審核失敗' }, { status: 422 })
+    const message = e instanceof Error ? e.message : '審核失敗'
+    const status = message.includes('無權') ? 403 : 422
+    return NextResponse.json({ error: message }, { status })
   }
 }
