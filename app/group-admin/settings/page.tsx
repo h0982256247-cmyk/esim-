@@ -1,0 +1,132 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+
+type GroupSettings = {
+  name: string
+  description: string | null
+  rebateRate: number
+  bankName: string | null
+  bankBranch: string | null
+  bankAccount: string | null
+  bankHolderName: string | null
+}
+
+export default function GroupAdminSettingsPage() {
+  const [settings, setSettings] = useState<GroupSettings | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const [rebateRate, setRebateRate] = useState('0')
+  const [description, setDescription] = useState('')
+  const [bankName, setBankName] = useState('')
+  const [bankBranch, setBankBranch] = useState('')
+  const [bankAccount, setBankAccount] = useState('')
+  const [bankHolderName, setBankHolderName] = useState('')
+
+  useEffect(() => {
+    fetch('/api/groups').then(r => r.json()).then(d => {
+      const g = d.ownedGroup
+      if (g) {
+        setSettings(g)
+        setRebateRate(String(Math.round(Number(g.rebateRate) * 100)))
+        setDescription(g.description ?? '')
+        setBankName(g.bankName ?? '')
+        setBankBranch(g.bankBranch ?? '')
+        setBankAccount(g.bankAccount ?? '')
+        setBankHolderName(g.bankHolderName ?? '')
+      }
+    }).finally(() => setLoading(false))
+  }, [])
+
+  const handleSave = async () => {
+    setSaving(true)
+    setMsg(null)
+    const r = await fetch('/api/groups/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rebateRate: parseFloat(rebateRate) / 100,
+        description,
+        bankName,
+        bankBranch,
+        bankAccount,
+        bankHolderName,
+      }),
+    }).then(x => x.json())
+    setSaving(false)
+    setMsg(r.group ? '✅ 設定已儲存' : `❌ ${r.error}`)
+  }
+
+  if (loading) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">載入中…</p></div>
+  if (!settings) return <div className="px-4 py-5"><p className="text-gray-500">無法取得社群資訊</p></div>
+
+  return (
+    <div className="px-4 py-5 space-y-5 pb-24">
+      <h1 className="text-xl font-bold">社群設定</h1>
+
+      {/* 讓利比例 */}
+      <div className="bg-white rounded-xl border p-4 shadow-sm">
+        <h2 className="font-semibold mb-3">讓利比例設定</h2>
+        <p className="text-xs text-gray-500 mb-3">
+          讓利比例越高，成員優惠越大，但你的分潤收益越少。<br />
+          平台固定分 30%，你的分潤 = 30% − 讓利比例。
+        </p>
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min="0"
+            max="30"
+            value={rebateRate}
+            onChange={e => setRebateRate(e.target.value)}
+            className="flex-1"
+          />
+          <span className="text-xl font-bold text-blue-600 w-16 text-right">{rebateRate}%</span>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">你的分潤比例：{30 - parseInt(rebateRate)}%</p>
+      </div>
+
+      {/* 社群簡介 */}
+      <div className="bg-white rounded-xl border p-4 shadow-sm">
+        <h2 className="font-semibold mb-2">社群簡介</h2>
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          rows={3}
+          className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        />
+      </div>
+
+      {/* 銀行帳戶 */}
+      <div className="bg-white rounded-xl border p-4 shadow-sm">
+        <h2 className="font-semibold mb-3">提領銀行帳戶</h2>
+        {[
+          { label: '銀行名稱', value: bankName, set: setBankName },
+          { label: '分行', value: bankBranch, set: setBankBranch },
+          { label: '帳號', value: bankAccount, set: setBankAccount },
+          { label: '戶名', value: bankHolderName, set: setBankHolderName },
+        ].map(f => (
+          <div key={f.label} className="mb-3">
+            <label className="text-sm text-gray-600 block mb-1">{f.label}</label>
+            <input
+              value={f.value}
+              onChange={e => f.set(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        ))}
+      </div>
+
+      {msg && <p className="text-sm text-center">{msg}</p>}
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold disabled:opacity-50"
+      >
+        {saving ? '儲存中…' : '儲存設定'}
+      </button>
+    </div>
+  )
+}

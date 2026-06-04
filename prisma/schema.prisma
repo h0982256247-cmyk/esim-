@@ -1,0 +1,454 @@
+// eSIM 社群優惠券分潤系統 — Prisma Schema
+// 技術棧：Next.js 15 + Supabase (PostgreSQL) + Prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// 會員系統
+// ============================================================
+
+model User {
+  id          String   @id @default(cuid())
+  lineUid     String   @unique @map("line_uid")
+  displayName String   @map("display_name")
+  phone       String?  // 加密儲存
+  email       String?  // 加密儲存
+  birthday    DateTime? @db.Date
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // 關聯
+  ownedGroup      Group?          @relation("GroupOwner")
+  groupMembership GroupMember?
+  coupons         Coupon[]
+  orders          Order[]
+  notifications   Notification[]
+
+  @@map("users")
+}
+
+// ============================================================
+// 社群系統
+// ============================================================
+
+model Group {
+  id          String      @id @default(cuid())
+  ownerId     String      @unique @map("owner_id")
+  name        String
+  description String?
+  type        String?     // 社群類型（旅遊、導遊、KOL 等）
+  status      GroupStatus @default(PENDING)
+  rebateRate  Decimal     @default(0) @db.Decimal(4, 2) @map("rebate_rate") // 讓利比例 0~0.30
+  inviteCode  String      @unique @map("invite_code")
+  inviteLink  String?     @map("invite_link")
+  bankName    String?     @map("bank_name")
+  bankAccount String?     @map("bank_account") // 加密儲存
+  bankBranch  String?     @map("bank_branch")
+  bankHolderName String?  @map("bank_holder_name")
+  activityCouponQuota Int @default(4) @map("activity_coupon_quota") // 每月活動券剩餘次數
+  quotaResetAt DateTime?  @map("quota_reset_at")
+  approvedAt  DateTime?   @map("approved_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  // 關聯
+  owner               User                  @relation("GroupOwner", fields: [ownerId], references: [id])
+  members             GroupMember[]
+  couponsIssued       Coupon[]              @relation("SourceGroup")
+  commissions         Commission[]
+  commissionSettlements CommissionSettlement[]
+  withdrawals         Withdrawal[]
+
+  @@map("groups")
+}
+
+enum GroupStatus {
+  PENDING   // 審核中
+  APPROVED  // 已核准
+  REJECTED  // 已拒絕
+  SUSPENDED // 已停權
+
+  @@map("group_status")
+}
+
+model GroupMember {
+  id       String    @id @default(cuid())
+  groupId  String    @map("group_id")
+  userId   String    @unique @map("user_id") // 每人只能屬於一個社群
+  joinedAt DateTime  @default(now()) @map("joined_at")
+  leftAt   DateTime? @map("left_at")
+
+  group Group @relation(fields: [groupId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@map("group_members")
+}
+
+// ============================================================
+// 商品系統
+// ============================================================
+
+model SupplierProduct {
+  id            String              @id @default(cuid())
+  wmProductId   String              @unique @map("wm_product_id") // 世界移動唯一商品編號
+  productId     String?             @map("product_id")            // 供應商自身商品編號
+  productName   String              @map("product_name")
+  productRegion String?             @map("product_region")
+  productType   SupplierProductType @map("product_type")
+  costPrice     Int                 @map("cost_price")            // 台幣，經銷商成本價
+  isEsim        Boolean             @default(true) @map("is_esim") // leSIM: true=世界移動, false=成品卡
+  status        SupplierProductStatus @default(ACTIVE)
+  lastSyncAt    DateTime?           @map("last_sync_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  products Product[]
+
+  @@map("supplier_products")
+}
+
+enum SupplierProductType {
+  ESIM      // 0
+  SIM       // 1
+  SIM_TOPUP // 2 充值 SIM 卡
+
+  @@map("supplier_product_type")
+}
+
+enum SupplierProductStatus {
+  ACTIVE
+  INACTIVE     // 人工下架
+  AUTO_INACTIVE // 系統偵測供應商下架
+
+  @@map("supplier_product_status")
+}
+
+model Product {
+  id               String        @id @default(cuid())
+  supplierSkuId    String        @map("supplier_sku_id")
+  countryCode      String        @map("country_code")   // ISO 3166-1 alpha-2
+  countryNameZh    String        @map("country_name_zh")
+  countryNameEn    String        @map("country_name_en")
+  countryFlag      String?       @map("country_flag")   // emoji 或 URL
+  displayDays      Int           @map("display_days")   // 前台顯示天數（+/- 選擇用）
+  dataCapacity     String?       @map("data_capacity")  // 例如 "1GB" / "每日1GB"
+  description      String?
+  sellPrice        Int           @map("sell_price")     // 台幣含稅售價
+  costPrice        Int           @map("cost_price")     // 同步自供應商，僅後台可見
+  status           ProductStatus @default(ACTIVE)
+  sortOrder        Int           @default(0) @map("sort_order")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  supplierProduct SupplierProduct @relation(fields: [supplierSkuId], references: [id])
+  orderItems      OrderItem[]
+
+  @@map("products")
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  AUTO_INACTIVE
+
+  @@map("product_status")
+}
+
+// ============================================================
+// 優惠券系統
+// ============================================================
+
+model Coupon {
+  id            String       @id @default(cuid())
+  ownerUid      String       @map("owner_uid")       // LINE UID，使用時驗證
+  ownerId       String       @map("owner_id")        // User.id
+  type          CouponType
+  level         CouponLevel
+  discount      Decimal      @db.Decimal(4, 2)       // 0.70 ~ 0.99，連續折扣用
+  sourceGroupId String?      @map("source_group_id") // 分潤歸屬依此欄位（非當前社群）
+  isOfficial    Boolean      @default(false) @map("is_official")
+  usedAt        DateTime?    @map("used_at")
+  usedOrderId   String?      @map("used_order_id")
+  expiresAt     DateTime?    @map("expires_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  owner       User         @relation(fields: [ownerId], references: [id])
+  sourceGroup Group?       @relation("SourceGroup", fields: [sourceGroupId], references: [id])
+  usedOrder   Order?       @relation(fields: [usedOrderId], references: [id])
+  orderCoupons OrderCoupon[]
+
+  @@map("coupons")
+}
+
+enum CouponType {
+  OFFICIAL_WELCOME  // 官方歡迎券（C級，註冊送）
+  GROUP_JOIN        // 入群券
+  GROUP_REPURCHASE  // 回購券
+  GROUP_OWNER       // 社群主7折券（A級）
+  GROUP_ACTIVITY    // 活動券（C級）
+
+  @@map("coupon_type")
+}
+
+enum CouponLevel {
+  A // discount < 0.80，不可與任何券併用
+  B // 0.80 <= discount < 0.90，最多搭配1張C
+  C // 0.90 <= discount < 1.00，最多同時3張
+
+  @@map("coupon_level")
+}
+
+// ============================================================
+// 訂單系統
+// ============================================================
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String      @map("user_id")
+  status          OrderStatus @default(PENDING)
+
+  // 金額
+  subtotal        Int         // 折扣前含稅金額（台幣）
+  discountAmount  Int         @default(0) @map("discount_amount")
+  totalPaid       Int         @map("total_paid")    // 實付含稅金額（分潤計算基準）
+  taxAmount       Int         @default(0) @map("tax_amount")
+
+  // 金流
+  paymentMethod   PaymentMethod @map("payment_method")
+  tapPayOrderId   String?     @unique @map("tappay_order_id")
+  tapPayRecTradeId String?    @map("tappay_rec_trade_id")
+  paidAt          DateTime?   @map("paid_at")
+
+  // 世界移動
+  wmOrderId       String?     @unique @map("wm_order_id")   // 發貨系統唯一單號
+  wmOrderSn       String?     @map("wm_order_sn")           // eSIM mail 單號
+  wmOrderTime     String?     @map("wm_order_time")
+
+  // eSIM 啟動碼
+  esimRcode       String?     @map("esim_rcode")            // redemptionCode
+  esimQrcode      String?     @map("esim_qrcode")           // QRcode 圖片 URL
+  esimLpa         String?     @map("esim_lpa")              // LPA 文字（iOS一鍵安裝）
+  esimPin1        String?     @map("esim_pin1")
+  esimPin2        String?     @map("esim_pin2")
+  esimPuk1        String?     @map("esim_puk1")
+  esimPuk2        String?     @map("esim_puk2")
+  esimCfCode      String?     @map("esim_cf_code")
+  esimApnExplain  String?     @map("esim_apn_explain")
+  esimIccid       String?     @map("esim_iccid")            // 優惠券編號（世界移動）
+  activationStart DateTime?   @map("activation_start")
+  activationEnd   DateTime?   @map("activation_end")
+
+  // Retry 機制
+  retryCount      Int         @default(0) @map("retry_count")
+  lastRetryAt     DateTime?   @map("last_retry_at")
+
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id])
+  orderItems   OrderItem[]
+  orderCoupons OrderCoupon[]
+  commission   Commission?
+  usedCoupons  Coupon[]
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING      // 建立中
+  PROCESSING   // 處理中（金流進行中）
+  PAID         // 付款成功
+  COMPLETED    // 完成（啟動碼已交付）
+  FAILED       // 付款失敗
+  ESIM_PENDING // 付款成功但啟動碼未取得（補發中）
+  REFUNDED     // 已退款
+
+  @@map("order_status")
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  LINE_PAY
+
+  @@map("payment_method")
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String  @map("order_id")
+  productId   String  @map("product_id")
+  productName String  @map("product_name") // 快照
+  qty         Int     @default(1)
+  unitPrice   Int     @map("unit_price")   // 快照，含稅單價
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model OrderCoupon {
+  id              String  @id @default(cuid())
+  orderId         String  @map("order_id")
+  couponId        String  @map("coupon_id")
+  discountApplied Decimal @map("discount_applied") @db.Decimal(4, 2) // 快照
+
+  order  Order  @relation(fields: [orderId], references: [id])
+  coupon Coupon @relation(fields: [couponId], references: [id])
+
+  @@unique([orderId, couponId])
+  @@map("order_coupons")
+}
+
+// ============================================================
+// 分潤系統
+// ============================================================
+
+model Commission {
+  id              String           @id @default(cuid())
+  orderId         String           @unique @map("order_id") // 冪等保證：同一訂單不重複計算
+  groupId         String           @map("group_id")
+  groupOwnerId    String           @map("group_owner_id")
+  paidAmount      Int              @map("paid_amount")      // 實付含稅金額
+  rebateRate      Decimal          @db.Decimal(4, 2) @map("rebate_rate")   // 讓利比例（快照）
+  ownerRate       Decimal          @db.Decimal(4, 2) @map("owner_rate")    // 30% - rebateRate
+  commissionAmount Int             @map("commission_amount") // ROUND(paidAmount * ownerRate)
+  status          CommissionStatus @default(PENDING)
+  settlementId    String?          @map("settlement_id")
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  order      Order                @relation(fields: [orderId], references: [id])
+  group      Group                @relation(fields: [groupId], references: [id])
+  settlement CommissionSettlement? @relation(fields: [settlementId], references: [id])
+
+  @@map("commissions")
+}
+
+enum CommissionStatus {
+  PENDING  // 待結算
+  SETTLED  // 已結算
+  CANCELLED // 退款取消
+
+  @@map("commission_status")
+}
+
+model CommissionSettlement {
+  id          String           @id @default(cuid())
+  groupId     String           @map("group_id")
+  period      String           // YYYY-MM
+  totalAmount Int              @map("total_amount") // 可為負數（累積扣抵）
+  status      SettlementStatus @default(PENDING)
+  paidAt      DateTime?        @map("paid_at")
+  note        String?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  group       Group        @relation(fields: [groupId], references: [id])
+  commissions Commission[]
+
+  @@unique([groupId, period])
+  @@map("commission_settlements")
+}
+
+enum SettlementStatus {
+  PENDING
+  PAID
+  REJECTED
+
+  @@map("settlement_status")
+}
+
+model Withdrawal {
+  id              String           @id @default(cuid())
+  groupId         String           @map("group_id")
+  amount          Int
+  status          WithdrawalStatus @default(PENDING)
+  bankInfoSnapshot Json            @map("bank_info_snapshot") // 申請時銀行資訊快照
+  appliedAt       DateTime         @default(now()) @map("applied_at")
+  processedAt     DateTime?        @map("processed_at")
+  note            String?
+
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@map("withdrawals")
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+
+  @@map("withdrawal_status")
+}
+
+// ============================================================
+// 平台後台帳號
+// ============================================================
+
+model PlatformAdmin {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  passwordHash String            @map("password_hash")
+  name         String
+  role         PlatformAdminRole
+  parentId     String?           @map("parent_id")
+  modules      Json              @default("[]") // 可存取的模組清單
+  isActive     Boolean           @default(true) @map("is_active")
+  createdById  String?           @map("created_by_id")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  parent     PlatformAdmin?  @relation("AdminHierarchy", fields: [parentId], references: [id])
+  children   PlatformAdmin[] @relation("AdminHierarchy")
+  createdBy  PlatformAdmin?  @relation("AdminCreated", fields: [createdById], references: [id])
+  created    PlatformAdmin[] @relation("AdminCreated")
+
+  @@map("platform_admins")
+}
+
+enum PlatformAdminRole {
+  SUPER_ADMIN
+  PLATFORM_ADMIN
+  SUB_ADMIN
+
+  @@map("platform_admin_role")
+}
+
+// ============================================================
+// 通知系統
+// ============================================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String?
+  content   String
+  metadata  Json?            // 額外資料（訂單ID、優惠券ID 等）
+  sentAt    DateTime?        @map("sent_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  COUPON_ISSUED        // 優惠券發放
+  ORDER_PAID           // 訂單付款成功
+  ORDER_ESIM_READY     // 啟動碼已就緒
+  ORDER_ESIM_PENDING   // 啟動碼處理中
+  COMMISSION_SETTLED   // 分潤結算
+  GROUP_APPROVED       // 社群審核通過
+  GROUP_REJECTED       // 社群審核拒絕
+
+  @@map("notification_type")
+}

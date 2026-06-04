@@ -1,0 +1,191 @@
+import { prisma } from '@/lib/db/prisma'
+import type { CouponType, CouponLevel } from '@prisma/client'
+
+export interface IssueCouponInput {
+  ownerId: string
+  ownerUid: string
+  type: CouponType
+  discount: number          // 0.70 ~ 0.99
+  isOfficial?: boolean
+  sourceGroupId?: string
+  expiresAt?: Date
+}
+
+export function getCouponLevel(discount: number): CouponLevel {
+  if (discount < 0.8) return 'A'
+  if (discount < 0.9) return 'B'
+  return 'C'
+}
+
+export async function issueCoupon(input: IssueCouponInput) {
+  return prisma.coupon.create({
+    data: {
+      ownerId: input.ownerId,
+      ownerUid: input.ownerUid,
+      type: input.type,
+      level: getCouponLevel(input.discount),
+      discount: input.discount,
+      isOfficial: input.isOfficial ?? false,
+      sourceGroupId: input.sourceGroupId ?? null,
+      expiresAt: input.expiresAt ?? null,
+    },
+  })
+}
+
+// ─── 驗證組合規則（A/B/C 等級）────────────────────────────────────
+
+export function validateCouponCombination(discounts: number[]): { valid: boolean; reason?: string } {
+  if (discounts.length === 0) return { valid: true }
+
+  const levels = discounts.map(getCouponLevel)
+
+  if (levels.includes('A') && levels.length > 1) {
+    return { valid: false, reason: 'A 級券不可與其他券併用' }
+  }
+
+  const bCount = levels.filter(l => l === 'B').length
+  const cCount = levels.filter(l => l === 'C').length
+
+  if (bCount > 1) {
+    return { valid: false, reason: '不可同時使用多張 B 級券' }
+  }
+  if (bCount > 0 && cCount > 1) {
+    return { valid: false, reason: 'B 級券最多只能搭配 1 張 C 級券' }
+  }
+  if (cCount > 3) {
+    return { valid: false, reason: 'C 級券最多同時使用 3 張' }
+  }
+
+  return { valid: true }
+}
+
+// 連續折扣計算（非加總）
+export function calculateFinalPrice(price: number, discounts: number[]): number {
+  const result = discounts.reduce((acc, d) => acc * d, price)
+  return Math.round(result)
+}
+
+// ─── 查詢 ─────────────────────────────────────────────────────────
+
+export async function getUserCoupons(userId: string) {
+  const now = new Date()
+  return prisma.coupon.findMany({
+    where: {
+      ownerId: userId,
+      usedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      type: true,
+      level: true,
+      discount: true,
+      isOfficial: true,
+      expiresAt: true,
+      createdAt: true,
+      sourceGroupId: true,
+    },
+  })
+}
+
+export async function getUserCouponsIncludingUsed(userId: string) {
+  return prisma.coupon.findMany({
+    where: { ownerId: userId },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      type: true,
+      level: true,
+      discount: true,
+      isOfficial: true,
+      expiresAt: true,
+      usedAt: true,
+      createdAt: true,
+    },
+  })
+}
+
+// ─── 驗證所有權與有效性 ───────────────────────────────────────────
+
+export type CouponValidationResult =
+  | { ok: true; coupon: { id: string; discount: number; level: CouponLevel; sourceGroupId: string | null } }
+  | { ok: false; reason: string }
+
+export async function validateCouponOwnership(
+  couponId: string,
+  lineUid: string
+): Promise<CouponValidationResult> {
+  const coupon = await prisma.coupon.findUnique({
+    where: { id: couponId },
+    select: {
+      id: true,
+      ownerUid: true,
+      discount: true,
+      level: true,
+      usedAt: true,
+      expiresAt: true,
+      sourceGroupId: true,
+    },
+  })
+
+  if (!coupon) return { ok: false, reason: '優惠券不存在' }
+  if (coupon.ownerUid !== lineUid) return { ok: false, reason: '此優惠券不屬於你' }
+  if (coupon.usedAt) return { ok: false, reason: '此優惠券已使用' }
+  if (coupon.expiresAt && coupon.expiresAt < new Date()) return { ok: false, reason: '此優惠券已過期' }
+
+  return {
+    ok: true,
+    coupon: {
+      id: coupon.id,
+      discount: Number(coupon.discount),
+      level: coupon.level,
+      sourceGroupId: coupon.sourceGroupId,
+    },
+  }
+}
+
+// ─── 使用優惠券（結帳時呼叫，在 transaction 內）──────────────────
+
+export async function markCouponUsed(couponId: string, orderId: string) {
+  return prisma.coupon.update({
+    where: { id: couponId },
+    data: { usedAt: new Date(), usedOrderId: orderId },
+  })
+}
+
+// ─── Admin 發券 ───────────────────────────────────────────────────
+
+export interface BatchIssueCouponInput {
+  userIds: string[]          // User.id 列表
+  type: CouponType
+  discount: number
+  isOfficial?: boolean
+  sourceGroupId?: string
+  expiresAt?: Date
+}
+
+export async function batchIssueCoupons(input: BatchIssueCouponInput): Promise<{ count: number }> {
+  // 先取得這些 user 的 id + lineUid
+  const users = await prisma.user.findMany({
+    where: { id: { in: input.userIds } },
+    select: { id: true, lineUid: true },
+  })
+
+  const level = getCouponLevel(input.discount)
+
+  const result = await prisma.coupon.createMany({
+    data: users.map(u => ({
+      ownerId: u.id,
+      ownerUid: u.lineUid,
+      type: input.type,
+      level,
+      discount: input.discount,
+      isOfficial: input.isOfficial ?? false,
+      sourceGroupId: input.sourceGroupId ?? null,
+      expiresAt: input.expiresAt ?? null,
+    })),
+  })
+
+  return { count: result.count }
+}
