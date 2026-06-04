@@ -6,7 +6,9 @@ import { verifyPlatformSession, PLATFORM_COOKIE } from '@/lib/auth/platform'
 const PUBLIC_API = ['/api/auth/line', '/api/tenant/', '/api/platform/auth/']
 
 // 平台後台路由前綴（使用 PLATFORM_COOKIE 驗證）
-const PLATFORM_API_PREFIX = '/api/platform/'
+// /api/platform/* 為新式命名；/api/admin/* 為舊式命名，路由內部同樣使用 requirePlatformAuth
+const isPlatformRoute = (p: string) =>
+  p.startsWith('/api/platform/') || p.startsWith('/api/admin/')
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -18,7 +20,7 @@ export async function proxy(req: NextRequest) {
   if (PUBLIC_API.some(p => pathname.startsWith(p))) return NextResponse.next()
 
   // 平台後台路由 → 驗證 PLATFORM_COOKIE
-  if (pathname.startsWith(PLATFORM_API_PREFIX)) {
+  if (isPlatformRoute(pathname)) {
     const token = req.cookies.get(PLATFORM_COOKIE)?.value
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
