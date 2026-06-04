@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
+import { Prisma } from '@prisma/client'
 
 // GET /api/platform/users?page=1&q=keyword
 export async function GET(req: NextRequest) {
@@ -12,14 +13,14 @@ export async function GET(req: NextRequest) {
   const pageSize = 20
 
   const tenantAdminId = auth.tenantAdminId
-  const tenantWhere = tenantAdminId ? {
+  const tenantWhere: Prisma.UserWhereInput = tenantAdminId ? {
     OR: [
       { groupMembership: { group: { tenantAdminId } } },
       { ownedGroup: { tenantAdminId } },
     ],
   } : {}
 
-  const where = q
+  const where: Prisma.UserWhereInput = q
     ? {
         AND: [
           tenantWhere,

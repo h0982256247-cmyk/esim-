@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
-import { PlatformAdminRole } from '@prisma/client'
+import { Prisma, PlatformAdminRole, OrderStatus, CommissionStatus, GroupStatus } from '@prisma/client'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -14,19 +14,21 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const { id: tenantAdminId } = await params
 
-  const userTenantWhere = {
+  const userWhere: Prisma.UserWhereInput = {
     OR: [
       { groupMembership: { group: { tenantAdminId } } },
       { ownedGroup: { tenantAdminId } },
     ],
-  } as const
+  }
 
-  const orderTenantWhere = {
-    user: { OR: [
-      { groupMembership: { group: { tenantAdminId } } },
-      { ownedGroup: { tenantAdminId } },
-    ] },
-  } as const
+  const orderWhere: Prisma.OrderWhereInput = {
+    user: {
+      OR: [
+        { groupMembership: { group: { tenantAdminId } } },
+        { ownedGroup: { tenantAdminId } },
+      ],
+    },
+  }
 
   const [
     totalUsers,
@@ -37,19 +39,19 @@ export async function GET(req: NextRequest, { params }: Params) {
     pendingCommissions,
     esimPendingOrders,
   ] = await Promise.all([
-    prisma.user.count({ where: userTenantWhere }),
-    prisma.order.count({ where: orderTenantWhere }),
+    prisma.user.count({ where: userWhere }),
+    prisma.order.count({ where: orderWhere }),
     prisma.order.aggregate({
-      where: { status: { in: ['PAID', 'COMPLETED'] }, ...orderTenantWhere },
+      where: { ...orderWhere, status: { in: [OrderStatus.PAID, OrderStatus.COMPLETED] } },
       _sum: { totalPaid: true },
     }),
-    prisma.group.count({ where: { status: 'PENDING', tenantAdminId } }),
-    prisma.group.count({ where: { status: 'APPROVED', tenantAdminId } }),
+    prisma.group.count({ where: { status: GroupStatus.PENDING, tenantAdminId } }),
+    prisma.group.count({ where: { status: GroupStatus.APPROVED, tenantAdminId } }),
     prisma.commission.aggregate({
-      where: { status: 'PENDING', group: { tenantAdminId } },
+      where: { status: CommissionStatus.PENDING, group: { tenantAdminId } },
       _sum: { commissionAmount: true },
     }),
-    prisma.order.count({ where: { status: 'ESIM_PENDING', ...orderTenantWhere } }),
+    prisma.order.count({ where: { ...orderWhere, status: OrderStatus.ESIM_PENDING } }),
   ])
 
   return NextResponse.json({

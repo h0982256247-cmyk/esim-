@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
-import { OrderStatus } from '@prisma/client'
+import { Prisma, OrderStatus } from '@prisma/client'
 
 // GET /api/platform/orders?page=1&status=ESIM_PENDING
 export async function GET(req: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const pageSize = 20
 
   const tenantAdminId = auth.tenantAdminId
-  const tenantWhere = tenantAdminId ? {
+  const tenantWhere: Prisma.OrderWhereInput = tenantAdminId ? {
     user: {
       OR: [
         { groupMembership: { group: { tenantAdminId } } },
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     },
   } : {}
 
-  const where = {
+  const where: Prisma.OrderWhereInput = {
     ...(statusParam && Object.values(OrderStatus).includes(statusParam as OrderStatus)
       ? { status: statusParam as OrderStatus }
       : {}),

@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db/prisma'
-import { PlatformAdminRole } from '@prisma/client'
+import { Prisma, PlatformAdminRole } from '@prisma/client'
 
 // ─── 登入驗證 ─────────────────────────────────────────────────────
 
@@ -95,14 +95,14 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     ? { status: 'PENDING' as const, tenantAdminId }
     : { status: 'PENDING' as const }
 
-  const userTenantWhere = tenantAdminId != null ? {
+  const userTenantWhere: Prisma.UserWhereInput | undefined = tenantAdminId != null ? {
     OR: [
       { groupMembership: { group: { tenantAdminId } } },
       { ownedGroup: { tenantAdminId } },
     ],
   } : undefined
 
-  const orderTenantWhere = tenantAdminId != null ? {
+  const orderTenantWhere: Prisma.OrderWhereInput = tenantAdminId != null ? {
     user: {
       OR: [
         { groupMembership: { group: { tenantAdminId } } },
