@@ -2,9 +2,21 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 
-function createPrismaClient() {
+function createPrismaClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL
-  if (!connectionString) throw new Error('DATABASE_URL is not set')
+
+  // During `next build`, DATABASE_URL is not injected yet.
+  // Return a stub proxy so the module can be imported at build time;
+  // any actual DB call at runtime will still get a clear error if unset.
+  if (!connectionString) {
+    return new Proxy({} as PrismaClient, {
+      get(_t, prop) {
+        throw new Error(
+          `DATABASE_URL is not set — cannot call prisma.${String(prop)} at runtime`
+        )
+      },
+    })
+  }
 
   const pool = new Pool({
     connectionString,
