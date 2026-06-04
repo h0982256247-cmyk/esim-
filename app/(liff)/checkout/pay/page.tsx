@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Script from 'next/script'
+import { useLiff } from '@/components/liff/LiffProvider'
 
 declare global {
   interface Window {
@@ -30,17 +31,38 @@ function PayContent() {
   const searchParams = useSearchParams()
   const orderId = searchParams.get('orderId')!
   const amount = searchParams.get('amount')!
+  const { liff } = useLiff()
 
   const [sdkReady, setSdkReady] = useState(false)
   const [canPay, setCanPay] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tapPayConfigRef = useRef<{ appId: number; appKey: string; env: string } | null>(null)
+
+  // Fetch TapPay config from server (per-tenant, falls back to env vars)
+  useEffect(() => {
+    async function fetchConfig() {
+      try {
+        const profile = liff ? await liff.getProfile().catch(() => null) : null
+        const lineUid = profile?.userId ?? ''
+        const url = lineUid
+          ? `/api/liff/payment-config?lineUid=${encodeURIComponent(lineUid)}`
+          : '/api/liff/payment-config'
+        const res = await fetch(url).then(r => r.json())
+        tapPayConfigRef.current = res
+      } catch {
+        // Fallback handled server-side
+      }
+    }
+    fetchConfig()
+  }, [liff])
 
   const initTapPay = () => {
-    const appId = parseInt(process.env.NEXT_PUBLIC_TAPPAY_APP_ID ?? '0')
-    const appKey = process.env.NEXT_PUBLIC_TAPPAY_APP_KEY ?? ''
-    const env = process.env.NEXT_PUBLIC_TAPPAY_ENV === 'production' ? 'production' : 'sandbox'
+    const cfg = tapPayConfigRef.current
+    const appId = cfg?.appId ?? parseInt(process.env.NEXT_PUBLIC_TAPPAY_APP_ID ?? '0')
+    const appKey = cfg?.appKey ?? process.env.NEXT_PUBLIC_TAPPAY_APP_KEY ?? ''
+    const env = cfg?.env ?? (process.env.NEXT_PUBLIC_TAPPAY_ENV === 'production' ? 'production' : 'sandbox')
 
     window.TPDirect.setupSDK(appId, appKey, env)
     window.TPDirect.card.setup({

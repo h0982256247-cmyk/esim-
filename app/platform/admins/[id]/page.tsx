@@ -17,6 +17,7 @@ type AdminDetail = {
   brandName: string | null
   logoUrl: string | null
   primaryColor: string | null
+  lineAccessToken: string | null
   _count: { ownedGroups: number }
 }
 
@@ -45,6 +46,8 @@ type PaymentConfig = {
   gateway: string
   partnerKey: string
   merchantId: string
+  appId: string
+  appKey: string
   env: string
   isActive: boolean
   updatedAt: string
@@ -339,6 +342,8 @@ function GatewayCard({
     partnerKey: existing?.partnerKey ?? '',
     merchantId: existing?.merchantId ?? '',
     env: existing?.env ?? 'sandbox',
+    appId: existing?.appId ?? '',
+    appKey: existing?.appKey ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -408,6 +413,27 @@ function GatewayCard({
             />
           </div>
           <div>
+            <label className="text-xs text-gray-500 block mb-1">App ID（前端 SDK）</label>
+            <input
+              type="text"
+              value={form.appId}
+              onChange={e => setForm(p => ({ ...p, appId: e.target.value }))}
+              placeholder="例：12345"
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">App Key（前端 SDK）</label>
+            <input
+              type="password"
+              value={form.appKey}
+              onChange={e => setForm(p => ({ ...p, appKey: e.target.value }))}
+              placeholder={existing?.appKey ? '留空保留現有 Key' : '輸入 App Key'}
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {existing?.appKey && <p className="text-xs text-gray-400 mt-1">現有 Key：{existing.appKey}</p>}
+          </div>
+          <div>
             <label className="text-xs text-gray-500 block mb-1">環境</label>
             <select
               value={form.env}
@@ -443,6 +469,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
     tenantSlug: admin.tenantSlug ?? '',
     logoUrl: admin.logoUrl ?? '',
     primaryColor: admin.primaryColor ?? '#3B82F6',
+    lineAccessToken: admin.lineAccessToken ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -583,6 +610,18 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
                 className="border rounded-lg px-3 py-2 text-sm font-mono w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">LINE Channel Access Token</label>
+            <input
+              type="password"
+              value={form.lineAccessToken}
+              onChange={e => setForm(p => ({ ...p, lineAccessToken: e.target.value }))}
+              placeholder="輸入 LINE Channel Access Token"
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">留空則使用系統預設環境變數。</p>
           </div>
 
           {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}

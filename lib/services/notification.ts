@@ -3,8 +3,19 @@ import { NotificationType } from '@prisma/client'
 
 // ─── LINE Messaging API Push Message ─────────────────────────────
 
-async function sendLineMessage(lineUid: string, text: string): Promise<void> {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
+async function getLineToken(tenantAdminId?: string | null): Promise<string> {
+  if (tenantAdminId) {
+    const admin = await prisma.platformAdmin.findUnique({
+      where: { id: tenantAdminId },
+      select: { lineAccessToken: true },
+    })
+    if (admin?.lineAccessToken) return admin.lineAccessToken
+  }
+  return process.env.LINE_CHANNEL_ACCESS_TOKEN ?? ''
+}
+
+async function sendLineMessage(lineUid: string, text: string, tenantAdminId?: string | null): Promise<void> {
+  const token = await getLineToken(tenantAdminId)
   if (!token) return // 金鑰未設定時靜默跳過
 
   await fetch('https://api.line.me/v2/bot/message/push', {
@@ -57,6 +68,7 @@ export interface SendNotificationInput {
   type: NotificationType
   data: Record<string, string>
   title?: string
+  tenantAdminId?: string | null
 }
 
 export async function sendNotification(input: SendNotificationInput): Promise<void> {
@@ -81,7 +93,7 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
   })
 
   // 推送 LINE 訊息（非同步，失敗不影響主流程）
-  sendLineMessage(user.lineUid, content).catch(() => {})
+  sendLineMessage(user.lineUid, content, input.tenantAdminId).catch(() => {})
 }
 
 // ─── 常用通知捷徑 ─────────────────────────────────────────────────
@@ -119,19 +131,21 @@ export async function notifyCouponIssued(userId: string, discount: number, typeN
   })
 }
 
-export async function notifyGroupApproved(userId: string, groupName: string) {
+export async function notifyGroupApproved(userId: string, groupName: string, tenantAdminId?: string | null) {
   await sendNotification({
     userId,
     type: NotificationType.GROUP_APPROVED,
     data: { groupName },
+    tenantAdminId,
   })
 }
 
-export async function notifyGroupRejected(userId: string, groupName: string) {
+export async function notifyGroupRejected(userId: string, groupName: string, tenantAdminId?: string | null) {
   await sendNotification({
     userId,
     type: NotificationType.GROUP_REJECTED,
     data: { groupName },
+    tenantAdminId,
   })
 }
 

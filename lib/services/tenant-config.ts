@@ -54,6 +54,8 @@ export async function upsertPaymentConfig(
     partnerKey: string
     merchantId: string
     env: string
+    appId?: string
+    appKey?: string
   },
 ) {
   return prisma.tenantPaymentConfig.upsert({
@@ -64,11 +66,15 @@ export async function upsertPaymentConfig(
       partnerKey: input.partnerKey,
       merchantId: input.merchantId,
       env: input.env,
+      appId: input.appId,
+      appKey: input.appKey,
     },
     update: {
       partnerKey: input.partnerKey,
       merchantId: input.merchantId,
       env: input.env,
+      appId: input.appId,
+      appKey: input.appKey,
       isActive: true,
     },
   })

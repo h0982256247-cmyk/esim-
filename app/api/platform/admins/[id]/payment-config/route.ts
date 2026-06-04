@@ -24,6 +24,8 @@ export async function GET(req: NextRequest, { params }: Params) {
       gateway: c.gateway,
       partnerKey: maskKey(c.partnerKey),
       merchantId: c.merchantId,
+      appId: c.appId ?? '',
+      appKey: c.appKey ? maskKey(c.appKey) : '',
       env: c.env,
       isActive: c.isActive,
       updatedAt: c.updatedAt,
@@ -40,7 +42,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
   const { id } = await params
   const body = await req.json()
-  const { gateway, partnerKey, merchantId, env = 'sandbox' } = body
+  const { gateway, partnerKey, merchantId, env = 'sandbox', appId, appKey } = body
 
   if (!gateway || !partnerKey || !merchantId) {
     return NextResponse.json({ error: '請填寫所有必要欄位' }, { status: 400 })
@@ -53,11 +55,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
     finalKey = existing.partnerKey
   }
 
+  // Handle masked appKey
+  let finalAppKey: string | undefined = appKey || undefined
+  if (appKey && appKey.startsWith('****')) {
+    const existing = await prisma.tenantPaymentConfig.findFirst({ where: { adminId: id, gateway } })
+    finalAppKey = existing?.appKey ?? undefined
+  }
+
   try {
     await prisma.tenantPaymentConfig.upsert({
       where: { adminId_gateway: { adminId: id, gateway } },
-      create: { adminId: id, gateway, partnerKey: finalKey, merchantId, env },
-      update: { partnerKey: finalKey, merchantId, env, isActive: true },
+      create: { adminId: id, gateway, partnerKey: finalKey, merchantId, env, appId: appId || undefined, appKey: finalAppKey },
+      update: { partnerKey: finalKey, merchantId, env, appId: appId || undefined, appKey: finalAppKey, isActive: true },
     })
     return NextResponse.json({ ok: true })
   } catch (e) {

@@ -412,6 +412,7 @@ model PlatformAdmin {
   brandName    String?           @map("brand_name")            // 顯示名稱，如「Bii旅」
   logoUrl      String?           @map("logo_url")              // Logo 圖片網址
   primaryColor String?           @map("primary_color")         // 主題色，如 #FF5A00
+  lineAccessToken String?        @map("line_access_token")
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
 
@@ -455,6 +456,8 @@ model TenantPaymentConfig {
   gateway    String   // "tappay_credit" | "tappay_linepay"
   partnerKey String   @map("partner_key")
   merchantId String   @map("merchant_id")
+  appId      String?  @map("app_id")
+  appKey     String?  @map("app_key")
   env        String   @default("sandbox") // "sandbox" | "production"
   isActive   Boolean  @default(true) @map("is_active")
   createdAt  DateTime @default(now()) @map("created_at")

@@ -199,7 +199,12 @@ export async function approveGroup(groupId: string, tenantAdminId?: string | nul
   const group = await prisma.group.update({
     where: { id: groupId },
     data: { status: GroupStatus.APPROVED, approvedAt: new Date() },
-    include: { owner: { select: { id: true, lineUid: true } } },
+    select: {
+      id: true,
+      name: true,
+      tenantAdminId: true,
+      owner: { select: { id: true, lineUid: true } },
+    },
   })
 
   // 發社群主 7 折券（A 級，永久有效）
@@ -212,7 +217,7 @@ export async function approveGroup(groupId: string, tenantAdminId?: string | nul
     sourceGroupId: group.id,
   })
 
-  notifyGroupApproved(group.owner.id, group.name).catch(() => {})
+  notifyGroupApproved(group.owner.id, group.name, group.tenantAdminId).catch(() => {})
   return group
 }
 
@@ -225,9 +230,14 @@ export async function rejectGroup(groupId: string, note?: string, tenantAdminId?
   const group = await prisma.group.update({
     where: { id: groupId },
     data: { status: GroupStatus.REJECTED },
-    include: { owner: { select: { id: true } } },
+    select: {
+      id: true,
+      name: true,
+      tenantAdminId: true,
+      owner: { select: { id: true } },
+    },
   })
-  notifyGroupRejected(group.owner.id, group.name).catch(() => {})
+  notifyGroupRejected(group.owner.id, group.name, group.tenantAdminId).catch(() => {})
   return group
 }
 

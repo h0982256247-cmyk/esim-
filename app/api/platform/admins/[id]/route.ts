@@ -30,6 +30,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       brandName: true,
       logoUrl: true,
       primaryColor: true,
+      lineAccessToken: true,
       _count: { select: { ownedGroups: true } },
     },
   })
@@ -74,12 +75,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   }
 
-  if (body.brandName !== undefined || body.tenantSlug !== undefined || body.logoUrl !== undefined || body.primaryColor !== undefined) {
+  if (body.brandName !== undefined || body.tenantSlug !== undefined || body.logoUrl !== undefined || body.primaryColor !== undefined || body.lineAccessToken !== undefined) {
     const updateData: Record<string, unknown> = {}
     if (body.brandName !== undefined) updateData.brandName = body.brandName
     if (body.tenantSlug !== undefined) updateData.tenantSlug = body.tenantSlug
     if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl
     if (body.primaryColor !== undefined) updateData.primaryColor = body.primaryColor
+    if (body.lineAccessToken !== undefined) updateData.lineAccessToken = body.lineAccessToken
     try {
       await prisma.platformAdmin.update({ where: { id }, data: updateData })
       return NextResponse.json({ ok: true })
