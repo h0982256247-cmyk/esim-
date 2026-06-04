@@ -10,7 +10,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '帳號與密碼必填' }, { status: 400 })
   }
 
-  const admin = await verifyAdminCredentials(email, password)
+  let admin
+  try {
+    admin = await verifyAdminCredentials(email, password)
+  } catch (e) {
+    return NextResponse.json({ error: 'db_error', detail: String(e) }, { status: 500 })
+  }
   if (!admin) {
     return NextResponse.json({ error: '帳號或密碼錯誤' }, { status: 401 })
   }
