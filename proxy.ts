@@ -4,7 +4,7 @@ import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 // API 路由白名單（不需要驗證）
 const PUBLIC_API = ['/api/auth/line']
 
-export default async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // 只保護 /api/* 路由（LIFF 頁面由 client 端處理）
