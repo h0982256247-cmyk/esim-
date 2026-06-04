@@ -77,6 +77,7 @@ export async function getAllProductsAdmin(tenantAdminId?: string | null) {
 
 export type ProductUpsertInput = {
   supplierSkuId: string
+  planCode?: string | null
   countryCode: string
   countryNameZh: string
   countryNameEn: string
@@ -84,6 +85,8 @@ export type ProductUpsertInput = {
   displayDays: number
   dataCapacity?: string | null
   description?: string | null
+  networkType?: string | null
+  isNativeSim?: boolean
   sellPrice: number
   costPrice: number
   sortOrder?: number
@@ -105,6 +108,7 @@ export async function setProductStatus(id: string, status: ProductStatus) {
 
 export type CsvProductRow = {
   supplierSkuId: string
+  planCode?: string
   countryCode: string
   countryNameZh: string
   countryNameEn: string
@@ -112,6 +116,8 @@ export type CsvProductRow = {
   displayDays: number
   dataCapacity?: string
   description?: string
+  networkType?: string
+  isNativeSim?: boolean
   sellPrice: number
   costPrice: number
   sortOrder?: number

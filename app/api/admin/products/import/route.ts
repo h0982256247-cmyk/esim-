@@ -2,19 +2,84 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { batchCreateProducts, type CsvProductRow } from '@/lib/services/product'
 
-const REQUIRED_HEADERS = [
-  'supplierSkuId', 'countryCode', 'countryNameZh', 'countryNameEn',
-  'displayDays', 'sellPrice', 'costPrice',
-]
+// ── 欄位別名對應表（中文欄位名 → 內部英文名）──────────────────────
+const HEADER_ALIAS: Record<string, string> = {
+  // 中文欄位名（使用者試算表）
+  '供應商方案id':   'supplierSkuId',
+  '供應商方案ID':   'supplierSkuId',
+  'plan_code':      'planCode',
+  'plancode':       'planCode',
+  '商品名稱':       'productName',
+  '適用地區':       'countryNameZh',
+  '是否為原生卡':   'isNativeSim',
+  '網絡類型':       'networkType',
+  '成本價nt':       'costPrice',
+  '成本價(nt)':     'costPrice',
+  '成本價':         'costPrice',
+  '售價nt':         'sellPrice',
+  '售價(nt)':       'sellPrice',
+  '售價':           'sellPrice',
+  '利潤':           '_skip',
+  // 英文欄位名（template）
+  'supplierskuid':  'supplierSkuId',
+  'countrycode':    'countryCode',
+  'countrynamezh':  'countryNameZh',
+  'countrynateen':  'countryNameEn',
+  'countryflag':    'countryFlag',
+  'displaydays':    'displayDays',
+  'datacapacity':   'dataCapacity',
+  'description':    'description',
+  'sellprice':      'sellPrice',
+  'costprice':      'costPrice',
+  'sortorder':      'sortOrder',
+  'networktype':    'networkType',
+  'isnativesim':    'isNativeSim',
+  'plancode':       'planCode',
+  'productname':    'productName',
+}
+
+// 必填欄位（至少要有其中一組）
+const REQUIRED = ['supplierSkuId', 'sellPrice', 'costPrice']
+
+// 從商品名稱自動解析天數，例如「日本Softbank, 3天, 1GB/天」→ 3
+function parseDaysFromName(name: string): number | null {
+  const m = name.match(/(\d+)\s*天/)
+  return m ? parseInt(m[1]) : null
+}
+
+// 從商品名稱自動解析流量，例如「500MB」「1GB」「1GB/天」
+function parseCapacityFromName(name: string): string | null {
+  const m = name.match(/(\d+(?:\.\d+)?)\s*(MB|GB)(\/天|\/day)?/i)
+  if (!m) return null
+  return m[3] ? `${m[1]}${m[2].toUpperCase()}${m[3]}` : `${m[1]}${m[2].toUpperCase()}`
+}
+
+// 從 planCode 推斷國家代碼，例如 JP-SB-1GB-3D → JP
+function parseCountryFromPlanCode(planCode: string): string | null {
+  const m = planCode.match(/^([A-Z]{2})-/i)
+  return m ? m[1].toUpperCase() : null
+}
+
+// 正規化 header（去空白、小寫、去括號）
+function normalizeHeader(h: string): string {
+  return h.trim().toLowerCase().replace(/[\s()（）]/g, '')
+}
 
 function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
-  const lines = text.trim().split('\n')
+  const lines = text.trim().split(/\r?\n/)
   if (lines.length < 2) return { rows: [], errors: ['CSV 檔案缺少資料列'] }
 
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-  const missing = REQUIRED_HEADERS.filter(h => !headers.includes(h))
+  // Parse headers with alias mapping
+  const rawHeaders = lines[0].split(',').map(h => h.trim().replace(/^["'﻿]+|["']+$/g, ''))
+  const headers = rawHeaders.map(h => {
+    const normalized = normalizeHeader(h)
+    return HEADER_ALIAS[normalized] ?? HEADER_ALIAS[h] ?? normalized
+  })
+
+  // Check required fields
+  const missing = REQUIRED.filter(r => !headers.includes(r))
   if (missing.length > 0) {
-    return { rows: [], errors: [`缺少必要欄位：${missing.join(', ')}`] }
+    return { rows: [], errors: [`缺少必要欄位：${missing.join(', ')}（支援中文欄位名）`] }
   }
 
   const rows: CsvProductRow[] = []
@@ -24,32 +89,71 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
     const line = lines[i].trim()
     if (!line) continue
 
-    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
-    const get = (key: string) => values[headers.indexOf(key)] ?? ''
+    // Handle quoted values
+    const values: string[] = []
+    let current = ''
+    let inQuote = false
+    for (const ch of line) {
+      if (ch === '"') { inQuote = !inQuote; continue }
+      if (ch === ',' && !inQuote) { values.push(current.trim()); current = ''; continue }
+      current += ch
+    }
+    values.push(current.trim())
 
-    const displayDays = parseInt(get('displayDays'))
+    const get = (key: string) => values[headers.indexOf(key)]?.trim().replace(/^["']+|["']+$/g, '') ?? ''
+
+    const supplierSkuId = get('supplierSkuId')
+    const productName   = get('productName')
+    const planCode      = get('planCode')
+    const countryNameZh = get('countryNameZh') || get('countryCode') // fallback
+    const networkType   = get('networkType') || undefined
+    const isNativeRaw   = get('isNativeSim').toLowerCase()
+    const isNativeSim   = isNativeRaw === '是' || isNativeRaw === 'true' || isNativeRaw === '1'
+
+    // countryCode: explicit → parse from planCode → fallback ''
+    let countryCode = get('countryCode').toUpperCase()
+    if (!countryCode && planCode) countryCode = parseCountryFromPlanCode(planCode) ?? ''
+
+    const countryNameEn = get('countryNameEn') || ''
+    const countryFlag   = get('countryFlag') || ''
+
+    // displayDays: explicit field → parse from productName
+    const explicitDays = get('displayDays')
+    let displayDays = explicitDays ? parseInt(explicitDays) : NaN
+    if (isNaN(displayDays) && productName) {
+      displayDays = parseDaysFromName(productName) ?? NaN
+    }
+
+    // dataCapacity: explicit field → parse from productName
+    const dataCapacity = get('dataCapacity') || (productName ? parseCapacityFromName(productName) : null) || undefined
+
     const sellPrice = parseInt(get('sellPrice'))
     const costPrice = parseInt(get('costPrice'))
+    const sortOrder = parseInt(get('sortOrder')) || 0
+    const description = get('description') || undefined
 
-    if (!get('supplierSkuId')) errors.push(`第 ${i + 1} 行：supplierSkuId 不可為空`)
-    if (!get('countryCode')) errors.push(`第 ${i + 1} 行：countryCode 不可為空`)
-    if (isNaN(displayDays) || displayDays <= 0) errors.push(`第 ${i + 1} 行：displayDays 必須為正整數`)
-    if (isNaN(sellPrice) || sellPrice <= 0) errors.push(`第 ${i + 1} 行：sellPrice 必須為正整數`)
-    if (isNaN(costPrice) || costPrice <= 0) errors.push(`第 ${i + 1} 行：costPrice 必須為正整數`)
+    // Validation
+    if (!supplierSkuId) errors.push(`第 ${i + 1} 行：供應商方案ID（supplierSkuId）不可為空`)
+    if (isNaN(displayDays) || displayDays <= 0) errors.push(`第 ${i + 1} 行：無法判斷天數（請填 displayDays 欄或在商品名稱中包含如「3天」）`)
+    if (isNaN(sellPrice) || sellPrice <= 0) errors.push(`第 ${i + 1} 行：售價必須為正整數`)
+    if (isNaN(costPrice) || costPrice <= 0) errors.push(`第 ${i + 1} 行：成本價必須為正整數`)
 
     if (errors.length === 0) {
       rows.push({
-        supplierSkuId: get('supplierSkuId'),
-        countryCode: get('countryCode').toUpperCase(),
-        countryNameZh: get('countryNameZh'),
-        countryNameEn: get('countryNameEn'),
-        countryFlag: get('countryFlag') || undefined,
+        supplierSkuId,
+        planCode: planCode || undefined,
+        countryCode: countryCode || 'XX',
+        countryNameZh: countryNameZh || supplierSkuId,
+        countryNameEn,
+        countryFlag,
         displayDays,
-        dataCapacity: get('dataCapacity') || undefined,
-        description: get('description') || undefined,
+        dataCapacity,
+        description,
+        networkType,
+        isNativeSim,
         sellPrice,
         costPrice,
-        sortOrder: parseInt(get('sortOrder')) || 0,
+        sortOrder,
       })
     }
   }
@@ -72,7 +176,6 @@ export async function POST(req: NextRequest) {
   const text = await (file as File).text()
   const { rows, errors } = parseCsv(text)
 
-  // Any validation error → reject entire batch
   if (errors.length > 0) {
     return NextResponse.json({ error: '驗證失敗，整批未寫入', details: errors }, { status: 422 })
   }

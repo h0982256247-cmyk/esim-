@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 
 type Product = {
   id: string
+  supplierSkuId: string
+  planCode: string | null
   countryCode: string
   countryNameZh: string
   countryNameEn: string
@@ -12,6 +14,8 @@ type Product = {
   displayDays: number
   dataCapacity: string | null
   description: string | null
+  networkType: string | null
+  isNativeSim: boolean
   sellPrice: number
   costPrice: number
   sortOrder: number
@@ -25,6 +29,8 @@ type EditForm = {
   countryFlag: string
   displayDays: string
   dataCapacity: string
+  networkType: string
+  isNativeSim: boolean
   description: string
   sellPrice: string
   costPrice: string
@@ -104,6 +110,8 @@ export default function PlatformProductsPage() {
       countryFlag: p.countryFlag ?? '',
       displayDays: String(p.displayDays),
       dataCapacity: p.dataCapacity ?? '',
+      networkType: p.networkType ?? '',
+      isNativeSim: p.isNativeSim,
       description: p.description ?? '',
       sellPrice: String(p.sellPrice),
       costPrice: String(p.costPrice),
@@ -127,13 +135,16 @@ export default function PlatformProductsPage() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        supplierSkuId: editingProduct.supplierProduct?.wmProductId ?? '',
+        supplierSkuId: editingProduct.supplierSkuId,
+        planCode: editingProduct.planCode ?? undefined,
         countryCode: editingProduct.countryCode,
         countryNameZh: editForm.countryNameZh,
         countryNameEn: editForm.countryNameEn,
         countryFlag: editForm.countryFlag || null,
         displayDays: parseInt(editForm.displayDays),
         dataCapacity: editForm.dataCapacity || null,
+        networkType: editForm.networkType || null,
+        isNativeSim: editForm.isNativeSim,
         description: editForm.description || null,
         sellPrice: parseInt(editForm.sellPrice),
         costPrice: parseInt(editForm.costPrice),
@@ -168,9 +179,9 @@ export default function PlatformProductsPage() {
           </label>
           <button
             onClick={() => {
-              const headers = 'supplierSkuId,countryCode,countryNameZh,countryNameEn,countryFlag,displayDays,dataCapacity,description,sellPrice,costPrice,sortOrder'
-              const example = 'WM001,JP,日本,Japan,🇯🇵,5,1GB,,299,150,1'
-              const blob = new Blob([headers + '\n' + example], { type: 'text/csv' })
+              const headers = '供應商方案ID,plan_code,商品名稱,適用地區,是否為原生卡,網絡類型,成本價NT,售價NT'
+              const example = 'WM-JP-001,JP-SB-1GB-3D,日本Softbank 3天 1GB/天,日本,否,4G/5G,150,299'
+              const blob = new Blob(['﻿' + headers + '\n' + example], { type: 'text/csv;charset=utf-8' })
               const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
               a.download = 'products_template.csv'; a.click()
             }}
@@ -307,6 +318,29 @@ export default function PlatformProductsPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">網絡類型</label>
+                  <input
+                    type="text"
+                    value={editForm.networkType}
+                    onChange={e => setEditForm(f => f ? { ...f, networkType: e.target.value } : f)}
+                    placeholder="4G/5G"
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-4">
+                  <input
+                    type="checkbox"
+                    id="isNativeSim"
+                    checked={editForm.isNativeSim}
+                    onChange={e => setEditForm(f => f ? { ...f, isNativeSim: e.target.checked } : f)}
+                    className="w-4 h-4 rounded"
+                  />
+                  <label htmlFor="isNativeSim" className="text-sm text-gray-600">原生卡 (Native SIM)</label>
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">售價（NT$）</label>
@@ -351,7 +385,10 @@ export default function PlatformProductsPage() {
               {/* Read-only info */}
               <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500 grid grid-cols-2 gap-1">
                 <span>國家代碼：<span className="font-mono font-medium text-gray-700">{editingProduct.countryCode}</span></span>
-                <span>供應商 SKU：<span className="font-mono font-medium text-gray-700">{editingProduct.supplierProduct?.wmProductId ?? '—'}</span></span>
+                <span>供應商 SKU：<span className="font-mono font-medium text-gray-700">{editingProduct.supplierSkuId || editingProduct.supplierProduct?.wmProductId || '—'}</span></span>
+                {editingProduct.planCode && (
+                  <span className="col-span-2">Plan Code：<span className="font-mono font-medium text-gray-700">{editingProduct.planCode}</span></span>
+                )}
               </div>
 
               {saveMsg && (

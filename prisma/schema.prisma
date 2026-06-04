@@ -141,6 +141,9 @@ model Product {
   countryFlag      String?       @map("country_flag")   // emoji 或 URL
   displayDays      Int           @map("display_days")   // 前台顯示天數（+/- 選擇用）
   dataCapacity     String?       @map("data_capacity")  // 例如 "1GB" / "每日1GB"
+  planCode         String?       @map("plan_code")      // 供應商 Plan_code，e.g. JP-SB-1GB-3D
+  networkType      String?       @map("network_type")   // 例如 "5G/4G"
+  isNativeSim      Boolean       @default(false) @map("is_native_sim") // 是否為原生卡
   description      String?
   sellPrice        Int           @map("sell_price")     // 台幣含稅售價
   costPrice        Int           @map("cost_price")     // 同步自供應商，僅後台可見
