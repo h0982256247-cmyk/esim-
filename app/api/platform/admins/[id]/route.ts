@@ -3,6 +3,7 @@ import { requirePlatformAuth } from '@/lib/auth/platform'
 import { toggleAdminActive, updateAdminPassword, updateMaxRebateRate } from '@/lib/services/platform-admin'
 import { PlatformAdminRole } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
+import { encrypt, safeDecrypt } from '@/lib/utils/crypto'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -37,7 +38,15 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   if (!admin) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  return NextResponse.json({ admin })
+  // Mask lineAccessToken before returning — never expose plaintext to frontend
+  return NextResponse.json({
+    admin: {
+      ...admin,
+      lineAccessToken: admin.lineAccessToken
+        ? '****' + safeDecrypt(admin.lineAccessToken).slice(-4)
+        : null,
+    },
+  })
 }
 
 // PATCH /api/platform/admins/:id  — toggle active, change password, or set maxRebateRate
@@ -81,7 +90,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (body.tenantSlug !== undefined) updateData.tenantSlug = body.tenantSlug
     if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl
     if (body.primaryColor !== undefined) updateData.primaryColor = body.primaryColor
-    if (body.lineAccessToken !== undefined) updateData.lineAccessToken = body.lineAccessToken
+    if (body.lineAccessToken !== undefined) {
+      // If masked value passed back, keep existing encrypted value
+      if (body.lineAccessToken && body.lineAccessToken.startsWith('****')) {
+        const existing = await prisma.platformAdmin.findUnique({ where: { id }, select: { lineAccessToken: true } })
+        updateData.lineAccessToken = existing?.lineAccessToken ?? null
+      } else {
+        updateData.lineAccessToken = body.lineAccessToken ? encrypt(body.lineAccessToken) : null
+      }
+    }
     try {
       await prisma.platformAdmin.update({ where: { id }, data: updateData })
       return NextResponse.json({ ok: true })

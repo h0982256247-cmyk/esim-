@@ -1,9 +1,13 @@
 import { prisma } from '@/lib/db/prisma'
+import { encrypt, safeDecrypt } from '@/lib/utils/crypto'
 
 // ─── eSIM 供應商設定 ──────────────────────────────────────────────
 
+/** Returns config with decrypted token (for internal server use only) */
 export async function getEsimConfig(adminId: string) {
-  return prisma.tenantEsimConfig.findUnique({ where: { adminId } })
+  const cfg = await prisma.tenantEsimConfig.findUnique({ where: { adminId } })
+  if (!cfg) return null
+  return { ...cfg, token: safeDecrypt(cfg.token) }
 }
 
 export async function upsertEsimConfig(
@@ -16,6 +20,7 @@ export async function upsertEsimConfig(
     token: string
   },
 ) {
+  const encryptedToken = encrypt(input.token)
   return prisma.tenantEsimConfig.upsert({
     where: { adminId },
     create: {
@@ -24,14 +29,14 @@ export async function upsertEsimConfig(
       apiUrl: input.apiUrl,
       merchantId: input.merchantId,
       deptId: input.deptId,
-      token: input.token,
+      token: encryptedToken,
     },
     update: {
       provider: input.provider,
       apiUrl: input.apiUrl,
       merchantId: input.merchantId,
       deptId: input.deptId,
-      token: input.token,
+      token: encryptedToken,
       isActive: true,
     },
   })
@@ -39,12 +44,25 @@ export async function upsertEsimConfig(
 
 // ─── 金流設定 ─────────────────────────────────────────────────────
 
+/** Returns configs with decrypted keys (for internal server use only) */
 export async function getPaymentConfigs(adminId: string) {
-  return prisma.tenantPaymentConfig.findMany({ where: { adminId } })
+  const cfgs = await prisma.tenantPaymentConfig.findMany({ where: { adminId } })
+  return cfgs.map(c => ({
+    ...c,
+    partnerKey: safeDecrypt(c.partnerKey),
+    appKey: c.appKey ? safeDecrypt(c.appKey) : c.appKey,
+  }))
 }
 
+/** Returns single config with decrypted keys (for internal server use only) */
 export async function getPaymentConfig(adminId: string, gateway: string) {
-  return prisma.tenantPaymentConfig.findFirst({ where: { adminId, gateway } })
+  const c = await prisma.tenantPaymentConfig.findFirst({ where: { adminId, gateway } })
+  if (!c) return null
+  return {
+    ...c,
+    partnerKey: safeDecrypt(c.partnerKey),
+    appKey: c.appKey ? safeDecrypt(c.appKey) : c.appKey,
+  }
 }
 
 export async function upsertPaymentConfig(
@@ -58,23 +76,26 @@ export async function upsertPaymentConfig(
     appKey?: string
   },
 ) {
+  const encryptedPartnerKey = encrypt(input.partnerKey)
+  const encryptedAppKey = input.appKey ? encrypt(input.appKey) : undefined
+
   return prisma.tenantPaymentConfig.upsert({
     where: { adminId_gateway: { adminId, gateway: input.gateway } },
     create: {
       adminId,
       gateway: input.gateway,
-      partnerKey: input.partnerKey,
+      partnerKey: encryptedPartnerKey,
       merchantId: input.merchantId,
       env: input.env,
       appId: input.appId,
-      appKey: input.appKey,
+      appKey: encryptedAppKey,
     },
     update: {
-      partnerKey: input.partnerKey,
+      partnerKey: encryptedPartnerKey,
       merchantId: input.merchantId,
       env: input.env,
       appId: input.appId,
-      appKey: input.appKey,
+      appKey: encryptedAppKey,
       isActive: true,
     },
   })

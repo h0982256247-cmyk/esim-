@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { NotificationType } from '@prisma/client'
+import { safeDecrypt } from '@/lib/utils/crypto'
 
 // ─── LINE Messaging API Push Message ─────────────────────────────
 
@@ -9,7 +10,7 @@ async function getLineToken(tenantAdminId?: string | null): Promise<string> {
       where: { id: tenantAdminId },
       select: { lineAccessToken: true },
     })
-    if (admin?.lineAccessToken) return admin.lineAccessToken
+    if (admin?.lineAccessToken) return safeDecrypt(admin.lineAccessToken)
   }
   return process.env.LINE_CHANNEL_ACCESS_TOKEN ?? ''
 }
