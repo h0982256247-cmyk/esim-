@@ -4,7 +4,7 @@ import { createPlatformSession, PLATFORM_COOKIE } from '@/lib/auth/platform'
 
 // POST /api/platform/auth/login
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json()
+  const { email, password, rememberMe } = await req.json()
 
   if (!email || !password) {
     return NextResponse.json({ error: '帳號與密碼必填' }, { status: 400 })
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 8 * 60 * 60,
+    maxAge: rememberMe ? 30 * 24 * 60 * 60 : 8 * 60 * 60,  // 30天 或 8小時
     path: '/',
   })
 

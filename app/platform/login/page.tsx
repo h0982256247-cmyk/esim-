@@ -7,6 +7,7 @@ export default function PlatformLoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -18,7 +19,7 @@ export default function PlatformLoginPage() {
     const r = await fetch('/api/platform/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, rememberMe }),
     }).then(x => x.json())
 
     setLoading(false)
@@ -57,6 +58,19 @@ export default function PlatformLoginPage() {
               required
               className="w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="rememberMe"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={e => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            <label htmlFor="rememberMe" className="text-sm text-gray-600 cursor-pointer select-none">
+              記住我（30 天免登入）
+            </label>
           </div>
 
           {error && <p className="text-red-500 text-sm">{error}</p>}
