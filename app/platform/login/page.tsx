@@ -45,6 +45,7 @@ export default function PlatformLoginPage() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
+              autoComplete="username"
               className="w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="admin@example.com"
             />
@@ -56,6 +57,7 @@ export default function PlatformLoginPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
               className="w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
