@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
   let admin
   try {
     admin = await verifyAdminCredentials(email, password)
-  } catch (e) {
-    return NextResponse.json({ error: 'db_error', detail: String(e) }, { status: 500 })
+  } catch {
+    return NextResponse.json({ error: '伺服器錯誤，請稍後再試' }, { status: 500 })
   }
   if (!admin) {
     return NextResponse.json({ error: '帳號或密碼錯誤' }, { status: 401 })
