@@ -445,7 +445,28 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
     primaryColor: admin.primaryColor ?? '#3B82F6',
   })
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('adminId', admin.id)
+    const r = await fetch('/api/platform/upload/logo', { method: 'POST', body: fd }).then(x => x.json())
+    setUploading(false)
+    if (r.ok) {
+      setForm(p => ({ ...p, logoUrl: r.url }))
+    } else {
+      setUploadError(r.error ?? '上傳失敗')
+    }
+    // Reset input so the same file can be re-selected
+    e.target.value = ''
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -492,19 +513,59 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
               className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+
+          {/* Logo 欄位：支援直接上傳或貼網址 */}
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Logo 圖片網址</label>
+            <label className="text-xs text-gray-500 block mb-1">Logo 圖片</label>
+
+            {/* 上傳區 */}
+            <div className="flex items-center gap-2 mb-2">
+              <label className={`inline-flex items-center gap-1.5 cursor-pointer border rounded-lg px-3 py-2 text-xs font-medium transition
+                ${uploading ? 'opacity-50 cursor-not-allowed bg-gray-50 text-gray-400' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                </svg>
+                {uploading ? '上傳中…' : '選擇圖片上傳'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  disabled={uploading}
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+              </label>
+              <span className="text-xs text-gray-400">PNG / JPG / WebP / SVG，最大 2 MB</span>
+            </div>
+
+            {uploadError && (
+              <p className="text-xs text-red-500 mb-2">{uploadError}</p>
+            )}
+
+            {/* 或直接輸入 URL */}
             <input
               type="url"
               value={form.logoUrl}
               onChange={e => setForm(p => ({ ...p, logoUrl: e.target.value }))}
-              placeholder="https://..."
+              placeholder="https://... （或直接上傳）"
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+
+            {/* 預覽 */}
             {form.logoUrl && (
-              <img src={form.logoUrl} alt="Logo preview" className="mt-2 h-10 object-contain rounded border" />
+              <div className="mt-2 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={form.logoUrl} alt="Logo preview" className="h-12 w-auto object-contain rounded border bg-gray-50 p-1" />
+                <button
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, logoUrl: '' }))}
+                  className="text-xs text-gray-400 hover:text-red-500 transition"
+                >
+                  移除
+                </button>
+              </div>
             )}
           </div>
+
           <div>
             <label className="text-xs text-gray-500 block mb-1">主題色</label>
             <div className="flex items-center gap-2">
@@ -528,7 +589,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploading}
             className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
           >
             {saving ? '儲存中…' : '儲存品牌設定'}
