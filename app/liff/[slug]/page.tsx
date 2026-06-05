@@ -7,7 +7,7 @@ import { useLiff } from '@/components/liff/LiffProvider'
 import { useTenant } from '@/components/liff/TenantContext'
 import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 
-type Phase = 'splash' | 'modal' | 'redirecting'
+type Phase = 'splash' | 'redirecting'
 
 export default function TenantLiffHome() {
   const { isReady, error } = useLiff()
@@ -20,7 +20,6 @@ export default function TenantLiffHome() {
   const [splashOut, setSplashOut] = useState(false)
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
 
-  const primary = tenant?.primaryColor ?? '#FFC107'
   const brandName = tenant?.brandName ?? 'eSIM'
 
   useEffect(() => {
@@ -39,11 +38,11 @@ export default function TenantLiffHome() {
     const t = setTimeout(() => {
       setSplashOut(true)
       setTimeout(() => {
+        setPhase('redirecting')
         if (profileComplete) {
-          setPhase('redirecting')
           router.replace(`/liff/${slug}/products`)
         } else {
-          setPhase('modal')
+          router.replace(`/liff/${slug}/products?setup=1`)
         }
       }, 350)
     }, 500)
@@ -179,63 +178,6 @@ export default function TenantLiffHome() {
         </div>
       </div>
 
-      {/* Profile modal */}
-      {phase === 'modal' && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 90,
-          background: 'rgba(0,0,0,0.45)',
-          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-          animation: 'fadeIn 0.25s ease',
-        }}>
-          <div style={{
-            background: '#fff', borderRadius: '24px 24px 0 0',
-            padding: '28px 24px 40px', width: '100%', maxWidth: 520,
-            animation: 'slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)',
-          }}>
-            <div style={{ width: 40, height: 4, background: '#e2e8f0', borderRadius: 100, margin: '0 auto 24px' }} />
-            <div style={{ width: 72, height: 72, background: '#FFF8E1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-              <BeeLogoSVG size={48} />
-            </div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1F1F1F', textAlign: 'center', margin: '0 0 10px' }}>
-              完成個人資料綁定
-            </h2>
-            <p style={{ fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 1.7, margin: '0 0 8px' }}>
-              填寫基本資料後，即可獲得
-            </p>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              background: '#FFF8E1', border: '1.5px dashed #FFC107',
-              borderRadius: 12, padding: '12px 20px', margin: '0 0 28px',
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFC107" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                <line x1="7" y1="7" x2="7.01" y2="7"/>
-              </svg>
-              <span style={{ fontSize: 15, fontWeight: 700, color: '#92400e' }}>官方 9 折優惠券 × 1</span>
-            </div>
-            <button
-              onClick={() => router.push(`/liff/${slug}/profile/setup`)}
-              style={{
-                width: '100%', background: primary, border: 'none', borderRadius: 16,
-                padding: '17px', fontSize: 16, fontWeight: 800, color: '#1F1F1F',
-                cursor: 'pointer', letterSpacing: '0.04em',
-              }}
-            >
-              前往綁定
-            </button>
-            <button
-              onClick={() => router.replace(`/liff/${slug}/products`)}
-              style={{ width: '100%', background: 'none', border: 'none', marginTop: 12, padding: '10px', fontSize: 13, color: '#94a3b8', cursor: 'pointer' }}
-            >
-              稍後再說
-            </button>
-          </div>
-          <style>{`
-            @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-            @keyframes slideUp{from{transform:translateY(60px)}to{transform:translateY(0)}}
-          `}</style>
-        </div>
-      )}
     </>
   )
 }
