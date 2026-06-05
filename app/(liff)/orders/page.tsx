@@ -7,6 +7,7 @@ import { useTenantColors } from '@/components/liff/TenantContext'
 
 type Order = {
   id: string
+  orderNumber: string | null
   status: string
   totalPaid: number
   createdAt: string
@@ -26,6 +27,7 @@ const STATUS_META: Record<string, { text: string; bg: string; color: string }> =
   FAILED:       { text: '付款失敗',    bg: '#fee2e2', color: '#b91c1c' },
   ESIM_PENDING: { text: 'eSIM 處理中', bg: '#ffedd5', color: '#c2410c' },
   REFUNDED:     { text: '已退款',      bg: '#f1f5f9', color: '#475569' },
+  CANCELLED:    { text: '已取消',      bg: '#f1f5f9', color: '#94a3b8' },
 }
 
 function ChevronRight() {
@@ -100,7 +102,7 @@ export default function OrdersPage() {
                   )}
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 12, color: S.faint }}>#{o.id.slice(-8).toUpperCase()}</span>
+                  <span style={{ fontSize: 12, color: S.faint }}>{o.orderNumber ?? `#${o.id.slice(-8).toUpperCase()}`}</span>
                   <span style={{ fontSize: 20, fontWeight: 800, color: C.primary, letterSpacing: '-0.02em' }}>
                     NT${o.totalPaid.toLocaleString()}
                   </span>

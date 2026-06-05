@@ -7,6 +7,7 @@ import { useTenantColors } from '@/components/liff/TenantContext'
 
 type OrderDetail = {
   id: string
+  orderNumber: string | null
   status: string
   totalPaid: number
   subtotal: number
@@ -39,6 +40,7 @@ const STATUS_META: Record<string, { text: string; bg: string; color: string }> =
   FAILED:       { text: '付款失敗',     bg: '#fee2e2', color: '#b91c1c' },
   ESIM_PENDING: { text: 'eSIM 處理中',  bg: '#ffedd5', color: '#c2410c' },
   REFUNDED:     { text: '已退款',       bg: '#f1f5f9', color: '#475569' },
+  CANCELLED:    { text: '已取消',       bg: '#f1f5f9', color: '#94a3b8' },
 }
 
 const S = {
@@ -75,13 +77,16 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>
+    const POLLING_STATUSES = ['PROCESSING', 'PAID', 'ESIM_PENDING']
     const load = () =>
       fetch(`/api/orders/${id}`)
         .then(r => { if (r.status === 404) setNotFound(true); return r.json() })
         .then(d => {
           if (d.order) setOrder(d.order)
-          if (d.order?.status === 'ESIM_PENDING' || d.order?.status === 'PAID') {
-            timer = setInterval(load, 5000)
+          if (POLLING_STATUSES.includes(d.order?.status)) {
+            if (!timer) timer = setInterval(load, 4000)
+          } else {
+            clearInterval(timer)
           }
         })
         .finally(() => setLoading(false))
@@ -143,7 +148,7 @@ export default function OrderDetailPage() {
             {s.text}
           </span>
         </div>
-        <p style={{ fontSize: 12, color: S.faint, marginTop: 4 }}>#{order.id.slice(-8).toUpperCase()}</p>
+        <p style={{ fontSize: 12, color: S.faint, marginTop: 4 }}>{order.orderNumber ?? `#${order.id.slice(-8).toUpperCase()}`}</p>
       </div>
 
       {/* eSIM 啟動碼 */}
@@ -223,6 +228,29 @@ export default function OrderDetailPage() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 已取消 */}
+      {order.status === 'CANCELLED' && (
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 16, padding: '18px 20px', marginBottom: 12 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#475569', margin: '0 0 4px' }}>訂單已取消</p>
+          <p style={{ fontSize: 13, color: '#94a3b8', margin: 0, lineHeight: 1.6 }}>
+            此訂單因超過 30 分鐘未完成付款，已自動取消。如需購買請重新下單。
+          </p>
+        </div>
+      )}
+
+      {/* 付款確認中（3DS 完成後等待 webhook） */}
+      {order.status === 'PROCESSING' && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 16, padding: '18px 20px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <div style={{ width: 18, height: 18, border: '2.5px solid #bfdbfe', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+            <p style={{ fontSize: 14, fontWeight: 700, color: '#1d4ed8', margin: 0 }}>付款確認中</p>
+          </div>
+          <p style={{ fontSize: 13, color: '#1e40af', margin: 0, lineHeight: 1.6 }}>
+            正在與銀行確認付款結果，通常在幾秒內完成。請勿關閉此頁面。
+          </p>
         </div>
       )}
 

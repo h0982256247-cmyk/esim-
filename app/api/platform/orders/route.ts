@@ -34,11 +34,13 @@ export async function GET(req: NextRequest) {
       take: pageSize,
       select: {
         id: true,
+        orderNumber: true,
         status: true,
         totalPaid: true,
         subtotal: true,
         discountAmount: true,
         paymentMethod: true,
+        tapPayOrderId: true,
         paidAt: true,
         createdAt: true,
         retryCount: true,

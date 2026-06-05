@@ -3,6 +3,21 @@ import { OrderStatus, PaymentMethod } from '@prisma/client'
 import { validateCouponOwnership, validateCouponCombination, calculateFinalPrice, markCouponUsed } from './coupon'
 import { getProductById } from './product'
 
+// ─── 訂單號生成 ───────────────────────────────────────────────────
+// 格式：ESM-YYMMDD-XXXXXX（去除易混淆字元 I/O/0/1）
+const ORDER_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+function generateOrderNumber(): string {
+  const now = new Date()
+  const yy = String(now.getFullYear()).slice(2)
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  const suffix = Array.from({ length: 6 }, () =>
+    ORDER_CHARS[Math.floor(Math.random() * ORDER_CHARS.length)]
+  ).join('')
+  return `ESM-${yy}${mm}${dd}-${suffix}`
+}
+
 // ─── 建立訂單（結帳第一步）────────────────────────────────────────
 
 export interface CreateOrderInput {
@@ -14,7 +29,7 @@ export interface CreateOrderInput {
 }
 
 export type CreateOrderResult =
-  | { ok: true; orderId: string; totalPaid: number; subtotal: number; discountAmount: number }
+  | { ok: true; orderId: string; orderNumber: string; totalPaid: number; subtotal: number; discountAmount: number }
   | { ok: false; reason: string }
 
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
@@ -38,10 +53,19 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const totalPaid = calculateFinalPrice(subtotal, discounts)
   const discountAmount = subtotal - totalPaid
 
+  // 生成訂單號（衝突時最多重試 3 次）
+  let orderNumber = generateOrderNumber()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const exists = await prisma.order.findUnique({ where: { orderNumber } })
+    if (!exists) break
+    orderNumber = generateOrderNumber()
+  }
+
   const order = await prisma.$transaction(async tx => {
     const o = await tx.order.create({
       data: {
         userId: input.userId,
+        orderNumber,
         status: OrderStatus.PENDING,
         subtotal,
         discountAmount,
@@ -79,10 +103,18 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   return {
     ok: true,
     orderId: order.id,
+    orderNumber: order.orderNumber ?? orderNumber,
     totalPaid,
     subtotal,
     discountAmount,
   }
+}
+
+// ─── 逾時判斷（30 分鐘）─────────────────────────────────────────────
+export const ORDER_EXPIRY_MS = 30 * 60 * 1000
+
+export function isOrderExpired(createdAt: Date): boolean {
+  return Date.now() - createdAt.getTime() > ORDER_EXPIRY_MS
 }
 
 // ─── 訂單狀態更新 ─────────────────────────────────────────────────
@@ -110,6 +142,33 @@ export async function markOrderFailed(orderId: string) {
     where: { id: orderId },
     data: { status: OrderStatus.FAILED },
   })
+}
+
+export async function markOrderCancelled(orderId: string) {
+  return prisma.order.update({
+    where: { id: orderId },
+    data: { status: OrderStatus.CANCELLED },
+  })
+}
+
+export async function markOrderRefunded(orderId: string) {
+  return prisma.order.update({
+    where: { id: orderId },
+    data: { status: OrderStatus.REFUNDED },
+  })
+}
+
+// 取消超過 30 分鐘仍為 PENDING 的訂單
+export async function cancelExpiredPendingOrders(): Promise<number> {
+  const cutoff = new Date(Date.now() - 30 * 60 * 1000)
+  const result = await prisma.order.updateMany({
+    where: {
+      status: OrderStatus.PENDING,
+      createdAt: { lt: cutoff },
+    },
+    data: { status: OrderStatus.CANCELLED },
+  })
+  return result.count
 }
 
 export async function markOrderEsimPending(orderId: string) {
@@ -153,6 +212,7 @@ export async function getUserOrders(userId: string) {
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
+      orderNumber: true,
       status: true,
       totalPaid: true,
       subtotal: true,
@@ -182,6 +242,7 @@ export async function getOrderByIdForUser(orderId: string, userId: string) {
     where: { id: orderId, userId },
     select: {
       id: true,
+      orderNumber: true,
       status: true,
       subtotal: true,
       discountAmount: true,
@@ -189,6 +250,7 @@ export async function getOrderByIdForUser(orderId: string, userId: string) {
       paymentMethod: true,
       paidAt: true,
       createdAt: true,
+      updatedAt: true,
       esimRcode: true,
       esimQrcode: true,
       esimLpa: true,

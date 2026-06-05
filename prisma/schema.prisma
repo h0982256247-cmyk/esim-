@@ -33,6 +33,7 @@ model User {
   coupons         Coupon[]
   orders          Order[]
   notifications   Notification[]
+  savedCard       SavedCard?
 
   @@map("users")
 }
@@ -230,6 +231,9 @@ model Order {
   totalPaid       Int         @map("total_paid")    // 實付含稅金額（分潤計算基準）
   taxAmount       Int         @default(0) @map("tax_amount")
 
+  // 系統訂單號
+  orderNumber     String?     @unique @map("order_number")
+
   // 金流
   paymentMethod   PaymentMethod @map("payment_method")
   tapPayOrderId   String?     @unique @map("tappay_order_id")
@@ -279,6 +283,7 @@ enum OrderStatus {
   FAILED       // 付款失敗
   ESIM_PENDING // 付款成功但啟動碼未取得（補發中）
   REFUNDED     // 已退款
+  CANCELLED    // 已取消（逾時或手動）
 
   @@map("order_status")
 }
@@ -486,6 +491,27 @@ enum PlatformAdminRole {
   SUB_ADMIN
 
   @@map("platform_admin_role")
+}
+
+// ============================================================
+// 儲存卡片
+// ============================================================
+
+model SavedCard {
+  id            String   @id @default(cuid())
+  userId        String   @unique @map("user_id")
+  cardKeyEnc    String   @map("card_key_enc")
+  cardTokenEnc  String   @map("card_token_enc")
+  lastFour      String   @map("last_four")
+  cardType      Int      @default(1) @map("card_type")
+  funding       Int      @default(0)
+  cardExpiresAt String?  @map("card_expires_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("saved_cards")
 }
 
 // ============================================================

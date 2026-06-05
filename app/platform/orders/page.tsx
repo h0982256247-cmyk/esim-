@@ -7,10 +7,11 @@ import TenantScopeBar from '@/components/platform/TenantScopeBar'
 type Order = {
   id: string; status: string; totalPaid: number; paymentMethod: string
   paidAt: string | null; createdAt: string; retryCount: number
+  orderNumber: string | null; tapPayOrderId: string | null
   user: { displayName: string }
   orderItems: { productName: string }[]
 }
-const STATUS_OPTS = ['','PENDING','PAID','COMPLETED','FAILED','ESIM_PENDING','REFUNDED']
+const STATUS_OPTS = ['','PENDING','PROCESSING','PAID','COMPLETED','FAILED','ESIM_PENDING','REFUNDED','CANCELLED']
 const STATUS: Record<string,{text:string;cls:string}> = {
   PENDING:      {text:'待付款',cls:'bg-yellow-50 text-yellow-600'},
   PROCESSING:   {text:'付款中',cls:'bg-blue-50 text-blue-500'},
@@ -19,6 +20,7 @@ const STATUS: Record<string,{text:string;cls:string}> = {
   FAILED:       {text:'付款失敗',cls:'bg-red-50 text-red-500'},
   ESIM_PENDING: {text:'eSIM 待補',cls:'bg-orange-50 text-orange-600'},
   REFUNDED:     {text:'已退款',cls:'bg-gray-100 text-gray-400'},
+  CANCELLED:    {text:'已取消',cls:'bg-gray-100 text-gray-400'},
 }
 const COLORS=['bg-blue-500','bg-violet-500','bg-emerald-500','bg-amber-500','bg-rose-500']
 const avatarCls=(n:string)=>COLORS[n.charCodeAt(0)%COLORS.length]
@@ -87,8 +89,9 @@ function OrdersContent() {
                 return (
                   <tr key={o.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3.5">
-                      <p className="font-mono text-xs text-gray-400">#{o.id.slice(-8).toUpperCase()}</p>
+                      <p className="font-mono text-xs font-semibold text-gray-700">{o.orderNumber??`#${o.id.slice(-8).toUpperCase()}`}</p>
                       <p className="text-xs text-gray-600 mt-0.5">{o.orderItems[0]?.productName??'—'}</p>
+                      {o.tapPayOrderId&&<p className="font-mono text-xs text-gray-300 mt-0.5 select-all">{o.tapPayOrderId}</p>}
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
