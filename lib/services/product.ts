@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db/prisma'
-import { ProductStatus } from '@prisma/client'
+import { ProductStatus, SupplierProductType } from '@prisma/client'
 
 export async function getActiveProducts(countryCode?: string, tenantAdminId?: string | null) {
   return prisma.product.findMany({
@@ -128,7 +128,26 @@ export async function batchCreateProducts(rows: CsvProductRow[], tenantAdminId?:
   return prisma.$transaction(async tx => {
     let count = 0
     for (const row of rows) {
-      await tx.product.create({ data: { ...row, tenantAdminId: tenantAdminId ?? null } })
+      // SupplierProduct 以 wmProductId = supplierSkuId 做 upsert
+      // 若供應商目錄中已有此 SKU 則沿用，否則自動建立 stub 記錄
+      const supplierProduct = await tx.supplierProduct.upsert({
+        where:  { wmProductId: row.supplierSkuId },
+        update: {},   // 已存在則不覆蓋任何欄位
+        create: {
+          wmProductId: row.supplierSkuId,
+          productName: row.countryNameZh || row.supplierSkuId,
+          productType: SupplierProductType.ESIM,
+          costPrice:   row.costPrice,
+        },
+      })
+
+      await tx.product.create({
+        data: {
+          ...row,
+          supplierSkuId: supplierProduct.id,   // 使用 SupplierProduct 的 cuid
+          tenantAdminId: tenantAdminId ?? null,
+        },
+      })
       count++
     }
     return { count }
