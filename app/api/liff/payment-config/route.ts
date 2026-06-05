@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
+import { safeDecrypt } from '@/lib/utils/crypto'
 
 // GET /api/liff/payment-config?lineUid=...
 // Returns TapPay frontend SDK config for the user's tenant
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
     if (cfg?.appId && cfg?.appKey) {
       return NextResponse.json({
         appId: parseInt(cfg.appId),
-        appKey: cfg.appKey,
+        appKey: safeDecrypt(cfg.appKey),   // decrypt before sending to frontend SDK
         env: cfg.env === 'production' ? 'production' : 'sandbox',
       })
     }
