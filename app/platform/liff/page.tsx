@@ -18,9 +18,9 @@ const LIFF_PAGES = [
 
 // Template preview colours per key
 const HOME_PREVIEW: Record<string, { bg: string; label: string }> = {
-  landmark: { bg: 'linear-gradient(160deg,#fff9ec,#fff)', label: '白底地標插畫' },
-  gradient: { bg: 'linear-gradient(160deg,#0f0c29,#302b63,#24243e)', label: '深色極光漸層' },
-  minimal:  { bg: 'linear-gradient(160deg,#fafafa,#f3f4f6)', label: '極簡品牌' },
+  landmark: { bg: 'linear-gradient(160deg,#FAF9F6,#fff)', label: '經典首頁' },
+  gradient: { bg: 'linear-gradient(160deg,#0a0a0f,#1e1b4b)', label: '暗黑探索家' },
+  minimal:  { bg: 'linear-gradient(160deg,#ffffff,#f7f8fa)', label: '清新微風' },
 }
 const PRODUCTS_PREVIEW: Record<string, { accent: string; rows: number[] }> = {
   classic:  { accent: '#0284c7', rows: [2, 3, 2] },
@@ -129,35 +129,53 @@ export default function LiffSettingsPage() {
                       style={{ background: preview.bg }}
                     >
                       {t.key === 'landmark' && (
-                        <>
-                          <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center shadow-sm text-xs">🐝</div>
-                          <div className="flex gap-1">
-                            {['🗼','🏔️','🕐'].map(e => (
-                              <span key={e} className="text-xs opacity-60">{e}</span>
-                            ))}
+                        <div className="w-full px-2 flex flex-col gap-1.5">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <div className="w-5 h-5 rounded-md bg-amber-100 flex items-center justify-center text-xs">🐝</div>
+                            <div className="h-2 w-12 bg-gray-200 rounded-full"/>
                           </div>
-                        </>
+                          <div className="h-6 bg-white rounded-lg border border-gray-100 flex items-center px-2 gap-1">
+                            <div className="w-2 h-2 rounded-full bg-gray-200"/>
+                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full"/>
+                          </div>
+                          <div className="grid grid-cols-4 gap-1">
+                            {[0,1,2,3].map(i=><div key={i} className="h-7 rounded-lg bg-orange-50"/>)}
+                          </div>
+                        </div>
                       )}
                       {t.key === 'gradient' && (
-                        <>
-                          <div className="w-8 h-8 rounded-full border border-white/30 bg-white/10 flex items-center justify-center shadow-inner">
-                            <span className="text-white text-sm">✦</span>
+                        <div className="w-full px-2 flex flex-col gap-1.5">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <div className="w-5 h-5 rounded-md bg-white/10 border border-white/20"/>
+                            <div className="h-1.5 w-10 bg-white/30 rounded-full"/>
                           </div>
-                          <div className="flex gap-0.5">
-                            {[0,1,2].map(i => (
-                              <div key={i} className="w-1.5 h-1.5 rounded-full bg-indigo-400/70" style={{ animationDelay: `${i*0.2}s` }} />
+                          <div className="h-6 bg-white/10 rounded-lg border border-white/10 flex items-center px-2 gap-1">
+                            <div className="w-2 h-2 rounded-full bg-white/20"/>
+                            <div className="flex-1 h-1.5 bg-white/15 rounded-full"/>
+                          </div>
+                          <div className="flex gap-1 overflow-hidden">
+                            {['#312e81','#1e3a5f','#166534'].map((c,i)=>(
+                              <div key={i} className="flex-1 h-10 rounded-lg" style={{background:`linear-gradient(145deg,${c},${c}88)`}}/>
                             ))}
                           </div>
-                        </>
+                        </div>
                       )}
                       {t.key === 'minimal' && (
-                        <>
-                          <div className="w-8 h-8 rounded-full border border-gray-200 bg-white shadow-sm flex items-center justify-center">
-                            <span className="text-xs">🐝</span>
+                        <div className="w-full px-2 flex flex-col gap-1.5">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-200"/>
+                            <div className="h-1.5 w-10 bg-gray-200 rounded-full"/>
                           </div>
-                          <div className="w-8 h-0.5 bg-gray-300 rounded" />
-                          <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
-                        </>
+                          <div className="h-6 bg-gray-100 rounded-xl"/>
+                          <div className="flex flex-col gap-1">
+                            {[0,1,2].map(i=>(
+                              <div key={i} className="h-5 bg-gray-50 rounded-lg border border-gray-100 flex items-center px-2 gap-1.5">
+                                <div className="w-3 h-3 rounded bg-gray-200"/>
+                                <div className="flex-1 h-1.5 bg-gray-200 rounded-full"/>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
                       {active && (
                         <div className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
