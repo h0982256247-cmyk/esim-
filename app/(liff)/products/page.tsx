@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { GlobeIllustration, BeeLogoSVG } from '@/components/liff/LiffIllustrations'
-import { useTenantColors } from '@/components/liff/TenantContext'
+import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
 
 type Country = {
   countryCode: string
@@ -60,6 +60,7 @@ export default function ProductsPage() {
 
 function SetupModal({ slug, onDismiss }: { slug: string; onDismiss: () => void }) {
   const C = useTenantColors()
+  const tenant = useTenant()
   const router = useRouter()
   return (
     <div style={{
@@ -79,14 +80,17 @@ function SetupModal({ slug, onDismiss }: { slug: string; onDismiss: () => void }
         animation: 'smScaleIn 0.28s cubic-bezier(0.34,1.56,0.64,1)',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
       }}>
-        {/* Icon */}
+        {/* Logo / Icon */}
         <div style={{
           width: 76, height: 76, borderRadius: '50%',
-          background: '#FFF8E1',
+          background: tenant?.logoUrl ? 'transparent' : '#FFF8E1',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          marginBottom: 20,
+          marginBottom: 20, overflow: 'hidden',
         }}>
-          <BeeLogoSVG size={48} />
+          {tenant?.logoUrl
+            ? <img src={tenant.logoUrl} alt="logo" style={{ width: 76, height: 76, objectFit: 'contain', borderRadius: '50%' }} />
+            : <BeeLogoSVG size={48} />
+          }
         </div>
 
         {/* Title */}
@@ -160,6 +164,7 @@ function ProductsContent() {
   const showSetup = searchParams.get('setup') === '1'
   const { liff, isReady } = useLiff()
   const C = useTenantColors()
+  const tenant = useTenant()
 
   const [countries, setCountries] = useState<Country[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -198,7 +203,10 @@ function ProductsContent() {
         <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96 }}>
           {/* Hero */}
           <div style={{ padding: '32px 24px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-            <GlobeIllustration size={110} />
+            {tenant?.logoUrl
+              ? <img src={tenant.logoUrl} alt="logo" style={{ width: 110, height: 110, objectFit: 'contain' }} />
+              : <GlobeIllustration size={110} />
+            }
             <div style={{ textAlign: 'center' }}>
               <h1 style={{ fontSize: 24, fontWeight: 800, color: S.ink, letterSpacing: '-0.02em', margin: 0 }}>選擇目的地</h1>
               <p style={{ fontSize: 13, color: S.faint, marginTop: 6 }}>購買出國 eSIM，即插即用</p>
