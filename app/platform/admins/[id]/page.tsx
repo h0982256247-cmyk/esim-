@@ -540,6 +540,12 @@ function MerchantIdCard({
 
       {expanded && (
         <form onSubmit={handleSave} className="mt-3 space-y-2 border-t pt-3">
+          {/* 若共用設定尚未儲存，禁止儲存 */}
+          {!anyConfig && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              ⚠️ 請先儲存上方「TapPay 共用設定」，再設定 Merchant ID
+            </p>
+          )}
           <div>
             <label className="text-xs text-gray-500 block mb-1">Merchant ID</label>
             <input
@@ -547,13 +553,14 @@ function MerchantIdCard({
               value={merchantId}
               onChange={e => setMerchantId(e.target.value)}
               required
+              disabled={!anyConfig}
               placeholder={`輸入 ${GATEWAY_LABEL[gateway]} 的 Merchant ID`}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
             />
           </div>
           {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
           <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+            <button type="submit" disabled={saving || !anyConfig} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
               {saving ? '儲存中…' : '儲存'}
             </button>
             <button type="button" onClick={() => setExpanded(false)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm">取消</button>

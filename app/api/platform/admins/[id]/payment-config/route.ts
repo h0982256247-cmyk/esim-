@@ -44,7 +44,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const body = await req.json()
   const { gateway, partnerKey, merchantId, env = 'sandbox', appId, appKey } = body
 
-  if (!gateway || !partnerKey || !merchantId) {
+  if (!gateway || !partnerKey) {
     return NextResponse.json({ error: '請填寫所有必要欄位' }, { status: 400 })
   }
 
