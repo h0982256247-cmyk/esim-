@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
 
-  const { email, password, name, role, modules, tenantSlug, brandName, liffId, primaryColor } = await req.json()
+  const { email, password, name, role, modules, parentId: bodyParentId, tenantSlug, brandName, liffId, primaryColor } = await req.json()
 
   if (!email || !password || !name || !role) {
     return NextResponse.json({ error: '必填欄位缺漏' }, { status: 400 })
@@ -37,11 +37,20 @@ export async function POST(req: NextRequest) {
   if (role === PlatformAdminRole.PLATFORM_ADMIN && (!tenantSlug || !brandName || !liffId)) {
     return NextResponse.json({ error: 'Platform Admin 需填寫 tenantSlug、brandName、liffId' }, { status: 400 })
   }
+  // Super Admin 建 Sub Admin 時必須指定所屬 Platform
+  if (role === PlatformAdminRole.SUB_ADMIN && auth.role === PlatformAdminRole.SUPER_ADMIN && !bodyParentId) {
+    return NextResponse.json({ error: 'Super Admin 建立 Sub Admin 需指定所屬 Platform' }, { status: 400 })
+  }
+
+  // parentId 決定：Super Admin 建 Sub Admin 時用前端傳來的，否則用自己
+  const parentId = (role === PlatformAdminRole.SUB_ADMIN && auth.role === PlatformAdminRole.SUPER_ADMIN)
+    ? bodyParentId
+    : auth.adminId
 
   try {
     const admin = await createAdmin({
       email, password, name, role,
-      parentId: auth.adminId,
+      parentId,
       createdById: auth.adminId,
       modules: modules ?? [],
       tenantSlug, brandName, liffId, primaryColor,

@@ -17,7 +17,7 @@ export default function PlatformAdminsPage() {
   const [loading, setLoading] = useState(true)
   const [currentRole, setCurrentRole] = useState<string|null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({email:'',password:'',name:'',role:'SUB_ADMIN',tenantSlug:'',brandName:'',liffId:'',primaryColor:'#FFC107'})
+  const [form, setForm] = useState({email:'',password:'',name:'',role:'SUB_ADMIN',parentId:'',tenantSlug:'',brandName:'',liffId:'',primaryColor:'#FFC107'})
   const [creating, setCreating] = useState(false)
   const [createMsg, setCreateMsg] = useState<{ok:boolean;text:string}|null>(null)
   const [editingRebate, setEditingRebate] = useState<string|null>(null)
@@ -36,7 +36,7 @@ export default function PlatformAdminsPage() {
     e.preventDefault(); setCreating(true); setCreateMsg(null)
     const r = await fetch('/api/platform/admins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)}).then(x=>x.json())
     setCreating(false)
-    if(r.admin){setCreateMsg({ok:true,text:'帳號建立成功'});setShowForm(false);setForm({email:'',password:'',name:'',role:'SUB_ADMIN',tenantSlug:'',brandName:'',liffId:'',primaryColor:'#FFC107'});load()}
+    if(r.admin){setCreateMsg({ok:true,text:'帳號建立成功'});setShowForm(false);setForm({email:'',password:'',name:'',role:'SUB_ADMIN',parentId:'',tenantSlug:'',brandName:'',liffId:'',primaryColor:'#FFC107'});load()}
     else setCreateMsg({ok:false,text:r.error??'建立失敗'})
   }
   const handleToggle = async (id:string,isActive:boolean) => { await fetch(`/api/platform/admins/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({isActive:!isActive})}); load() }
@@ -95,12 +95,25 @@ export default function PlatformAdminsPage() {
               ))}
               <div>
                 <label className="text-xs text-gray-500 block mb-1">角色</label>
-                <select value={form.role} onChange={e=>setForm(p=>({...p,role:e.target.value}))}
+                <select value={form.role} onChange={e=>setForm(p=>({...p,role:e.target.value,parentId:''}))}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-white">
                   <option value="PLATFORM_ADMIN">Platform Admin</option>
                   <option value="SUB_ADMIN">Sub Admin</option>
                 </select>
               </div>
+              {form.role==='SUB_ADMIN'&&currentRole==='SUPER_ADMIN'&&(
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-500 block mb-1">所屬 Platform <span className="text-red-400">*</span></label>
+                  <select value={form.parentId} onChange={e=>setForm(p=>({...p,parentId:e.target.value}))} required={form.role==='SUB_ADMIN'&&currentRole==='SUPER_ADMIN'}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-white">
+                    <option value="">— 選擇 Platform Admin —</option>
+                    {admins.filter(a=>a.role==='PLATFORM_ADMIN'&&a.isActive).map(a=>(
+                      <option key={a.id} value={a.id}>{a.name}（{a.email}）</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-0.5">Sub Admin 將只能查看此 Platform 的資料</p>
+                </div>
+              )}
             </div>
             {form.role==='PLATFORM_ADMIN'&&(
               <div className="border-t border-gray-100 pt-4 mt-2">
