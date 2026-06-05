@@ -9,18 +9,19 @@ export interface UpdateProfileInput {
   birthday: Date
 }
 
-export async function findOrCreateUser(lineInfo: LineUserInfo) {
+export async function findOrCreateUser(lineInfo: LineUserInfo, tenantAdminId?: string) {
   const existing = await prisma.user.findUnique({
     where: { lineUid: lineInfo.sub },
   })
 
   if (existing) {
-    // 更新顯示名稱與頭像（LINE 資料可能異動）
     const updated = await prisma.user.update({
       where: { id: existing.id },
       data: {
         displayName: lineInfo.name,
         avatarUrl: lineInfo.picture ?? existing.avatarUrl,
+        // 只在尚未設定租戶時才寫入（防止跨租戶登入覆蓋）
+        ...(tenantAdminId && !existing.tenantAdminId ? { tenantAdminId } : {}),
       },
     })
     return { user: updated, isNewUser: false }
@@ -31,6 +32,7 @@ export async function findOrCreateUser(lineInfo: LineUserInfo) {
       lineUid: lineInfo.sub,
       displayName: lineInfo.name,
       avatarUrl: lineInfo.picture,
+      tenantAdminId: tenantAdminId ?? null,
     },
   })
 

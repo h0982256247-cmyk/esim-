@@ -16,16 +16,18 @@ datasource db {
 model User {
   id          String   @id @default(cuid())
   lineUid     String   @unique @map("line_uid")
-  displayName String   @map("display_name")
-  realName    String?  @map("real_name")
-  phone       String?  // 加密儲存
-  email       String?  // 加密儲存
-  birthday    DateTime? @db.Date
-  avatarUrl   String?  @map("avatar_url")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  displayName   String   @map("display_name")
+  realName      String?  @map("real_name")
+  phone         String?  // 加密儲存
+  email         String?  // 加密儲存
+  birthday      DateTime? @db.Date
+  avatarUrl     String?  @map("avatar_url")
+  tenantAdminId String?  @map("tenant_admin_id") // 所屬 Platform
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   // 關聯
+  tenantAdmin     PlatformAdmin?  @relation("TenantUsers", fields: [tenantAdminId], references: [id])
   ownedGroup      Group?          @relation("GroupOwner")
   groupMembership GroupMember?
   coupons         Coupon[]
@@ -419,6 +421,7 @@ model PlatformAdmin {
   logoUrl      String?           @map("logo_url")              // Logo 圖片網址
   primaryColor String?           @map("primary_color")         // 主題色，如 #FF5A00
   lineAccessToken String?        @map("line_access_token")
+  liffId       String?           @map("liff_id")              // 該 Platform 的 LINE LIFF App ID
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
 
@@ -427,6 +430,7 @@ model PlatformAdmin {
   createdBy   PlatformAdmin?  @relation("AdminCreated", fields: [createdById], references: [id])
   created     PlatformAdmin[] @relation("AdminCreated")
   ownedGroups Group[]         @relation("TenantGroups")
+  tenantUsers User[]          @relation("TenantUsers")
   products    Product[]
 
   // Per-tenant integrations

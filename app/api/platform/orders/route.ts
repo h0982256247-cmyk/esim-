@@ -16,12 +16,7 @@ export async function GET(req: NextRequest) {
     ? (req.nextUrl.searchParams.get('tenantAdminId') || null)
     : auth.tenantAdminId
   const tenantWhere: Prisma.OrderWhereInput = tenantAdminId ? {
-    user: {
-      OR: [
-        { groupMembership: { group: { tenantAdminId } } },
-        { ownedGroup: { tenantAdminId } },
-      ],
-    },
+    user: { tenantAdminId },
   } : {}
 
   const where: Prisma.OrderWhereInput = {

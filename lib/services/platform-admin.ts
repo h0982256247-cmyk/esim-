@@ -28,6 +28,11 @@ export interface CreateAdminInput {
   parentId?: string
   createdById?: string
   modules?: string[]
+  // Platform-specific fields (required when role === PLATFORM_ADMIN)
+  tenantSlug?: string
+  brandName?: string
+  liffId?: string
+  primaryColor?: string
 }
 
 export async function createAdmin(input: CreateAdminInput) {
@@ -41,6 +46,12 @@ export async function createAdmin(input: CreateAdminInput) {
       parentId: input.parentId,
       createdById: input.createdById,
       modules: input.modules ?? [],
+      ...(input.role === 'PLATFORM_ADMIN' ? {
+        tenantSlug: input.tenantSlug,
+        brandName: input.brandName,
+        liffId: input.liffId,
+        primaryColor: input.primaryColor ?? '#FFC107',
+      } : {}),
     },
   })
 }
@@ -95,21 +106,13 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     ? { status: 'PENDING' as const, tenantAdminId }
     : { status: 'PENDING' as const }
 
-  const userTenantWhere: Prisma.UserWhereInput | undefined = tenantAdminId != null ? {
-    OR: [
-      { groupMembership: { group: { tenantAdminId } } },
-      { ownedGroup: { tenantAdminId } },
-    ],
-  } : undefined
+  const userTenantWhere: Prisma.UserWhereInput | undefined = tenantAdminId != null
+    ? { tenantAdminId }
+    : undefined
 
-  const orderTenantWhere: Prisma.OrderWhereInput = tenantAdminId != null ? {
-    user: {
-      OR: [
-        { groupMembership: { group: { tenantAdminId } } },
-        { ownedGroup: { tenantAdminId } },
-      ],
-    },
-  } : {}
+  const orderTenantWhere: Prisma.OrderWhereInput = tenantAdminId != null
+    ? { user: { tenantAdminId } }
+    : {}
 
   const [
     totalUsers,

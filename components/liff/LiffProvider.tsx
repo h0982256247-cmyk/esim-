@@ -24,9 +24,10 @@ export function useLiff() {
 interface LiffProviderProps {
   children: ReactNode
   liffId: string
+  tenantSlug?: string // 傳入則登入時記錄 tenantAdminId
 }
 
-export function LiffProvider({ children, liffId }: LiffProviderProps) {
+export function LiffProvider({ children, liffId, tenantSlug }: LiffProviderProps) {
   const [liff, setLiff] = useState<Liff | null>(null)
   const [isReady, setIsReady] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -53,7 +54,7 @@ export function LiffProvider({ children, liffId }: LiffProviderProps) {
           const res = await fetch('/api/auth/line', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken }),
+            body: JSON.stringify({ idToken, tenantSlug }),
           })
           if (!res.ok) throw new Error('LINE 登入失敗')
         }

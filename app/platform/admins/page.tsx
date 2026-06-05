@@ -17,7 +17,7 @@ export default function PlatformAdminsPage() {
   const [loading, setLoading] = useState(true)
   const [currentRole, setCurrentRole] = useState<string|null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({email:'',password:'',name:'',role:'SUB_ADMIN'})
+  const [form, setForm] = useState({email:'',password:'',name:'',role:'SUB_ADMIN',tenantSlug:'',brandName:'',liffId:'',primaryColor:'#FFC107'})
   const [creating, setCreating] = useState(false)
   const [createMsg, setCreateMsg] = useState<{ok:boolean;text:string}|null>(null)
   const [editingRebate, setEditingRebate] = useState<string|null>(null)
@@ -36,7 +36,7 @@ export default function PlatformAdminsPage() {
     e.preventDefault(); setCreating(true); setCreateMsg(null)
     const r = await fetch('/api/platform/admins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)}).then(x=>x.json())
     setCreating(false)
-    if(r.admin){setCreateMsg({ok:true,text:'帳號建立成功'});setShowForm(false);setForm({email:'',password:'',name:'',role:'SUB_ADMIN'});load()}
+    if(r.admin){setCreateMsg({ok:true,text:'帳號建立成功'});setShowForm(false);setForm({email:'',password:'',name:'',role:'SUB_ADMIN',tenantSlug:'',brandName:'',liffId:'',primaryColor:'#FFC107'});load()}
     else setCreateMsg({ok:false,text:r.error??'建立失敗'})
   }
   const handleToggle = async (id:string,isActive:boolean) => { await fetch(`/api/platform/admins/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({isActive:!isActive})}); load() }
@@ -102,6 +102,38 @@ export default function PlatformAdminsPage() {
                 </select>
               </div>
             </div>
+            {form.role==='PLATFORM_ADMIN'&&(
+              <div className="border-t border-gray-100 pt-4 mt-2">
+                <p className="text-xs text-blue-600 font-semibold mb-3 uppercase tracking-wide">Platform 設定</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Tenant Slug <span className="text-red-400">*</span></label>
+                    <input type="text" placeholder="e.g. travel-bee" value={form.tenantSlug} onChange={e=>setForm(p=>({...p,tenantSlug:e.target.value}))} required={form.role==='PLATFORM_ADMIN'}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"/>
+                    <p className="text-xs text-gray-400 mt-0.5">LIFF URL: /liff/<span className="font-mono">{form.tenantSlug||'slug'}</span></p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">品牌名稱 <span className="text-red-400">*</span></label>
+                    <input type="text" placeholder="e.g. Bee旅" value={form.brandName} onChange={e=>setForm(p=>({...p,brandName:e.target.value}))} required={form.role==='PLATFORM_ADMIN'}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"/>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">LIFF ID <span className="text-red-400">*</span></label>
+                    <input type="text" placeholder="e.g. 1234567890-abcdefgh" value={form.liffId} onChange={e=>setForm(p=>({...p,liffId:e.target.value}))} required={form.role==='PLATFORM_ADMIN'}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"/>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">品牌主色</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={form.primaryColor} onChange={e=>setForm(p=>({...p,primaryColor:e.target.value}))}
+                        className="w-10 h-9 border border-gray-200 rounded-xl cursor-pointer p-1"/>
+                      <input type="text" value={form.primaryColor} onChange={e=>setForm(p=>({...p,primaryColor:e.target.value}))}
+                        className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"/>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {createMsg&&<p className={`text-sm font-medium ${createMsg.ok?'text-green-600':'text-red-500'}`}>{createMsg.ok?'✅':'❌'} {createMsg.text}</p>}
             <div className="flex gap-2">
               <button type="submit" disabled={creating} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-medium disabled:opacity-50 transition">{creating?'建立中…':'建立帳號'}</button>
