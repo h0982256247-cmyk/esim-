@@ -5,6 +5,15 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useTenantColors } from '@/components/liff/TenantContext'
 
+function IconHome({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9.5z" />
+      <path d="M9 21V12h6v9" />
+    </svg>
+  )
+}
+
 function IconShop({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -15,22 +24,14 @@ function IconShop({ size = 20 }: { size?: number }) {
   )
 }
 
-function IconOrders({ size = 20 }: { size?: number }) {
+function IconEsim({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  )
-}
-
-function IconCoupon({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-      <line x1="7" y1="7" x2="7.01" y2="7" />
+      <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+      <path d="M15 2v4H9V2" />
+      <line x1="9" y1="12" x2="9" y2="12" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="12" y1="12" x2="15" y2="12" />
+      <line x1="9" y1="16" x2="15" y2="16" />
     </svg>
   )
 }
@@ -54,12 +55,12 @@ function IconAdmin({ size = 20 }: { size?: number }) {
 
 const ADMIN_PATH = 'group-admin'
 
-type TabDef = { path: string; label: string; Icon: React.FC<{ size?: number }>; ownerOnly?: boolean }
+type TabDef = { path: string; label: string; Icon: React.FC<{ size?: number }>; ownerOnly?: boolean; isRoot?: boolean }
 
 const TABS: TabDef[] = [
+  { path: '',         label: '主頁',  Icon: IconHome,    isRoot: true },
   { path: 'products', label: '商城',  Icon: IconShop },
-  { path: 'orders',   label: '訂單',  Icon: IconOrders },
-  { path: 'coupons',  label: '優惠券', Icon: IconCoupon },
+  { path: 'orders',   label: 'eSIM',  Icon: IconEsim },
   { path: 'profile',  label: '個人',  Icon: IconProfile },
 ]
 
@@ -95,9 +96,12 @@ export default function LiffBottomNav() {
       boxShadow: '0 -2px 12px rgba(0,0,0,0.06)',
     }}>
       <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {tabs.map(({ path, label, Icon }) => {
-          const href = `${base}/${path}`
-          const active = pathname === href || pathname.startsWith(href + '/')
+        {tabs.map(({ path, label, Icon, isRoot }) => {
+          const href = isRoot ? (base || '/') : `${base}/${path}`
+          // 主頁：精確匹配根路徑；其他：前綴匹配
+          const active = isRoot
+            ? (pathname === href || pathname === base || pathname === `${base}/`)
+            : (pathname === href || pathname.startsWith(href + '/'))
           return (
             <Link
               key={path}
