@@ -15,6 +15,11 @@ export async function GET(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   return NextResponse.json({
-    admin: { ...admin, tenantAdminId: auth.tenantAdminId },
+    admin: {
+      ...admin,
+      tenantAdminId:    auth.tenantAdminId,
+      impersonatorId:   auth.impersonatorId   ?? null,
+      impersonatorName: auth.impersonatorName ?? null,
+    },
   })
 }

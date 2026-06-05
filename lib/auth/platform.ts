@@ -6,6 +6,9 @@ export interface PlatformSessionPayload extends JWTPayload {
   adminId: string
   role: string
   tenantAdminId: string | null
+  /** Set when a Super Admin has switched into a Platform Admin's view */
+  impersonatorId?:   string | null
+  impersonatorName?: string | null
 }
 
 export const PLATFORM_COOKIE = 'platform_session'

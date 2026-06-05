@@ -27,6 +27,7 @@ export default function PlatformAdminsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Admin|null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string|null>(null)
+  const [impersonating, setImpersonating] = useState<string|null>(null)
 
   const load = () => { setLoading(true); fetch('/api/platform/admins').then(r=>r.status===401?(router.replace('/platform/login'),null):r.json()).then(d=>{if(d)setAdmins(d.admins)}).finally(()=>setLoading(false)) }
   useEffect(load, [router])
@@ -50,6 +51,17 @@ export default function PlatformAdminsPage() {
     if(!deleteTarget)return; setDeleting(true); setDeleteError(null)
     const r=await fetch(`/api/platform/admins/${deleteTarget.id}`,{method:'DELETE'}).then(x=>x.json())
     setDeleting(false); if(r.ok){setDeleteTarget(null);load()}else setDeleteError(r.error??'移除失敗')
+  }
+  const handleImpersonate = async (id: string) => {
+    setImpersonating(id)
+    const r = await fetch('/api/platform/auth/impersonate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetId: id }),
+    }).then(x => x.json())
+    setImpersonating(null)
+    if (r.ok) { window.location.href = '/platform' }
+    else alert(r.error ?? '切換失敗')
   }
   return (
     <div className="space-y-5">
@@ -222,7 +234,21 @@ export default function PlatformAdminsPage() {
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1.5">
                       {a.role==='PLATFORM_ADMIN'&&currentRole==='SUPER_ADMIN'&&(
-                        <Link href={`/platform/admins/${a.id}`} className="text-xs px-2.5 py-1.5 rounded-lg font-medium bg-purple-50 text-purple-600 hover:bg-purple-100 transition">設定</Link>
+                        <>
+                          <Link href={`/platform/admins/${a.id}`} className="text-xs px-2.5 py-1.5 rounded-lg font-medium bg-purple-50 text-purple-600 hover:bg-purple-100 transition">設定</Link>
+                          <button
+                            onClick={() => handleImpersonate(a.id)}
+                            disabled={impersonating === a.id || !a.isActive}
+                            className="text-xs px-2.5 py-1.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1"
+                          >
+                            {impersonating === a.id ? (
+                              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeLinecap="round"/></svg>
+                            ) : (
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                            )}
+                            進入後台
+                          </button>
+                        </>
                       )}
                       {a.role!=='SUPER_ADMIN'&&(
                         <button onClick={()=>handleToggle(a.id,a.isActive)}
