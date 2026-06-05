@@ -94,14 +94,14 @@ function UsersContent() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['會員', '聯絡資訊', '所屬社群', '訂單 / 券', '加入時間'].map(h => (
+                {['會員', '聯絡資訊', '所屬社群', '訂單 / 券', '加入時間', ''].map(h => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {users.map(u => (
-                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={u.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => router.push(`/platform/users/${u.id}`)}>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       {u.avatarUrl
@@ -131,6 +131,9 @@ function UsersContent() {
                     <span className="font-medium text-gray-700">{u._count.coupons}</span><span className="text-gray-400 text-xs"> 張</span>
                   </td>
                   <td className="px-5 py-3.5 text-xs text-gray-400">{new Date(u.createdAt).toLocaleDateString('zh-TW')}</td>
+                  <td className="px-3 py-3.5 text-gray-300">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" /></svg>
+                  </td>
                 </tr>
               ))}
             </tbody>
