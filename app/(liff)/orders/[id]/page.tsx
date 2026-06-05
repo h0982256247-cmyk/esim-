@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { useLiffBase } from '@/hooks/useLiffBase'
 
 type OrderDetail = {
   id: string
@@ -15,29 +16,58 @@ type OrderDetail = {
   esimRcode: string | null
   esimQrcode: string | null
   esimLpa: string | null
+  esimIccid: string | null
   activationStart: string | null
   activationEnd: string | null
   orderItems: { productName: string; qty: number; unitPrice: number }[]
 }
 
+type EsimUsage = {
+  iccid: string
+  totalData: number
+  usedData: number
+  remainingData: number
+  unit: string
+}
+
 const STATUS_LABEL: Record<string, { text: string; color: string }> = {
-  PENDING: { text: '待付款', color: 'text-yellow-600' },
-  PROCESSING: { text: '付款中', color: 'text-blue-600' },
-  PAID: { text: '付款成功', color: 'text-green-600' },
-  COMPLETED: { text: '已完成', color: 'text-green-700' },
-  FAILED: { text: '付款失敗', color: 'text-red-600' },
-  ESIM_PENDING: { text: 'eSIM 處理中', color: 'text-orange-600' },
-  REFUNDED: { text: '已退款', color: 'text-gray-600' },
+  PENDING:      { text: '待付款',       color: 'text-yellow-600' },
+  PROCESSING:   { text: '付款中',       color: 'text-blue-600' },
+  PAID:         { text: '付款成功',     color: 'text-green-600' },
+  COMPLETED:    { text: '已完成',       color: 'text-green-700' },
+  FAILED:       { text: '付款失敗',     color: 'text-red-600' },
+  ESIM_PENDING: { text: 'eSIM 處理中',  color: 'text-orange-600' },
+  REFUNDED:     { text: '已退款',       color: 'text-gray-600' },
+}
+
+function UsageBar({ used, total }: { used: number; total: number }) {
+  const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0
+  const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#22c55e'
+  return (
+    <div style={{ background: '#f1f5f9', borderRadius: 100, height: 8, overflow: 'hidden' }}>
+      <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 100, transition: 'width 0.6s ease' }} />
+    </div>
+  )
+}
+
+function formatData(mb: number, unit: string): string {
+  if (unit === 'GB' || mb >= 1024) {
+    return `${(mb / 1024).toFixed(2)} GB`
+  }
+  return `${mb.toLocaleString()} MB`
 }
 
 export default function OrderDetailPage() {
   const router = useRouter()
+  const base = useLiffBase()
   const { id } = useParams<{ id: string }>()
   const [order, setOrder] = useState<OrderDetail | null>(null)
+  const [usage, setUsage] = useState<EsimUsage | null>(null)
+  const [usageLoading, setUsageLoading] = useState(false)
+  const [usageError, setUsageError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
-  // 若 esim_pending 自動輪詢
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>
 
@@ -56,108 +86,197 @@ export default function OrderDetailPage() {
     return () => clearInterval(timer)
   }, [id])
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">載入中…</p></div>
+  const fetchUsage = async () => {
+    setUsageLoading(true)
+    setUsageError(null)
+    try {
+      const res = await fetch(`/api/orders/${id}/usage`)
+      const data = await res.json()
+      if (data.usage) {
+        setUsage(data.usage)
+      } else {
+        setUsageError(data.error ?? '無法取得用量')
+      }
+    } catch {
+      setUsageError('查詢失敗，請稍後再試')
+    } finally {
+      setUsageLoading(false)
+    }
+  }
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: '#0284c7', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
+
   if (notFound || !order) return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-3">
-      <p className="text-gray-500">訂單不存在</p>
-      <button onClick={() => router.push('/orders')} className="text-blue-600 text-sm underline">查看所有訂單</button>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 12 }}>
+      <p style={{ color: '#94a3b8' }}>訂單不存在</p>
+      <button onClick={() => router.push(`${base}/orders`)} style={{ color: '#0284c7', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+        查看所有訂單
+      </button>
     </div>
   )
 
   const s = STATUS_LABEL[order.status] ?? { text: order.status, color: 'text-gray-600' }
 
   return (
-    <div className="max-w-lg mx-auto px-4 pb-24">
-      <div className="pt-6 mb-6">
-        <button onClick={() => router.push('/orders')} className="text-blue-600 text-sm mb-3">← 所有訂單</button>
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">訂單詳情</h1>
-          <span className={`text-sm font-semibold ${s.color}`}>{s.text}</span>
+    <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 16px 96px' }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: 20 }}>
+        <button onClick={() => router.push(`${base}/orders`)} style={{ fontSize: 13, color: '#0284c7', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
+          ← 所有訂單
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', margin: 0 }}>訂單詳情</h1>
+          <span style={{ fontSize: 13, fontWeight: 600, color: s.color.replace('text-', '').includes('-') ? undefined : s.color }}>
+            {s.text}
+          </span>
         </div>
-        <p className="text-xs text-gray-400 mt-1">#{order.id.slice(-8).toUpperCase()}</p>
+        <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>#{order.id.slice(-8).toUpperCase()}</p>
       </div>
 
-      {/* eSIM 啟動碼 */}
+      {/* eSIM 啟動碼 + 流量 */}
       {order.status === 'COMPLETED' && order.esimRcode && (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 mb-4">
-          <h2 className="font-bold text-blue-800 mb-3">📱 eSIM 啟動碼</h2>
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 16, padding: '20px', marginBottom: 12 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1e40af', margin: '0 0 14px' }}>eSIM 啟動碼</h2>
+
           {order.esimQrcode && (
-            <div className="flex justify-center mb-4">
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={order.esimQrcode} alt="eSIM QR Code" className="w-40 h-40 rounded-xl" />
+              <img src={order.esimQrcode} alt="eSIM QR Code" style={{ width: 140, height: 140, borderRadius: 12, background: '#fff' }} />
             </div>
           )}
-          <div className="space-y-2 text-sm">
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
             <div>
-              <span className="text-gray-500">啟動碼</span>
-              <p className="font-mono text-gray-900 break-all">{order.esimRcode}</p>
+              <span style={{ color: '#64748b', display: 'block', marginBottom: 2 }}>啟動碼</span>
+              <span style={{ fontFamily: 'ui-monospace, monospace', color: '#1e3a8a', wordBreak: 'break-all' }}>{order.esimRcode}</span>
             </div>
             {order.esimLpa && (
               <div>
-                <span className="text-gray-500">LPA（iOS 一鍵安裝）</span>
-                <p className="font-mono text-gray-900 text-xs break-all">{order.esimLpa}</p>
+                <span style={{ color: '#64748b', display: 'block', marginBottom: 2 }}>LPA（iOS 一鍵安裝）</span>
+                <span style={{ fontFamily: 'ui-monospace, monospace', color: '#1e3a8a', fontSize: 11, wordBreak: 'break-all' }}>{order.esimLpa}</span>
               </div>
             )}
             {order.activationStart && order.activationEnd && (
               <div>
-                <span className="text-gray-500">使用期間</span>
-                <p className="text-gray-900">
+                <span style={{ color: '#64748b', display: 'block', marginBottom: 2 }}>使用期間</span>
+                <span style={{ color: '#1e3a8a' }}>
                   {new Date(order.activationStart).toLocaleDateString('zh-TW')} ～ {new Date(order.activationEnd).toLocaleDateString('zh-TW')}
-                </p>
+                </span>
               </div>
             )}
           </div>
+
+          {/* 流量使用狀況 */}
+          {order.esimIccid && (
+            <div style={{ marginTop: 16, borderTop: '1px solid #bfdbfe', paddingTop: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#1e40af' }}>流量使用狀況</span>
+                <button
+                  onClick={fetchUsage}
+                  disabled={usageLoading}
+                  style={{
+                    fontSize: 12, color: '#2563eb', background: usageLoading ? '#dbeafe' : '#eff6ff',
+                    border: '1px solid #bfdbfe', borderRadius: 8, padding: '4px 12px',
+                    cursor: usageLoading ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}
+                >
+                  {usageLoading ? (
+                    <>
+                      <span style={{ display: 'inline-block', width: 10, height: 10, border: '1.5px solid #bfdbfe', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                      查詢中
+                    </>
+                  ) : '查詢流量'}
+                </button>
+              </div>
+
+              {usageError && (
+                <p style={{ fontSize: 12, color: '#ef4444', margin: '0 0 8px' }}>{usageError}</p>
+              )}
+
+              {usage ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <UsageBar used={usage.usedData} total={usage.totalData} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                    <span style={{ color: '#64748b' }}>已用 <strong style={{ color: '#0f172a' }}>{formatData(usage.usedData, usage.unit)}</strong></span>
+                    <span style={{ color: '#64748b' }}>剩餘 <strong style={{ color: '#16a34a' }}>{formatData(usage.remainingData, usage.unit)}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>總流量 {formatData(usage.totalData, usage.unit)}</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>ICCID: {usage.iccid.slice(-8)}</span>
+                  </div>
+                </div>
+              ) : !usageError && (
+                <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>點擊「查詢流量」取得即時用量資料</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {/* eSIM 處理中 */}
       {(order.status === 'ESIM_PENDING' || order.status === 'PAID') && (
-        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 mb-4">
-          <p className="font-semibold text-orange-700">eSIM 啟動碼準備中</p>
-          <p className="text-sm text-orange-600 mt-1">系統正在取得啟動碼，通常在幾分鐘內完成。若超過 30 分鐘仍未收到，請聯繫客服。</p>
+        <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 16, padding: '18px 20px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#f97316', animation: 'pulse 1.5s ease-in-out infinite' }} />
+            <p style={{ fontSize: 14, fontWeight: 600, color: '#c2410c', margin: 0 }}>eSIM 啟動碼準備中</p>
+          </div>
+          <p style={{ fontSize: 13, color: '#ea580c', margin: 0, lineHeight: 1.6 }}>
+            系統正在取得啟動碼，通常在幾分鐘內完成。若超過 30 分鐘仍未收到，請聯繫客服。
+          </p>
+          <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
         </div>
       )}
 
       {/* 訂單資訊 */}
-      <div className="bg-white rounded-xl border p-4 shadow-sm space-y-3">
-        <div>
-          <p className="text-sm text-gray-500">商品</p>
-          <p className="font-medium">{order.orderItems[0]?.productName ?? '—'}</p>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(0,0,0,0.07)', padding: 16, marginBottom: 12 }}>
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 4px' }}>商品</p>
+          <p style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', margin: 0 }}>{order.orderItems[0]?.productName ?? '—'}</p>
         </div>
-        <div className="border-t pt-3 space-y-1.5">
-          <div className="flex justify-between text-sm text-gray-500">
-            <span>商品原價</span><span>NT${order.subtotal}</span>
+        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
+            <span>商品原價</span><span>NT${order.subtotal.toLocaleString()}</span>
           </div>
           {order.discountAmount > 0 && (
-            <div className="flex justify-between text-sm text-green-600">
-              <span>優惠折扣</span><span>-NT${order.discountAmount}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16a34a' }}>
+              <span>優惠折扣</span><span>-NT${order.discountAmount.toLocaleString()}</span>
             </div>
           )}
-          <div className="flex justify-between font-bold border-t pt-2">
-            <span>實付金額</span><span className="text-blue-600">NT${order.totalPaid}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 700, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+            <span style={{ color: '#0f172a' }}>實付金額</span>
+            <span style={{ color: '#0284c7' }}>NT${order.totalPaid.toLocaleString()}</span>
           </div>
         </div>
-        <div className="border-t pt-3 text-sm text-gray-500 space-y-1">
-          <div className="flex justify-between">
+        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#94a3b8' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>付款方式</span>
             <span>{order.paymentMethod === 'CREDIT_CARD' ? '信用卡' : 'LINE Pay'}</span>
           </div>
           {order.paidAt && (
-            <div className="flex justify-between">
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>付款時間</span>
               <span>{new Date(order.paidAt).toLocaleString('zh-TW')}</span>
             </div>
           )}
-          <div className="flex justify-between">
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>下單時間</span>
             <span>{new Date(order.createdAt).toLocaleString('zh-TW')}</span>
           </div>
         </div>
       </div>
 
-      {/* 客服連結 */}
-      <div className="mt-4 text-center">
-        <button onClick={() => router.push('/support')} className="text-gray-400 text-sm underline">需要協助？聯絡客服</button>
+      {/* 客服 */}
+      <div style={{ textAlign: 'center', marginTop: 8 }}>
+        <button onClick={() => router.push(`${base}/support`)} style={{ fontSize: 13, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+          需要協助？聯絡客服
+        </button>
       </div>
     </div>
   )

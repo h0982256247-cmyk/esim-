@@ -192,6 +192,40 @@ export async function triggerEsimActivation(orderId: string): Promise<void> {
   notifyEsimPending(userId, productName).catch(() => {})
 }
 
+// ─── 查詢 eSIM 用量 ───────────────────────────────────────────────
+
+export interface EsimUsage {
+  iccid: string
+  totalData: number    // MB
+  usedData: number     // MB
+  remainingData: number // MB
+  unit: string         // 'MB' | 'GB'
+}
+
+export async function queryEsimUsage(iccid: string, tenantAdminId?: string | null): Promise<EsimUsage | null> {
+  try {
+    const data = await wmPost('/api/esim/usage', { iccid }, tenantAdminId) as Record<string, unknown>
+    if (!data || data.code !== '0000') return null
+
+    const d = data.data as Record<string, unknown>
+    if (!d) return null
+
+    const totalData = Number(d.totalData ?? d.total ?? 0)
+    const usedData = Number(d.usedData ?? d.used ?? 0)
+    const unit = (d.dataUnit ?? d.unit ?? 'MB') as string
+
+    return {
+      iccid,
+      totalData,
+      usedData,
+      remainingData: Math.max(0, totalData - usedData),
+      unit,
+    }
+  } catch {
+    return null
+  }
+}
+
 // ─── Admin：補發（手動觸發）──────────────────────────────────────
 
 export async function retryEsimActivation(orderId: string): Promise<void> {

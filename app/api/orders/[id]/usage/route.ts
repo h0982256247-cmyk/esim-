@@ -1,0 +1,36 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
+import { prisma } from '@/lib/db/prisma'
+import { queryEsimUsage } from '@/lib/services/esim'
+
+// GET /api/orders/:id/usage — 查詢 eSIM 剩餘流量（即時向世界移動查詢）
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const token = req.cookies.get(SESSION_COOKIE)?.value
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  let session
+  try { session = await verifySession(token) } catch {
+    return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
+  }
+
+  const { id } = await params
+
+  const order = await prisma.order.findFirst({
+    where: { id, userId: session.userId },
+    select: {
+      esimIccid: true,
+      status: true,
+      user: { select: { tenantAdminId: true } },
+    },
+  })
+
+  if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
+  if (order.status !== 'COMPLETED') return NextResponse.json({ error: 'eSIM 尚未啟動' }, { status: 400 })
+  if (!order.esimIccid) return NextResponse.json({ error: '無 ICCID 資料' }, { status: 400 })
+
+  const usage = await queryEsimUsage(order.esimIccid, order.user?.tenantAdminId ?? null)
+
+  if (!usage) return NextResponse.json({ error: '無法取得用量資料' }, { status: 502 })
+
+  return NextResponse.json({ usage })
+}

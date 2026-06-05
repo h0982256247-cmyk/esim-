@@ -180,7 +180,21 @@ export async function getOrderById(orderId: string) {
 export async function getOrderByIdForUser(orderId: string, userId: string) {
   return prisma.order.findFirst({
     where: { id: orderId, userId },
-    include: {
+    select: {
+      id: true,
+      status: true,
+      subtotal: true,
+      discountAmount: true,
+      totalPaid: true,
+      paymentMethod: true,
+      paidAt: true,
+      createdAt: true,
+      esimRcode: true,
+      esimQrcode: true,
+      esimLpa: true,
+      esimIccid: true,
+      activationStart: true,
+      activationEnd: true,
       orderItems: {
         select: { productName: true, qty: true, unitPrice: true },
       },
