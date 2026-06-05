@@ -1,8 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/cancel-pending-orders",
-      "schedule": "*/5 * * * *"
-    }
-  ]
-}
+{}
