@@ -29,6 +29,58 @@ const TYPE_LABEL: Record<string, string> = {
   GROUP_ACTIVITY:   '活動券',
 }
 
+// ─── 最優組合算法 ─────────────────────────────────────────────────
+// 規則：A 級單獨用、B 最多 1 張可搭 1 張 C、C 最多 3 張
+// 因為所有 discount < 1，疊越多越划算，所以每類只需取「最大折扣那些」
+function findBestCouponCombo(coupons: Coupon[], price: number): string[] {
+  if (coupons.length === 0) return []
+
+  const getLevel = (d: number) => d < 0.8 ? 'A' : d < 0.9 ? 'B' : 'C'
+  const calcPrice = (ids: string[]) =>
+    Math.round(ids.reduce((acc, id) => {
+      const c = coupons.find(x => x.id === id)
+      return c ? acc * c.discount : acc
+    }, price))
+
+  // 各級按折扣從低到高排（折扣值越小 = 折越多）
+  const A = coupons.filter(c => getLevel(c.discount) === 'A').sort((a, b) => a.discount - b.discount)
+  const B = coupons.filter(c => getLevel(c.discount) === 'B').sort((a, b) => a.discount - b.discount)
+  const C = coupons.filter(c => getLevel(c.discount) === 'C').sort((a, b) => a.discount - b.discount)
+
+  let bestIds: string[] = []
+  let bestPrice = price
+
+  // 方案 1：最好的 A 級券（單張）
+  if (A.length > 0) {
+    const p = calcPrice([A[0].id])
+    if (p < bestPrice) { bestPrice = p; bestIds = [A[0].id] }
+  }
+
+  // 方案 2：最好的 B 級 + 最好的 C 級（0 或 1 張）
+  if (B.length > 0) {
+    const bId = B[0].id
+    // B 單獨
+    const p1 = calcPrice([bId])
+    if (p1 < bestPrice) { bestPrice = p1; bestIds = [bId] }
+    // B + C
+    if (C.length > 0) {
+      const combo = [bId, C[0].id]
+      const p2 = calcPrice(combo)
+      if (p2 < bestPrice) { bestPrice = p2; bestIds = combo }
+    }
+  }
+
+  // 方案 3：最好的 1–3 張 C 級券
+  const topC = C.slice(0, 3)
+  for (let n = 1; n <= topC.length; n++) {
+    const ids = topC.slice(0, n).map(c => c.id)
+    const p = calcPrice(ids)
+    if (p < bestPrice) { bestPrice = p; bestIds = ids }
+  }
+
+  return bestIds
+}
+
 function TicketIcon({ color }: { color: string }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -77,6 +129,7 @@ function CheckoutContent() {
   const [product, setProduct] = useState<Product | null>(null)
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [selectedCouponIds, setSelectedCouponIds] = useState<string[]>([])
+  const [autoSelectedIds, setAutoSelectedIds] = useState<string[]>([])  // 記錄自動帶入的組合
   const [paymentMethod, setPaymentMethod] = useState<'CREDIT_CARD' | 'LINE_PAY'>('CREDIT_CARD')
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [comboError, setComboError] = useState<string | null>(null)
@@ -89,12 +142,20 @@ function CheckoutContent() {
       fetch(`/api/products/${productId}`).then(r => r.json()),
       fetch('/api/coupons').then(r => r.json()),
     ]).then(([pd, cd]) => {
-      setProduct(pd.product ?? null)
+      const prod: Product | null = pd.product ?? null
+      setProduct(prod)
       const now = new Date()
-      setCoupons((cd.coupons ?? []).filter((c: Coupon) =>
+      const validCoupons: Coupon[] = (cd.coupons ?? []).filter((c: Coupon) =>
         !('usedAt' in c && (c as { usedAt: string | null }).usedAt) &&
         (!c.expiresAt || new Date(c.expiresAt) > now)
-      ))
+      )
+      setCoupons(validCoupons)
+      // 自動帶入最優惠組合
+      if (prod && validCoupons.length > 0) {
+        const best = findBestCouponCombo(validCoupons, prod.sellPrice)
+        setSelectedCouponIds(best)
+        setAutoSelectedIds(best)
+      }
     }).finally(() => setLoading(false))
   }, [productId])
 
@@ -229,7 +290,19 @@ function CheckoutContent() {
 
         {/* Coupon section */}
         <div>
-          <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: '0 0 8px 4px' }}>使用優惠券</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 8px 4px' }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>使用優惠券</p>
+            {autoSelectedIds.length > 0 && (
+              <span style={{
+                fontSize: 11, fontWeight: 600,
+                background: '#d1fae5', color: '#065f46',
+                padding: '2px 8px', borderRadius: 100,
+                display: 'flex', alignItems: 'center', gap: 3,
+              }}>
+                ✦ 已自動帶入最優惠組合
+              </span>
+            )}
+          </div>
           {coupons.length === 0 ? (
             <div style={{
               background: '#fff', borderRadius: 12,
