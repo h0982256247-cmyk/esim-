@@ -74,32 +74,37 @@ export default function AdminDetailPage() {
   const [esimConfig, setEsimConfig] = useState<EsimConfig>(null)
   const [paymentConfigs, setPaymentConfigs] = useState<PaymentConfig[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<Tab>('概覽')
+  const [activeTab, setActiveTab] = useState<Tab>('品牌設定')
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [adminRes, statsRes, esimRes, payRes] = await Promise.all([
-      fetch(`/api/platform/admins/${adminId}`),
-      fetch(`/api/platform/admins/${adminId}/stats`),
-      fetch(`/api/platform/admins/${adminId}/esim-config`),
-      fetch(`/api/platform/admins/${adminId}/payment-config`),
-    ])
+    try {
+      const [adminRes, statsRes, esimRes, payRes] = await Promise.all([
+        fetch(`/api/platform/admins/${adminId}`),
+        fetch(`/api/platform/admins/${adminId}/stats`),
+        fetch(`/api/platform/admins/${adminId}/esim-config`),
+        fetch(`/api/platform/admins/${adminId}/payment-config`),
+      ])
 
-    if (adminRes.status === 401) { router.replace('/platform/login'); return }
-    if (adminRes.status === 403 || adminRes.status === 404) { router.replace('/platform/admins'); return }
+      if (adminRes.status === 401) { router.replace('/platform/login'); return }
+      if (adminRes.status === 403 || adminRes.status === 404) { router.replace('/platform/admins'); return }
 
-    const [adminData, statsData, esimData, payData] = await Promise.all([
-      adminRes.json(),
-      statsRes.json(),
-      esimRes.json(),
-      payRes.json(),
-    ])
+      const [adminData, statsData, esimData, payData] = await Promise.all([
+        adminRes.json(),
+        statsRes.ok ? statsRes.json() : Promise.resolve(null),
+        esimRes.ok ? esimRes.json() : Promise.resolve({}),
+        payRes.ok ? payRes.json() : Promise.resolve({}),
+      ])
 
-    setAdmin(adminData.admin)
-    setStats(statsData)
-    setEsimConfig(esimData.config)
-    setPaymentConfigs(payData.configs ?? [])
-    setLoading(false)
+      setAdmin(adminData.admin ?? null)
+      if (statsData) setStats(statsData)
+      setEsimConfig(esimData.config ?? null)
+      setPaymentConfigs(payData.configs ?? [])
+    } catch (e) {
+      console.error('Admin detail load error:', e)
+    } finally {
+      setLoading(false)
+    }
   }, [adminId, router])
 
   useEffect(() => { load() }, [load])

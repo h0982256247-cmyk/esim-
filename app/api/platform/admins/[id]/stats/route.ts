@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
-import { Prisma, PlatformAdminRole, OrderStatus, CommissionStatus, GroupStatus } from '@prisma/client'
+import { PlatformAdminRole, OrderStatus, CommissionStatus, GroupStatus } from '@prisma/client'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -14,22 +14,6 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const { id: tenantAdminId } = await params
 
-  const userWhere: Prisma.UserWhereInput = {
-    OR: [
-      { groupMembership: { group: { tenantAdminId } } },
-      { ownedGroup: { tenantAdminId } },
-    ],
-  }
-
-  const orderWhere: Prisma.OrderWhereInput = {
-    user: {
-      OR: [
-        { groupMembership: { group: { tenantAdminId } } },
-        { ownedGroup: { tenantAdminId } },
-      ],
-    },
-  }
-
   const [
     totalUsers,
     totalOrders,
@@ -39,10 +23,10 @@ export async function GET(req: NextRequest, { params }: Params) {
     pendingCommissions,
     esimPendingOrders,
   ] = await Promise.all([
-    prisma.user.count({ where: userWhere }),
-    prisma.order.count({ where: orderWhere }),
+    prisma.user.count({ where: { tenantAdminId } }),
+    prisma.order.count({ where: { user: { tenantAdminId } } }),
     prisma.order.aggregate({
-      where: { ...orderWhere, status: { in: [OrderStatus.PAID, OrderStatus.COMPLETED] } },
+      where: { user: { tenantAdminId }, status: { in: [OrderStatus.PAID, OrderStatus.COMPLETED] } },
       _sum: { totalPaid: true },
     }),
     prisma.group.count({ where: { status: GroupStatus.PENDING, tenantAdminId } }),
@@ -51,7 +35,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       where: { status: CommissionStatus.PENDING, group: { tenantAdminId } },
       _sum: { commissionAmount: true },
     }),
-    prisma.order.count({ where: { ...orderWhere, status: OrderStatus.ESIM_PENDING } }),
+    prisma.order.count({ where: { user: { tenantAdminId }, status: OrderStatus.ESIM_PENDING } }),
   ])
 
   return NextResponse.json({
