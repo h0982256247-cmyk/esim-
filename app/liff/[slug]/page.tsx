@@ -6,12 +6,13 @@ import { useLiff } from '@/components/liff/LiffProvider'
 import { useTenant, useTenantColors } from '@/components/liff/TenantContext'
 import { HOME_TEMPLATES } from '@/components/liff/templates/registry'
 import SetupModal from '@/components/liff/SetupModal'
+import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import type { HomeCountry } from '@/components/liff/templates/home/types'
 
 type Product = { countryCode: string; sellPrice: number }
 
 export default function LiffHomePage() {
-  const { isReady, error, liff } = useLiff()
+  const { isReady, error } = useLiff()
   const router = useRouter()
   const params = useParams()
   const slug = params.slug as string
@@ -21,17 +22,19 @@ export default function LiffHomePage() {
   const [countries, setCountries] = useState<HomeCountry[]>([])
   const [showSetup, setShowSetup] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [splashOut, setSplashOut] = useState(false)
+
+  const brandName = tenant?.brandName ?? 'eSIM'
+  const primary = tenant?.primaryColor ?? '#0284c7'
 
   useEffect(() => {
     if (!isReady) return
     async function init() {
-      // 1. check profile
       try {
         const me = await fetch('/api/auth/me').then(r => r.ok ? r.json() : null)
         if (me && !me.profileComplete) setShowSetup(true)
       } catch {}
 
-      // 2. fetch countries + compute min prices
       try {
         const data = await fetch('/api/products').then(r => r.json())
         const products: Product[] = data.products ?? []
@@ -41,50 +44,19 @@ export default function LiffHomePage() {
             minPriceMap[p.countryCode] = p.sellPrice
           }
         }
-        setCountries(
-          (data.countries ?? []).map((c: HomeCountry) => ({
-            ...c,
-            minPrice: minPriceMap[c.countryCode] ?? null,
-          }))
-        )
+        setCountries((data.countries ?? []).map((c: HomeCountry) => ({
+          ...c, minPrice: minPriceMap[c.countryCode] ?? null,
+        })))
       } catch {}
 
-      setLoaded(true)
+      // 最少顯示 splash 0.6s，fade-out 需要 0.35s
+      setTimeout(() => {
+        setSplashOut(true)
+        setTimeout(() => setLoaded(true), 350)
+      }, 600)
     }
     init()
   }, [isReady])
-
-  if (error) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 24 }}>
-        <p style={{ color: '#ef4444', fontSize: 14, textAlign: 'center' }}>{error}</p>
-      </div>
-    )
-  }
-
-  // 首次載入 skeleton
-  if (!loaded) {
-    return (
-      <div style={{ minHeight: '100vh', background: '#fff', display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {/* header skeleton */}
-        <div style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #f3f4f6' }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: '#f3f4f6', animation: 'shimmer 1.2s ease infinite alternate' }}/>
-          <div style={{ width: 100, height: 16, borderRadius: 8, background: '#f3f4f6', animation: 'shimmer 1.2s ease infinite alternate' }}/>
-        </div>
-        {/* search skeleton */}
-        <div style={{ padding: '16px' }}>
-          <div style={{ height: 46, borderRadius: 16, background: '#f3f4f6', animation: 'shimmer 1.2s ease infinite alternate' }}/>
-        </div>
-        {/* grid skeleton */}
-        <div style={{ padding: '0 16px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
-          {[0,1,2,3].map(i => (
-            <div key={i} style={{ height: 72, borderRadius: 14, background: '#f3f4f6', animation: `shimmer 1.2s ${i*0.1}s ease infinite alternate` }}/>
-          ))}
-        </div>
-        <style>{`@keyframes shimmer{from{opacity:0.5}to{opacity:1}}`}</style>
-      </div>
-    )
-  }
 
   const templateKey = tenant?.homeTemplate ?? 'landmark'
   const HomeTemplate = HOME_TEMPLATES[templateKey]
@@ -101,27 +73,87 @@ export default function LiffHomePage() {
     router.push(routes[path] ?? `/liff/${slug}/${path}`)
   }
 
+  if (error) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 24 }}>
+        <p style={{ color: '#ef4444', fontSize: 14, textAlign: 'center' }}>{error}</p>
+      </div>
+    )
+  }
+
   return (
     <>
-      {showSetup && (
-        <SetupModal
-          slug={slug}
-          onDismiss={() => setShowSetup(false)}
-          colors={C}
-          logoUrl={tenant?.logoUrl ?? null}
-        />
+      {/* ── Splash 過場 ── */}
+      {!loaded && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          background: '#fff',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 20,
+          transition: 'opacity 0.35s ease',
+          opacity: splashOut ? 0 : 1,
+          pointerEvents: splashOut ? 'none' : 'auto',
+        }}>
+          {/* 旋轉圓環 */}
+          <div style={{ position: 'relative', width: 100, height: 100 }}>
+            <svg width="100" height="100" style={{ position: 'absolute', inset: 0, animation: 'spinRing 2.5s linear infinite' }}>
+              <circle cx="50" cy="50" r="44" fill="none" stroke={primary} strokeWidth="2" strokeDasharray="60 220" strokeLinecap="round" opacity="0.5"/>
+            </svg>
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {tenant?.logoUrl
+                ? <img src={tenant.logoUrl} alt={brandName} style={{ width: 56, height: 56, objectFit: 'contain', borderRadius: 14 }} />
+                : <BeeLogoSVG size={52} />
+              }
+            </div>
+          </div>
+
+          {/* 品牌名 */}
+          <div style={{ textAlign: 'center', animation: 'fadeUp 0.5s 0.1s ease both' }}>
+            <p style={{ fontSize: 24, fontWeight: 900, color: '#1a1a1a', margin: 0, letterSpacing: '-0.02em' }}>{brandName}</p>
+            <p style={{ fontSize: 12, color: '#9ca3af', margin: '6px 0 0', letterSpacing: '0.1em' }}>旅遊 eSIM 專門店</p>
+          </div>
+
+          {/* 載入點點 */}
+          <div style={{ display: 'flex', gap: 6 }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: primary,
+                animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+              }}/>
+            ))}
+          </div>
+
+          <style>{`
+            @keyframes spinRing  { to{transform:rotate(360deg)} }
+            @keyframes fadeUp    { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+            @keyframes dotPulse  { 0%,80%,100%{transform:scale(0.6);opacity:0.35} 40%{transform:scale(1.3);opacity:1} }
+          `}</style>
+        </div>
       )}
-      <HomeTemplate
-        tenant={tenant}
-        slug={slug}
-        countries={countries}
-        colors={C}
-        showSetup={showSetup}
-        onDismissSetup={() => setShowSetup(false)}
-        onSelectCountry={code => router.push(`/liff/${slug}/products?country=${code}`)}
-        onNavigate={handleNavigate}
-        onSearch={q => router.push(`/liff/${slug}/products?q=${encodeURIComponent(q)}`)}
-      />
+
+      {/* ── 首頁內容 ── */}
+      {loaded && (
+        <>
+          {showSetup && (
+            <SetupModal slug={slug} onDismiss={() => setShowSetup(false)} colors={C} logoUrl={tenant?.logoUrl ?? null} />
+          )}
+          <HomeTemplate
+            tenant={tenant}
+            slug={slug}
+            countries={countries}
+            colors={C}
+            showSetup={showSetup}
+            onDismissSetup={() => setShowSetup(false)}
+            onSelectCountry={code => router.push(`/liff/${slug}/products?country=${code}`)}
+            onNavigate={handleNavigate}
+            onSearch={q => router.push(`/liff/${slug}/products${q}`)}
+          />
+        </>
+      )}
     </>
   )
 }
