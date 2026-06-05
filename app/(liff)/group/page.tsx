@@ -10,7 +10,7 @@ type GroupStats   = { memberCount: number; pendingAmount: number; settledAmount:
 
 const S = {
   white: '#ffffff', ink: '#0f172a', muted: '#64748b', faint: '#94a3b8',
-  line: 'rgba(0,0,0,0.07)', accent: C.primary,
+  line: 'rgba(0,0,0,0.07)',
 } as const
 
 const STATUS_META: Record<string, { text: string; bg: string; color: string }> = {

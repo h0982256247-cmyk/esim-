@@ -18,14 +18,12 @@ type Product = {
 }
 
 const S = {
-  bg: '#f8f9fb',
+  bg: '#f9f9f9',
   white: '#ffffff',
-  ink: '#0f172a',
-  muted: '#64748b',
+  ink: '#1a1a1a',
+  muted: '#4b5563',
   faint: '#94a3b8',
   line: 'rgba(0,0,0,0.07)',
-  accent: '#0284c7',
-  accentLight: '#e0f2fe',
 } as const
 
 function BackArrow() {
@@ -36,9 +34,9 @@ function BackArrow() {
   )
 }
 
-function CheckIcon() {
+function CheckIcon({ color }: { color: string }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={S.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
     </svg>
   )
@@ -61,7 +59,7 @@ export default function ProductDetailPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.soft}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -69,11 +67,17 @@ export default function ProductDetailPage() {
   if (notFound || !product) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16 }}>
       <p style={{ color: S.faint, fontSize: 14 }}>商品不存在或已下架</p>
-      <button onClick={() => router.back()} style={{ color: S.accent, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer' }}>返回上一頁</button>
+      <button onClick={() => router.back()} style={{ color: C.primary, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer' }}>返回上一頁</button>
     </div>
   )
 
   const descLines = product.description?.split('\n').filter(Boolean) ?? []
+
+  const features = [
+    product.dataCapacity ? product.dataCapacity : null,
+    'eSIM 即插即用，無需實體 SIM',
+    '購買後即可收到安裝教學',
+  ].filter(Boolean) as string[]
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 100 }}>
@@ -85,46 +89,48 @@ export default function ProductDetailPage() {
         >
           <BackArrow />
         </button>
-        <span style={{ fontSize: 14, color: S.muted }}>
-          {product.countryNameZh}
-        </span>
+        <span style={{ fontSize: 14, color: S.muted }}>{product.countryNameZh}</span>
       </div>
 
       {/* Hero card */}
-      <div style={{ margin: '0 16px', background: S.white, borderRadius: 20, border: `1px solid ${S.line}`, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+      <div style={{ margin: '0 16px', background: S.white, borderRadius: 20, border: `1px solid ${S.line}`, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}>
         {/* Top band */}
-        <div style={{ background: `linear-gradient(135deg, ${C.light} 0%, ${C.soft} 100%)`, padding: '28px 24px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div style={{
+          background: `linear-gradient(135deg, ${C.light} 0%, ${C.soft} 100%)`,
+          padding: '28px 24px 22px',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+        }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              {product.countryFlag && <span style={{ fontSize: 24 }}>{product.countryFlag}</span>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              {product.countryFlag && <span style={{ fontSize: 26 }}>{product.countryFlag}</span>}
               <div>
                 <p style={{ fontSize: 17, fontWeight: 700, color: S.ink, margin: 0 }}>{product.countryNameZh}</p>
                 <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{product.countryNameEn}</p>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: S.ink, letterSpacing: '-0.03em' }}>{product.displayDays}</span>
+              <span style={{ fontSize: 40, fontWeight: 800, color: S.ink, letterSpacing: '-0.04em', lineHeight: 1 }}>{product.displayDays}</span>
               <span style={{ fontSize: 16, color: S.muted, fontWeight: 500 }}>天方案</span>
             </div>
           </div>
-          <SignalIllustration size={56} />
+          <SignalIllustration size={54} />
         </div>
 
         {/* Specs */}
         <div style={{ padding: '20px 24px' }}>
-          {product.dataCapacity && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <CheckIcon />
-              <span style={{ fontSize: 14, color: S.muted }}>{product.dataCapacity}</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <CheckIcon />
-            <span style={{ fontSize: 14, color: S.muted }}>eSIM 即插即用，無需實體 SIM</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <CheckIcon />
-            <span style={{ fontSize: 14, color: S.muted }}>購買後即可收到安裝教學</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {features.map((f, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                  background: C.light,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <CheckIcon color={C.primary} />
+                </div>
+                <span style={{ fontSize: 14, color: S.muted }}>{f}</span>
+              </div>
+            ))}
           </div>
 
           {descLines.length > 0 && (
@@ -140,7 +146,7 @@ export default function ProductDetailPage() {
       {/* Sticky CTA */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
-        background: 'rgba(248,249,251,0.96)',
+        background: 'rgba(249,249,249,0.97)',
         backdropFilter: 'blur(10px)',
         borderTop: `1px solid ${S.line}`,
         padding: '12px 16px',
@@ -149,21 +155,22 @@ export default function ProductDetailPage() {
         <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div>
             <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>售價</p>
-            <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>NT${product.sellPrice.toLocaleString()}</p>
+            <p style={{ fontSize: 26, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+              NT${product.sellPrice.toLocaleString()}
+            </p>
           </div>
           <button
             onClick={() => router.push(`/checkout?productId=${product.id}`)}
             style={{
               flex: 1,
               background: C.primary,
-              border: 'none',
-              borderRadius: 14,
+              border: 'none', borderRadius: 100,
               padding: '15px',
               color: C.onPrimary,
-              fontSize: 16,
-              fontWeight: 700,
+              fontSize: 16, fontWeight: 800,
               cursor: 'pointer',
               letterSpacing: '0.02em',
+              boxShadow: `0 4px 14px ${C.primary}40`,
             }}
           >
             立即購買

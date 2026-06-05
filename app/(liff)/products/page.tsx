@@ -25,14 +25,12 @@ type Product = {
 }
 
 const S = {
-  bg: '#f8f9fb',
+  bg: '#f9f9f9',
   white: '#ffffff',
-  ink: '#0f172a',
-  muted: '#64748b',
+  ink: '#1a1a1a',
+  muted: '#4b5563',
   faint: '#94a3b8',
   line: 'rgba(0,0,0,0.07)',
-  accent: '#0284c7',
-  accentLight: '#e0f2fe',
 } as const
 
 function Spinner() {
@@ -92,7 +90,7 @@ function SetupModal({ slug, onDismiss }: { slug: string; onDismiss: () => void }
         </div>
 
         {/* Title */}
-        <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', textAlign: 'center', margin: '0 0 8px', letterSpacing: '-0.01em' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1a1a1a', textAlign: 'center', margin: '0 0 8px', letterSpacing: '-0.01em' }}>
           完成個人資料綁定
         </h2>
         <p style={{ fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 1.65, margin: '0 0 20px' }}>
@@ -121,7 +119,7 @@ function SetupModal({ slug, onDismiss }: { slug: string; onDismiss: () => void }
         <button
           onClick={() => router.push(slug ? `/liff/${slug}/profile/setup` : '/profile/setup')}
           style={{
-            width: '100%', border: 'none', borderRadius: 16,
+            width: '100%', border: 'none', borderRadius: 100,
             padding: '16px', fontSize: 16, fontWeight: 800,
             color: C.onPrimary, cursor: 'pointer',
             background: C.primary,
@@ -161,6 +159,7 @@ function ProductsContent() {
   const selectedCountry = searchParams.get('country')
   const showSetup = searchParams.get('setup') === '1'
   const { liff, isReady } = useLiff()
+  const C = useTenantColors()
 
   const [countries, setCountries] = useState<Country[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -198,11 +197,11 @@ function ProductsContent() {
         {showSetup && <SetupModal slug={slug} onDismiss={dismissSetup} />}
         <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96 }}>
           {/* Hero */}
-          <div style={{ padding: '32px 24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-            <GlobeIllustration size={120} />
+          <div style={{ padding: '32px 24px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <GlobeIllustration size={110} />
             <div style={{ textAlign: 'center' }}>
-              <h1 style={{ fontSize: 22, fontWeight: 700, color: S.ink, letterSpacing: '-0.02em', margin: 0 }}>選擇目的地</h1>
-              <p style={{ fontSize: 13, color: S.faint, marginTop: 4 }}>購買出國 eSIM，即插即用</p>
+              <h1 style={{ fontSize: 24, fontWeight: 800, color: S.ink, letterSpacing: '-0.02em', margin: 0 }}>選擇目的地</h1>
+              <p style={{ fontSize: 13, color: S.faint, marginTop: 6 }}>購買出國 eSIM，即插即用</p>
             </div>
           </div>
 
@@ -222,15 +221,15 @@ function ProductsContent() {
                     padding: '18px 14px',
                     textAlign: 'left',
                     cursor: 'pointer',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                    transition: 'box-shadow 0.15s',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                    transition: 'box-shadow 0.15s, transform 0.15s',
                   }}
                 >
                   {c.countryFlag && (
-                    <span style={{ fontSize: 28, display: 'block', marginBottom: 8, lineHeight: 1 }}>{c.countryFlag}</span>
+                    <span style={{ fontSize: 30, display: 'block', marginBottom: 10, lineHeight: 1 }}>{c.countryFlag}</span>
                   )}
                   <p style={{ fontSize: 15, fontWeight: 700, color: S.ink, margin: 0 }}>{c.countryNameZh}</p>
-                  <p style={{ fontSize: 12, color: S.faint, marginTop: 2 }}>{c.countryNameEn}</p>
+                  <p style={{ fontSize: 12, color: S.faint, marginTop: 3 }}>{c.countryNameEn}</p>
                 </button>
               ))}
             </div>
@@ -247,81 +246,88 @@ function ProductsContent() {
     <>
       {showSetup && <SetupModal slug={slug} onDismiss={dismissSetup} />}
       <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96 }}>
-      {/* Sticky header */}
-      <div style={{
-        position: 'sticky', top: 0,
-        background: 'rgba(248,249,251,0.96)',
-        backdropFilter: 'blur(10px)',
-        zIndex: 10,
-        padding: '14px 16px',
-        borderBottom: `1px solid ${S.line}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-      }}>
-        <button
-          onClick={() => router.push('/products')}
-          style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', color: S.muted, display: 'flex', alignItems: 'center' }}
-        >
-          <BackArrow />
-        </button>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {country?.countryFlag && <span style={{ fontSize: 18 }}>{country.countryFlag}</span>}
-            <h1 style={{ fontSize: 17, fontWeight: 700, color: S.ink, margin: 0 }}>{country?.countryNameZh ?? '方案'}</h1>
+        {/* Sticky header */}
+        <div style={{
+          position: 'sticky', top: 0,
+          background: 'rgba(249,249,249,0.96)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 10,
+          padding: '14px 16px',
+          borderBottom: `1px solid ${S.line}`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}>
+          <button
+            onClick={() => router.push('/products')}
+            style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', color: S.muted, display: 'flex', alignItems: 'center' }}
+          >
+            <BackArrow />
+          </button>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {country?.countryFlag && <span style={{ fontSize: 18 }}>{country.countryFlag}</span>}
+              <h1 style={{ fontSize: 17, fontWeight: 700, color: S.ink, margin: 0 }}>{country?.countryNameZh ?? '方案'}</h1>
+            </div>
+            <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{products.length} 個方案</p>
           </div>
-          <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{products.length} 個方案</p>
+        </div>
+
+        {/* Plans */}
+        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {products.length === 0 && (
+            <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>此目的地暫無可購買方案</p>
+          )}
+          {products.map(p => (
+            <button
+              key={p.id}
+              onClick={() => router.push(`/products/${p.id}`)}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                background: S.white,
+                borderRadius: 14,
+                border: `1px solid ${S.line}`,
+                padding: '16px 18px',
+                cursor: 'pointer',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: S.ink, letterSpacing: '-0.02em' }}>{p.displayDays}</span>
+                  <span style={{ fontSize: 13, color: S.muted, fontWeight: 500 }}>天</span>
+                </div>
+                {p.dataCapacity && (
+                  <span style={{
+                    display: 'inline-block',
+                    fontSize: 12, fontWeight: 600, color: S.muted,
+                    background: '#f3f4f6', borderRadius: 6, padding: '2px 8px',
+                    marginBottom: 4,
+                  }}>
+                    {p.dataCapacity}
+                  </span>
+                )}
+                {p.description && (
+                  <p style={{ fontSize: 12, color: S.faint, margin: 0, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {p.description}
+                  </p>
+                )}
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                  NT${p.sellPrice.toLocaleString()}
+                </p>
+                <p style={{ fontSize: 11, color: S.faint, marginTop: 2 }}>點選購買</p>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
-
-      {/* Plans */}
-      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {products.length === 0 && (
-          <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>此目的地暫無可購買方案</p>
-        )}
-        {products.map((p, i) => (
-          <button
-            key={p.id}
-            onClick={() => router.push(`/products/${p.id}`)}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              background: S.white,
-              borderRadius: 16,
-              border: `1px solid ${S.line}`,
-              padding: '18px 16px',
-              cursor: 'pointer',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 20, fontWeight: 800, color: S.ink }}>{p.displayDays}</span>
-                <span style={{ fontSize: 13, color: S.muted, fontWeight: 500 }}>天</span>
-              </div>
-              {p.dataCapacity && (
-                <p style={{ fontSize: 13, color: S.muted, margin: 0 }}>{p.dataCapacity}</p>
-              )}
-              {p.description && (
-                <p style={{ fontSize: 12, color: S.faint, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {p.description}
-                </p>
-              )}
-            </div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <p style={{ fontSize: 22, fontWeight: 800, color: S.accent, margin: 0, letterSpacing: '-0.02em' }}>
-                NT${p.sellPrice.toLocaleString()}
-              </p>
-              <p style={{ fontSize: 11, color: S.faint, marginTop: 2 }}>點選購買</p>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
     </>
   )
 }

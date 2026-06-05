@@ -7,7 +7,7 @@ export default function LiffLayout({ children }: { children: ReactNode }) {
 
   return (
     <LiffProvider liffId={liffId}>
-      <div className="min-h-screen pb-16" style={{ background: '#f8f9fb' }}>
+      <div className="min-h-screen pb-16 liff-root" style={{ background: '#f9f9f9' }}>
         {children}
       </div>
       <LiffBottomNav />

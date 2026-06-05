@@ -19,7 +19,7 @@ export default async function TenantLiffLayout({ children, params }: Props) {
   return (
     <TenantProvider tenant={tenant}>
       <LiffProvider liffId={tenant.liffId} tenantSlug={slug}>
-        <div className="min-h-screen pb-16" style={{ background: '#f8f9fb' }}>
+        <div className="min-h-screen pb-16 liff-root" style={{ background: '#f9f9f9' }}>
           {children}
         </div>
         <LiffBottomNav />
