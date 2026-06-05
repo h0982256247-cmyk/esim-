@@ -3,10 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
+import { useLiffBase } from '@/hooks/useLiffBase'
 
 export default function ProfileSetup() {
   const { liff } = useLiff()
   const router = useRouter()
+  const base = useLiffBase()
 
   const [form, setForm] = useState({ name: '', phone: '', email: '', birthday: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -40,7 +42,7 @@ export default function ProfileSetup() {
         return
       }
 
-      router.replace('/products')
+      router.replace(`${base}/products`)
     } catch {
       setErrors({ submit: '送出失敗，請稍後再試' })
     } finally {

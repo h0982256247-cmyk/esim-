@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 
 type GroupInfo    = { id: string; name: string; description: string | null; status: string; inviteCode: string }
 type Membership   = { group: { id: string; name: string; description: string | null }; joinedAt: string }
+type GroupStats   = { memberCount: number; pendingAmount: number; settledAmount: number; recentCommissions: { id: string; amount: number; status: string; createdAt: string; orderTotal: number }[] }
 
 const S = {
   white: '#ffffff', ink: '#0f172a', muted: '#64748b', faint: '#94a3b8',
@@ -48,8 +49,12 @@ function MemberBadge() {
 
 export default function GroupPage() {
   const router = useRouter()
+  const pathname = usePathname()
+  const slugMatch = pathname.match(/^(\/liff\/[^/]+)/)
+  const base = slugMatch ? slugMatch[1] : ''
   const [ownedGroup, setOwnedGroup] = useState<GroupInfo | null>(null)
   const [membership, setMembership] = useState<Membership | null>(null)
+  const [stats, setStats] = useState<GroupStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'join' | 'apply'>('join')
 
@@ -62,11 +67,15 @@ export default function GroupPage() {
   const [applying, setApplying] = useState(false)
   const [applyMsg, setApplyMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
-  const reload = () =>
-    fetch('/api/groups').then(r => r.json()).then(d => {
-      setOwnedGroup(d.ownedGroup ?? null)
-      setMembership(d.membership ?? null)
-    })
+  const reload = async () => {
+    const d = await fetch('/api/groups').then(r => r.json())
+    setOwnedGroup(d.ownedGroup ?? null)
+    setMembership(d.membership ?? null)
+    if (d.ownedGroup?.status === 'APPROVED') {
+      const s = await fetch('/api/groups/stats').then(r => r.json())
+      if (!s.error) setStats(s)
+    }
+  }
 
   useEffect(() => { reload().finally(() => setLoading(false)) }, [])
 
@@ -123,14 +132,65 @@ export default function GroupPage() {
 
         {ownedGroup.status === 'APPROVED' && (
           <>
+            {/* 儀表板數字 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px' }}>
+                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 4px' }}>社群人數</p>
+                <p style={{ fontSize: 28, fontWeight: 800, color: S.ink, margin: 0, lineHeight: 1 }}>
+                  {stats ? stats.memberCount.toLocaleString() : '—'}
+                </p>
+                <p style={{ fontSize: 11, color: S.faint, margin: '4px 0 0' }}>位會員</p>
+              </div>
+              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px' }}>
+                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 4px' }}>待結算分潤</p>
+                <p style={{ fontSize: 22, fontWeight: 800, color: '#0284c7', margin: 0, lineHeight: 1 }}>
+                  {stats ? `NT$${Number(stats.pendingAmount).toLocaleString()}` : '—'}
+                </p>
+                <p style={{ fontSize: 11, color: S.faint, margin: '4px 0 0' }}>
+                  已結算 {stats ? `NT$${Number(stats.settledAmount).toLocaleString()}` : '—'}
+                </p>
+              </div>
+            </div>
+
+            {/* 邀請碼 */}
             <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px', marginBottom: 12 }}>
               <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 6px' }}>邀請碼</p>
               <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 26, fontWeight: 800, color: S.ink, letterSpacing: '0.2em', margin: 0 }}>
                 {ownedGroup.inviteCode}
               </p>
             </div>
+
+            {/* 近期分潤明細 */}
+            {stats && stats.recentCommissions.length > 0 && (
+              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px', marginBottom: 12 }}>
+                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 10px' }}>近期分潤明細</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {stats.recentCommissions.map(c => (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div>
+                        <p style={{ fontSize: 12, color: S.muted, margin: 0 }}>
+                          訂單金額 NT${Number(c.orderTotal).toLocaleString()}
+                        </p>
+                        <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0' }}>
+                          {new Date(c.createdAt).toLocaleDateString('zh-TW')}
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: c.status === 'SETTLED' ? '#15803d' : '#0284c7', margin: 0 }}>
+                          +NT${Number(c.amount).toLocaleString()}
+                        </p>
+                        <p style={{ fontSize: 10, color: c.status === 'SETTLED' ? '#15803d' : S.faint, margin: '2px 0 0' }}>
+                          {c.status === 'SETTLED' ? '已結算' : '待結算'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button
-              onClick={() => router.push('/group-admin')}
+              onClick={() => router.push(`${base}/group-admin`)}
               style={{
                 width: '100%', background: '#fffbeb', border: '1px solid #fde68a',
                 borderRadius: 14, padding: '15px 16px', cursor: 'pointer',

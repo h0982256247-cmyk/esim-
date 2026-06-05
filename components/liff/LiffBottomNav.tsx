@@ -53,19 +53,32 @@ function IconAdmin({ active }: { active?: boolean }) {
   )
 }
 
-type TabDef = { href: string; label: string; Icon: React.FC<{ active?: boolean }>; ownerOnly?: boolean }
+const TAB_PATHS = ['products', 'orders', 'coupons', 'profile']
+const ADMIN_PATH = 'group-admin'
+
+type TabDef = { path: string; label: string; Icon: React.FC<{ active?: boolean }>; ownerOnly?: boolean }
 
 const TABS: TabDef[] = [
-  { href: '/products', label: '購買', Icon: IconShop },
-  { href: '/orders',   label: '訂單', Icon: IconOrders },
-  { href: '/coupons',  label: '優惠券', Icon: IconCoupon },
-  { href: '/profile',  label: '我的', Icon: IconProfile },
+  { path: 'products', label: '購買',  Icon: IconShop },
+  { path: 'orders',   label: '訂單',  Icon: IconOrders },
+  { path: 'coupons',  label: '優惠券', Icon: IconCoupon },
+  { path: 'profile',  label: '我的',  Icon: IconProfile },
 ]
 
-const ADMIN_TAB: TabDef = { href: '/group-admin', label: '後台', Icon: IconAdmin, ownerOnly: true }
+const ADMIN_TAB: TabDef = { path: ADMIN_PATH, label: '後台', Icon: IconAdmin, ownerOnly: true }
+
+// 從 pathname 偵測是否在 /liff/[slug]/ 路由，並回傳 base prefix
+function useBasePath() {
+  const pathname = usePathname()
+  // /liff/slug/xxx → prefix = /liff/slug
+  const slugMatch = pathname.match(/^(\/liff\/[^/]+)/)
+  if (slugMatch) return slugMatch[1]
+  return ''
+}
 
 export default function LiffBottomNav() {
   const pathname = usePathname()
+  const base = useBasePath()
   const [isGroupOwner, setIsGroupOwner] = useState(false)
 
   useEffect(() => {
@@ -87,12 +100,13 @@ export default function LiffBottomNav() {
       }}
     >
       <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {tabs.map(({ href, label, Icon, ownerOnly }) => {
-          const active = pathname === href || (href !== '/' && pathname.startsWith(href))
+        {tabs.map(({ path, label, Icon, ownerOnly }) => {
+          const href = `${base}/${path}`
+          const active = pathname === href || pathname.startsWith(href + '/')
           const color = active ? (ownerOnly ? S.adminAccent : S.accent) : S.inactive
           return (
             <Link
-              key={href}
+              key={path}
               href={href}
               style={{
                 flex: 1,

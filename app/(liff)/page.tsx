@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
+import { useLiffBase } from '@/hooks/useLiffBase'
 
 type Phase = 'splash' | 'modal' | 'redirecting'
 
 export default function LiffHome() {
   const { isReady, error } = useLiff()
   const router = useRouter()
+  const base = useLiffBase()
   const [phase, setPhase] = useState<Phase>('splash')
   const [splashOut, setSplashOut] = useState(false)
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
@@ -37,7 +39,7 @@ export default function LiffHome() {
       setTimeout(() => {
         if (profileComplete) {
           setPhase('redirecting')
-          router.replace('/products')
+          router.replace(`${base}/products`)
         } else {
           setPhase('modal')
         }
@@ -169,7 +171,7 @@ export default function LiffHome() {
 
             {/* CTA */}
             <button
-              onClick={() => router.push('/profile/setup')}
+              onClick={() => router.push(`${base}/profile/setup`)}
               style={{
                 width: '100%',
                 background: '#FFC107',
@@ -189,7 +191,7 @@ export default function LiffHome() {
 
             {/* Skip */}
             <button
-              onClick={() => router.replace('/products')}
+              onClick={() => router.replace(`${base}/products`)}
               style={{
                 width: '100%', background: 'none', border: 'none',
                 marginTop: 12, padding: '10px',

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useLiffBase } from '@/hooks/useLiffBase'
 
 type UserInfo = {
   id: string
@@ -69,6 +70,7 @@ function IconAdmin() {
 
 export default function ProfilePage() {
   const router = useRouter()
+  const base = useLiffBase()
   const [user, setUser] = useState<UserInfo | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -130,7 +132,7 @@ export default function ProfilePage() {
       {/* Incomplete profile warning */}
       {!user.profileComplete && (
         <button
-          onClick={() => router.push('/profile/setup')}
+          onClick={() => router.push(`${base}/profile/setup`)}
           style={{
             width: '100%', marginBottom: 16,
             background: '#fff7ed', border: '1px solid #fed7aa',
@@ -154,7 +156,7 @@ export default function ProfilePage() {
       {/* Owner admin shortcut */}
       {isGroupOwner && (
         <button
-          onClick={() => router.push('/group-admin')}
+          onClick={() => router.push(`${base}/group-admin`)}
           style={{
             width: '100%', marginBottom: 16,
             background: '#fffbeb', border: '1px solid #fde68a',
@@ -175,9 +177,9 @@ export default function ProfilePage() {
       {/* Settings menu */}
       <div style={{ background: S.white, borderRadius: 16, border: `1px solid ${S.line}`, overflow: 'hidden' }}>
         {[
-          { label: '個人資料', sub: '姓名、電話、電郵', icon: <IconEdit />, href: '/profile/setup' },
-          { label: '我的社群', sub: groupLabel, icon: <IconGroup />, href: '/group' },
-          { label: '客服中心', sub: '問題回報與聯絡', icon: <IconSupport />, href: '/support' },
+          { label: '個人資料', sub: '姓名、電話、電郵', icon: <IconEdit />, href: `${base}/profile/setup` },
+          { label: '我的社群', sub: groupLabel, icon: <IconGroup />, href: `${base}/group` },
+          { label: '客服中心', sub: '問題回報與聯絡', icon: <IconSupport />, href: `${base}/support` },
         ].map((item, i) => (
           <button
             key={item.label}

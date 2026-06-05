@@ -29,6 +29,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       maxRebateRate: true,
       tenantSlug: true,
       brandName: true,
+      liffId: true,
       logoUrl: true,
       primaryColor: true,
       lineAccessToken: true,
@@ -84,10 +85,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   }
 
-  if (body.brandName !== undefined || body.tenantSlug !== undefined || body.logoUrl !== undefined || body.primaryColor !== undefined || body.lineAccessToken !== undefined) {
+  if (body.brandName !== undefined || body.tenantSlug !== undefined || body.liffId !== undefined || body.logoUrl !== undefined || body.primaryColor !== undefined || body.lineAccessToken !== undefined) {
     const updateData: Record<string, unknown> = {}
     if (body.brandName !== undefined) updateData.brandName = body.brandName
     if (body.tenantSlug !== undefined) updateData.tenantSlug = body.tenantSlug
+    if (body.liffId !== undefined) updateData.liffId = body.liffId
     if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl
     if (body.primaryColor !== undefined) updateData.primaryColor = body.primaryColor
     if (body.lineAccessToken !== undefined) {

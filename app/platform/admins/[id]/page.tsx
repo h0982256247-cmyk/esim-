@@ -15,6 +15,7 @@ type AdminDetail = {
   maxRebateRate: number
   tenantSlug: string | null
   brandName: string | null
+  liffId: string | null
   logoUrl: string | null
   primaryColor: string | null
   lineAccessToken: string | null
@@ -577,8 +578,9 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
   const [form, setForm] = useState({
     brandName: admin.brandName ?? '',
     tenantSlug: admin.tenantSlug ?? '',
+    liffId: admin.liffId ?? '',
     logoUrl: admin.logoUrl ?? '',
-    primaryColor: admin.primaryColor ?? '#3B82F6',
+    primaryColor: admin.primaryColor ?? '#FFC107',
     lineAccessToken: admin.lineAccessToken ?? '',
   })
   const [saving, setSaving] = useState(false)
@@ -649,6 +651,21 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
               placeholder="例：bii-travel"
               className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {form.tenantSlug && (
+              <p className="text-xs text-gray-400 mt-0.5">LIFF 網址：/liff/<span className="font-mono">{form.tenantSlug}</span></p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">LIFF ID</label>
+            <input
+              type="text"
+              value={form.liffId}
+              onChange={e => setForm(p => ({ ...p, liffId: e.target.value }))}
+              placeholder="例：1234567890-abcdefgh"
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-0.5">至 LINE Developers Console 申請，Endpoint URL 填 /liff/{form.tenantSlug || '[slug]'}</p>
           </div>
 
           {/* Logo 欄位：支援直接上傳或貼網址 */}
