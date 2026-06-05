@@ -66,7 +66,8 @@ export default function ClassicHome({
           <div style={{
             width: 46, height: 46, borderRadius: '50%', overflow: 'hidden',
             background: '#fff', flexShrink: 0,
-            boxShadow: '0 2px 14px rgba(0,0,0,0.10)',
+            boxShadow: '3px 4px 0 rgba(0,0,0,0.10)',
+            border: '2px solid rgba(0,0,0,0.06)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {tenant?.logoUrl
@@ -83,12 +84,11 @@ export default function ClassicHome({
           onClick={() => setSearchOpen(o => !o)}
           style={{
             width: 44, height: 44, borderRadius: '50%', background: '#fff',
-            border: 'none', cursor: 'pointer',
+            border: searchOpen ? `2px solid ${C.primary}` : '2px solid rgba(0,0,0,0.06)',
+            cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: searchOpen
-              ? `0 0 0 2px ${C.primary}, 0 4px 14px rgba(0,0,0,0.08)`
-              : '0 2px 14px rgba(0,0,0,0.08)',
-            transition: 'box-shadow 0.2s',
+            boxShadow: searchOpen ? `3px 4px 0 ${C.primary}40` : '3px 4px 0 rgba(0,0,0,0.10)',
+            transition: 'box-shadow 0.2s, border 0.2s',
           }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke={searchOpen ? C.primary : '#374151'} strokeWidth="2.2" strokeLinecap="round">
@@ -104,7 +104,9 @@ export default function ClassicHome({
             <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
               <div style={{
                 background: '#fff', borderRadius: 18, display: 'flex', alignItems: 'center',
-                gap: 10, padding: '0 14px', boxShadow: '0 2px 14px rgba(0,0,0,0.08)',
+                gap: 10, padding: '0 14px',
+                boxShadow: '4px 4px 0 rgba(0,0,0,0.08)',
+                border: '2px solid rgba(0,0,0,0.07)',
               }}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.2" strokeLinecap="round">
                   <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -154,9 +156,11 @@ export default function ClassicHome({
             </div>
 
             <button onClick={handleSearch} style={{
-              background: C.primary, border: 'none', borderRadius: 18, flexShrink: 0,
+              background: C.primary,
+              border: '2px solid rgba(0,0,0,0.10)',
+              borderRadius: 18, flexShrink: 0,
               padding: '0 18px', cursor: 'pointer', color: '#fff', fontWeight: 700, fontSize: 14,
-              height: 48, boxShadow: `0 4px 16px ${C.primary}50`,
+              height: 48, boxShadow: '4px 4px 0 rgba(0,0,0,0.12)',
               display: 'flex', alignItems: 'center', gap: 5,
             }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -177,35 +181,38 @@ export default function ClassicHome({
       {/* ── Hero Banner ── */}
       <div style={{ padding: '18px 20px 0' }}>
         <div style={{
-          background: 'linear-gradient(135deg, #C4B5FD 0%, #A78BFA 60%, #8B5CF6 100%)',
-          borderRadius: 28, padding: '24px 22px',
-          position: 'relative', overflow: 'hidden', minHeight: 170,
+          borderRadius: 28, padding: '28px 22px',
+          position: 'relative', overflow: 'hidden', minHeight: 180,
+          backgroundImage: 'url(https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=800&q=80)',
+          backgroundSize: 'cover', backgroundPosition: 'center 40%',
+          boxShadow: '6px 8px 0 rgba(109,40,217,0.22)',
+          border: '2px solid rgba(109,40,217,0.18)',
         }}>
-          {/* 裝飾圓 */}
-          <div style={{ position: 'absolute', top: -24, right: -24, width: 130, height: 130, borderRadius: '50%', background: 'rgba(255,255,255,0.14)' }}/>
-          <div style={{ position: 'absolute', bottom: -28, right: 56, width: 90, height: 90, borderRadius: '50%', background: 'rgba(255,255,255,0.09)' }}/>
-          <div style={{ position: 'absolute', top: 20, right: 80, width: 50, height: 50, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }}/>
+          {/* 紫色漸層遮罩 */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(120deg, rgba(109,40,217,0.82) 0%, rgba(124,58,237,0.68) 50%, rgba(139,92,246,0.30) 100%)',
+            borderRadius: 26,
+          }}/>
 
-          <div style={{ position: 'relative', zIndex: 1, maxWidth: '62%' }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.7)', margin: '0 0 8px', letterSpacing: '0.14em', textTransform: 'uppercase' }}>出發前必備</p>
-            <h2 style={{ fontSize: 27, fontWeight: 900, color: '#fff', margin: '0 0 8px', lineHeight: 1.1, letterSpacing: '-0.025em' }}>探索世界，<br/>隨時在線</h2>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', margin: '0 0 18px', lineHeight: 1.4 }}>最便宜的旅遊 eSIM 方案</p>
+          <div style={{ position: 'relative', zIndex: 1, maxWidth: '65%' }}>
+            <div style={{
+              display: 'inline-block', background: 'rgba(255,255,255,0.2)',
+              borderRadius: 8, padding: '3px 10px', marginBottom: 10,
+              border: '1px solid rgba(255,255,255,0.3)',
+            }}>
+              <p style={{ fontSize: 10, fontWeight: 800, color: '#fff', margin: 0, letterSpacing: '0.14em', textTransform: 'uppercase' }}>出發前必備</p>
+            </div>
+            <h2 style={{ fontSize: 27, fontWeight: 900, color: '#fff', margin: '0 0 8px', lineHeight: 1.1, letterSpacing: '-0.025em', textShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>探索世界，<br/>隨時在線</h2>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', margin: '0 0 18px', lineHeight: 1.4, textShadow: '0 1px 4px rgba(0,0,0,0.2)' }}>最便宜的旅遊 eSIM 方案</p>
             <button onClick={() => onNavigate('products')} style={{
-              background: '#fff', border: 'none', borderRadius: 22,
+              background: '#fff', border: '2px solid rgba(255,255,255,0.8)', borderRadius: 22,
               padding: '9px 20px', cursor: 'pointer',
               fontSize: 13, fontWeight: 800, color: '#7C3AED',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+              boxShadow: '3px 4px 0 rgba(0,0,0,0.15)',
             }}>
               立即選購 →
             </button>
-          </div>
-
-          <div style={{
-            position: 'absolute', right: 18, top: '50%', transform: 'translateY(-50%)',
-            fontSize: 62, lineHeight: 1,
-            filter: 'drop-shadow(0 6px 16px rgba(0,0,0,0.18))',
-          }}>
-            🌏
           </div>
         </div>
       </div>
@@ -217,15 +224,18 @@ export default function ClassicHome({
           {QUICK_ACTIONS.map(({ key, label, Icon, bg, color }, i) => (
             <button key={key} onClick={() => onNavigate(key)}
               style={{
-                background: bg, borderRadius: 22, border: 'none',
+                background: bg, borderRadius: 22,
+                border: '2px solid rgba(0,0,0,0.07)',
                 padding: '16px 4px 14px', display: 'flex', flexDirection: 'column',
                 alignItems: 'center', gap: 9, cursor: 'pointer',
                 animation: `fadeUp 0.4s ${i * 0.05}s ease both`,
-                boxShadow: `0 4px 14px ${bg}80`,
+                boxShadow: '4px 5px 0 rgba(0,0,0,0.10)',
               }}>
               <div style={{
                 width: 46, height: 46, borderRadius: 15,
-                background: 'rgba(255,255,255,0.55)',
+                background: 'rgba(255,255,255,0.65)',
+                border: '1.5px solid rgba(255,255,255,0.9)',
+                boxShadow: '2px 2px 0 rgba(0,0,0,0.08)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <Icon color={color} size={23} />
@@ -261,12 +271,14 @@ export default function ClassicHome({
               return (
                 <button key={c.countryCode} onClick={() => onSelectCountry(c.countryCode)}
                   style={{
-                    background: bg, borderRadius: 26, border: 'none', cursor: 'pointer',
+                    background: bg, borderRadius: 26,
+                    border: '2px solid rgba(0,0,0,0.07)',
+                    cursor: 'pointer',
                     padding: '18px 16px', textAlign: 'left', minHeight: 150,
                     display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
                     position: 'relative', overflow: 'hidden',
                     animation: `fadeUp 0.4s ${0.1 + i * 0.06}s ease both`,
-                    boxShadow: `0 6px 20px ${bg}70`,
+                    boxShadow: '5px 6px 0 rgba(0,0,0,0.10)',
                   }}>
                   {/* HOT badge */}
                   {i < 2 && (
