@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Script from 'next/script'
 import { useLiff } from '@/components/liff/LiffProvider'
-import { usePrimaryColor } from '@/components/liff/TenantContext'
+import { useTenantColors } from '@/components/liff/TenantContext'
 
 declare global {
   interface Window {
@@ -33,7 +33,7 @@ function PayContent() {
   const orderId = searchParams.get('orderId')!
   const amount = searchParams.get('amount')!
   const { liff } = useLiff()
-  const primaryColor = usePrimaryColor()
+  const C = useTenantColors()
 
   const [sdkReady, setSdkReady] = useState(false)
   const [canPay, setCanPay] = useState(false)
@@ -159,14 +159,14 @@ function PayContent() {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t px-4 py-3">
         <div className="max-w-lg mx-auto">
           <p style={{ textAlign: 'center', color: '#64748b', fontSize: 14, marginBottom: 8 }}>
-            實付金額 <span style={{ fontWeight: 700, color: primaryColor, fontSize: 16 }}>NT${amount}</span>
+            實付金額 <span style={{ fontWeight: 700, color: C.primary, fontSize: 16 }}>NT${amount}</span>
           </p>
           <button
             onClick={handlePay}
             disabled={!canPay || submitting || !sdkReady}
             style={{
-              width: '100%', background: (!canPay || submitting || !sdkReady) ? '#94a3b8' : primaryColor,
-              color: '#fff', border: 'none', borderRadius: 12, padding: '14px',
+              width: '100%', background: (!canPay || submitting || !sdkReady) ? '#94a3b8' : C.primary,
+              color: C.onPrimary, border: 'none', borderRadius: 12, padding: '14px',
               fontSize: 16, fontWeight: 700, cursor: (!canPay || submitting || !sdkReady) ? 'not-allowed' : 'pointer',
               transition: 'background 0.15s',
             }}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { SignalIllustration } from '@/components/liff/LiffIllustrations'
-import { usePrimaryColor } from '@/components/liff/TenantContext'
+import { useTenantColors } from '@/components/liff/TenantContext'
 
 type Product = {
   id: string
@@ -47,7 +47,7 @@ function CheckIcon() {
 export default function ProductDetailPage() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
-  const primaryColor = usePrimaryColor()
+  const C = useTenantColors()
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -61,7 +61,7 @@ export default function ProductDetailPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: S.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.soft}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -93,7 +93,7 @@ export default function ProductDetailPage() {
       {/* Hero card */}
       <div style={{ margin: '0 16px', background: S.white, borderRadius: 20, border: `1px solid ${S.line}`, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
         {/* Top band */}
-        <div style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', padding: '28px 24px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div style={{ background: `linear-gradient(135deg, ${C.light} 0%, ${C.soft} 100%)`, padding: '28px 24px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               {product.countryFlag && <span style={{ fontSize: 24 }}>{product.countryFlag}</span>}
@@ -149,17 +149,17 @@ export default function ProductDetailPage() {
         <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div>
             <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>售價</p>
-            <p style={{ fontSize: 24, fontWeight: 800, color: primaryColor, margin: 0, letterSpacing: '-0.02em' }}>NT${product.sellPrice.toLocaleString()}</p>
+            <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>NT${product.sellPrice.toLocaleString()}</p>
           </div>
           <button
             onClick={() => router.push(`/checkout?productId=${product.id}`)}
             style={{
               flex: 1,
-              background: primaryColor,
+              background: C.primary,
               border: 'none',
               borderRadius: 14,
               padding: '15px',
-              color: '#fff',
+              color: C.onPrimary,
               fontSize: 16,
               fontWeight: 700,
               cursor: 'pointer',

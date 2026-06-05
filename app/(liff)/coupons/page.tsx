@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { CouponIllustration } from '@/components/liff/LiffIllustrations'
-import { usePrimaryColor } from '@/components/liff/TenantContext'
+import { useTenantColors } from '@/components/liff/TenantContext'
 
 type Coupon = {
   id: string
@@ -48,7 +48,7 @@ function discountFold(d: number) {
 }
 
 export default function CouponsPage() {
-  const primaryColor = usePrimaryColor()
+  const C = useTenantColors()
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'available' | 'used'>('available')
@@ -67,7 +67,7 @@ export default function CouponsPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: primaryColor, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.soft}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -87,8 +87,9 @@ export default function CouponsPage() {
                 flex: 1, padding: '9px 0', borderRadius: 9,
                 fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
                 background: tab === t ? S.white : 'transparent',
-                color: tab === t ? S.ink : S.faint,
-                boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                color: tab === t ? C.primary : S.faint,
+                boxShadow: tab === t ? `0 1px 3px ${C.border}` : 'none',
+                borderBottom: tab === t ? `2px solid ${C.primary}` : '2px solid transparent',
                 transition: 'all 0.15s',
               }}
             >
@@ -166,7 +167,7 @@ export default function CouponsPage() {
                   )}
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <p style={{ fontSize: 20, fontWeight: 800, color: c.usedAt || expired ? S.faint : primaryColor, margin: 0, letterSpacing: '-0.02em' }}>
+                  <p style={{ fontSize: 20, fontWeight: 800, color: c.usedAt || expired ? S.faint : C.primary, margin: 0, letterSpacing: '-0.02em' }}>
                     {discountLabel(c.discount)}
                   </p>
                   <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>{discountFold(c.discount)}</p>

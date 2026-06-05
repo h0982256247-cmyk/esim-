@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { GlobeIllustration, BeeLogoSVG } from '@/components/liff/LiffIllustrations'
-import { usePrimaryColor } from '@/components/liff/TenantContext'
+import { useTenantColors } from '@/components/liff/TenantContext'
 
 type Country = {
   countryCode: string
@@ -61,7 +61,7 @@ export default function ProductsPage() {
 }
 
 function SetupModal({ slug, onDismiss }: { slug: string; onDismiss: () => void }) {
-  const primaryColor = usePrimaryColor()
+  const C = useTenantColors()
   const router = useRouter()
   return (
     <div style={{
@@ -102,15 +102,19 @@ function SetupModal({ slug, onDismiss }: { slug: string; onDismiss: () => void }
         {/* Coupon reward box */}
         <div style={{
           width: '100%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          background: '#FFFBEB', border: '1.5px dashed #F59E0B',
-          borderRadius: 14, padding: '13px 20px', marginBottom: 28,
+          background: '#F9F5E7',
+          border: '2px dashed #92400e',
+          borderRadius: 16,
+          padding: '18px 20px 20px',
+          marginBottom: 28,
+          textAlign: 'center',
         }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-            <line x1="7" y1="7" x2="7.01" y2="7"/>
-          </svg>
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#92400e', letterSpacing: '0.02em' }}>官方 9 折優惠券 × 1</span>
+          <p style={{ fontSize: 12, fontWeight: 600, color: '#92400e', margin: '0 0 6px', letterSpacing: '0.1em' }}>
+            新用戶限定
+          </p>
+          <p style={{ fontSize: 22, fontWeight: 900, color: '#78350f', margin: 0, letterSpacing: '0.04em' }}>
+            官方 9 折優惠券
+          </p>
         </div>
 
         {/* Primary CTA */}
@@ -119,10 +123,10 @@ function SetupModal({ slug, onDismiss }: { slug: string; onDismiss: () => void }
           style={{
             width: '100%', border: 'none', borderRadius: 16,
             padding: '16px', fontSize: 16, fontWeight: 800,
-            color: '#fff', cursor: 'pointer',
-            background: primaryColor,
+            color: C.onPrimary, cursor: 'pointer',
+            background: C.primary,
             letterSpacing: '0.03em',
-            boxShadow: `0 4px 14px ${primaryColor}44`,
+            boxShadow: `0 4px 14px ${C.primary}44`,
             marginBottom: 4,
           }}
         >

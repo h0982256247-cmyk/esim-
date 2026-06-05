@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { usePrimaryColor } from '@/components/liff/TenantContext'
+import { useTenantColors } from '@/components/liff/TenantContext'
 
 type GroupInfo    = { id: string; name: string; description: string | null; status: string; inviteCode: string }
 type Membership   = { group: { id: string; name: string; description: string | null }; joinedAt: string }
@@ -10,7 +10,7 @@ type GroupStats   = { memberCount: number; pendingAmount: number; settledAmount:
 
 const S = {
   white: '#ffffff', ink: '#0f172a', muted: '#64748b', faint: '#94a3b8',
-  line: 'rgba(0,0,0,0.07)', accent: '#0284c7',
+  line: 'rgba(0,0,0,0.07)', accent: C.primary,
 } as const
 
 const STATUS_META: Record<string, { text: string; bg: string; color: string }> = {
@@ -51,7 +51,7 @@ function MemberBadge() {
 export default function GroupPage() {
   const router = useRouter()
   const pathname = usePathname()
-  const primaryColor = usePrimaryColor()
+  const C = useTenantColors()
   const slugMatch = pathname.match(/^(\/liff\/[^/]+)/)
   const base = slugMatch ? slugMatch[1] : ''
   const [ownedGroup, setOwnedGroup] = useState<GroupInfo | null>(null)
@@ -107,7 +107,7 @@ export default function GroupPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: primaryColor, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -145,7 +145,7 @@ export default function GroupPage() {
               </div>
               <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px' }}>
                 <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 4px' }}>待結算分潤</p>
-                <p style={{ fontSize: 22, fontWeight: 800, color: '#0284c7', margin: 0, lineHeight: 1 }}>
+                <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, lineHeight: 1 }}>
                   {stats ? `NT$${Number(stats.pendingAmount).toLocaleString()}` : '—'}
                 </p>
                 <p style={{ fontSize: 11, color: S.faint, margin: '4px 0 0' }}>
@@ -178,7 +178,7 @@ export default function GroupPage() {
                         </p>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: c.status === 'SETTLED' ? '#15803d' : '#0284c7', margin: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: c.status === 'SETTLED' ? '#15803d' : C.primary, margin: 0 }}>
                           +NT${Number(c.amount).toLocaleString()}
                         </p>
                         <p style={{ fontSize: 10, color: c.status === 'SETTLED' ? '#15803d' : S.faint, margin: '2px 0 0' }}>
@@ -246,7 +246,7 @@ export default function GroupPage() {
   const btnEnabled = (check: boolean) => ({
     width: '100%', border: 'none', borderRadius: 12, padding: '15px',
     fontSize: 15, fontWeight: 700, cursor: check ? 'pointer' : 'not-allowed' as const,
-    background: check ? primaryColor : '#e2e8f0', color: check ? '#fff' : S.faint,
+    background: check ? C.primary : '#e2e8f0', color: check ? C.onPrimary : S.faint,
     transition: 'all 0.15s',
   })
 

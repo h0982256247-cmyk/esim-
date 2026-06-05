@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { usePrimaryColor } from '@/components/liff/TenantContext'
+import { useTenantColors } from '@/components/liff/TenantContext'
 
 type Product = {
   id: string
@@ -40,7 +40,7 @@ function CheckoutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const productId = searchParams.get('productId')
-  const primaryColor = usePrimaryColor()
+  const C = useTenantColors()
 
   const [product, setProduct] = useState<Product | null>(null)
   const [coupons, setCoupons] = useState<Coupon[]>([])
@@ -136,7 +136,7 @@ function CheckoutContent() {
         <div className="bg-white rounded-xl border p-4 mb-4 shadow-sm">
           <p className="font-semibold">{product.countryNameZh} · {product.displayDays} 天</p>
           {product.dataCapacity && <p className="text-sm text-gray-500 mt-1">{product.dataCapacity}</p>}
-          <p style={{ fontSize: 20, fontWeight: 800, color: primaryColor, marginTop: 8 }}>NT${product.sellPrice}</p>
+          <p style={{ fontSize: 20, fontWeight: 800, color: C.primary, marginTop: 8 }}>NT${product.sellPrice}</p>
         </div>
 
         {/* 優惠券選擇 */}
@@ -145,7 +145,12 @@ function CheckoutContent() {
             <h2 className="font-semibold mb-2">使用優惠券</h2>
             <div className="space-y-2">
               {coupons.map(c => (
-                <label key={c.id} className={`flex items-center justify-between bg-white rounded-xl border p-3 cursor-pointer ${selectedCouponIds.includes(c.id) ? 'border-blue-500 bg-blue-50' : ''}`}>
+                <label key={c.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: selectedCouponIds.includes(c.id) ? C.light : '#fff',
+                  borderRadius: 12, border: `1px solid ${selectedCouponIds.includes(c.id) ? C.border : 'rgba(0,0,0,0.08)'}`,
+                  padding: 12, cursor: 'pointer',
+                }}>
                   <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
@@ -158,7 +163,7 @@ function CheckoutContent() {
                       <p className="text-xs text-gray-400">{c.level} 級券</p>
                     </div>
                   </div>
-                  <p style={{ fontWeight: 700, color: primaryColor }}>{Math.round((1 - c.discount) * 100)}% OFF</p>
+                  <p style={{ fontWeight: 700, color: C.primary }}>{Math.round((1 - c.discount) * 100)}% OFF</p>
                 </label>
               ))}
             </div>
@@ -171,7 +176,12 @@ function CheckoutContent() {
           <h2 className="font-semibold mb-2">付款方式</h2>
           <div className="space-y-2">
             {(['CREDIT_CARD', 'LINE_PAY'] as const).map(m => (
-              <label key={m} className={`flex items-center gap-3 bg-white rounded-xl border p-3 cursor-pointer ${paymentMethod === m ? 'border-blue-500 bg-blue-50' : ''}`}>
+              <label key={m} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                background: paymentMethod === m ? C.light : '#fff',
+                borderRadius: 12, border: `1px solid ${paymentMethod === m ? C.border : 'rgba(0,0,0,0.08)'}`,
+                padding: 12, cursor: 'pointer',
+              }}>
                 <input type="radio" checked={paymentMethod === m} onChange={() => setPaymentMethod(m)} className="w-4 h-4" />
                 <span className="text-sm font-medium">{m === 'CREDIT_CARD' ? '💳 信用卡' : '💚 LINE Pay'}</span>
               </label>
@@ -192,14 +202,14 @@ function CheckoutContent() {
             </div>
           )}
           <div className="flex justify-between font-bold text-base mb-3">
-            <span>實付金額</span><span style={{ color: primaryColor }}>NT${displayPrice}</span>
+            <span>實付金額</span><span style={{ color: C.primary }}>NT${displayPrice}</span>
           </div>
           <button
             onClick={handleSubmit}
             disabled={submitting || !!comboError}
             style={{
-              width: '100%', background: submitting || comboError ? '#94a3b8' : primaryColor,
-              color: '#fff', border: 'none', borderRadius: 12, padding: '14px',
+              width: '100%', background: submitting || comboError ? '#94a3b8' : C.primary,
+              color: C.onPrimary, border: 'none', borderRadius: 12, padding: '14px',
               fontSize: 16, fontWeight: 700, cursor: submitting || comboError ? 'not-allowed' : 'pointer',
               transition: 'background 0.15s',
             }}

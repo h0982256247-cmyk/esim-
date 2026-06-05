@@ -4,13 +4,13 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useLiffBase } from '@/hooks/useLiffBase'
-import { usePrimaryColor } from '@/components/liff/TenantContext'
+import { useTenantColors } from '@/components/liff/TenantContext'
 
 export default function ProfileSetup() {
   const { liff } = useLiff()
   const router = useRouter()
   const base = useLiffBase()
-  const primaryColor = usePrimaryColor()
+  const C = useTenantColors()
 
   const [form, setForm] = useState({ name: '', phone: '', email: '', birthday: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -69,7 +69,7 @@ export default function ProfileSetup() {
       {/* Header */}
       <div style={{ marginBottom: 32, marginTop: 8 }}>
         <div style={{
-          width: 52, height: 52, background: primaryColor,
+          width: 52, height: 52, background: C.primary,
           borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
           marginBottom: 16,
         }}>
@@ -80,7 +80,7 @@ export default function ProfileSetup() {
         <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>完成註冊</h1>
         <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>
           填寫以下資料，完成後即獲得{' '}
-          <span style={{ color: primaryColor, fontWeight: 600 }}>官方 9 折優惠券</span>
+          <span style={{ color: C.primary, fontWeight: 600 }}>官方 9 折優惠券</span>
         </p>
       </div>
 
@@ -145,8 +145,8 @@ export default function ProfileSetup() {
           disabled={loading}
           style={{
             width: '100%',
-            background: loading ? '#94a3b8' : primaryColor,
-            color: '#fff',
+            background: loading ? '#94a3b8' : C.primary,
+            color: C.onPrimary,
             border: 'none',
             borderRadius: 16,
             padding: '16px',

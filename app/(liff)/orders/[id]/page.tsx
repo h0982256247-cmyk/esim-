@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useLiffBase } from '@/hooks/useLiffBase'
-import { usePrimaryColor } from '@/components/liff/TenantContext'
+import { useTenantColors } from '@/components/liff/TenantContext'
 
 type OrderDetail = {
   id: string
@@ -62,7 +62,7 @@ export default function OrderDetailPage() {
   const router = useRouter()
   const base = useLiffBase()
   const { id } = useParams<{ id: string }>()
-  const primaryColor = usePrimaryColor()
+  const C = useTenantColors()
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [usage, setUsage] = useState<EsimUsage | null>(null)
   const [usageLoading, setUsageLoading] = useState(false)
@@ -108,7 +108,7 @@ export default function OrderDetailPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: primaryColor, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -116,7 +116,7 @@ export default function OrderDetailPage() {
   if (notFound || !order) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 12 }}>
       <p style={{ color: '#94a3b8' }}>訂單不存在</p>
-      <button onClick={() => router.push(`${base}/orders`)} style={{ color: primaryColor, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+      <button onClick={() => router.push(`${base}/orders`)} style={{ color: C.primary, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
         查看所有訂單
       </button>
     </div>
@@ -129,7 +129,7 @@ export default function OrderDetailPage() {
 
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
-        <button onClick={() => router.push(`${base}/orders`)} style={{ fontSize: 13, color: primaryColor, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
+        <button onClick={() => router.push(`${base}/orders`)} style={{ fontSize: 13, color: C.primary, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
           ← 所有訂單
         </button>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -183,7 +183,7 @@ export default function OrderDetailPage() {
                   onClick={fetchUsage}
                   disabled={usageLoading}
                   style={{
-                    fontSize: 12, color: primaryColor, background: usageLoading ? '#dbeafe' : '#eff6ff',
+                    fontSize: 12, color: C.primary, background: usageLoading ? '#dbeafe' : '#eff6ff',
                     border: '1px solid #bfdbfe', borderRadius: 8, padding: '4px 12px',
                     cursor: usageLoading ? 'not-allowed' : 'pointer',
                     display: 'flex', alignItems: 'center', gap: 4,
@@ -191,7 +191,7 @@ export default function OrderDetailPage() {
                 >
                   {usageLoading ? (
                     <>
-                      <span style={{ display: 'inline-block', width: 10, height: 10, border: '1.5px solid #bfdbfe', borderTopColor: primaryColor, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                      <span style={{ display: 'inline-block', width: 10, height: 10, border: '1.5px solid #bfdbfe', borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
                       查詢中
                     </>
                   ) : '查詢流量'}
@@ -253,7 +253,7 @@ export default function OrderDetailPage() {
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 700, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
             <span style={{ color: '#0f172a' }}>實付金額</span>
-            <span style={{ color: primaryColor }}>NT${order.totalPaid.toLocaleString()}</span>
+            <span style={{ color: C.primary }}>NT${order.totalPaid.toLocaleString()}</span>
           </div>
         </div>
         <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#94a3b8' }}>
