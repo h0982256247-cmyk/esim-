@@ -32,6 +32,7 @@ type UserDetail = {
   birthday: string | null
   createdAt: string
   tenantAdminId: string | null
+  tenantAdmin: { id: string; name: string; brandName: string | null } | null
   ownedGroup: { id: string; name: string; status: string; inviteCode: string } | null
   groupMembership: { joinedAt: string; group: { id: string; name: string } } | null
   coupons: Coupon[]
@@ -66,12 +67,17 @@ export default function UserDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>('基本資料')
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/platform/users/${id}`)
-    if (res.status === 401) { router.replace('/platform/login'); return }
-    if (res.status === 403 || res.status === 404) { router.replace('/platform/users'); return }
-    const d = await res.json()
-    if (d.user) setUser(d.user)
-    setLoading(false)
+    try {
+      const res = await fetch(`/api/platform/users/${id}`)
+      if (res.status === 401) { router.replace('/platform/login'); return }
+      if (res.status === 403 || res.status === 404) { router.replace('/platform/users'); return }
+      const d = await res.json()
+      if (d.user) setUser(d.user)
+    } catch (e) {
+      console.error('User detail load error:', e)
+    } finally {
+      setLoading(false)
+    }
   }, [id, router])
 
   useEffect(() => { load() }, [load])
@@ -166,6 +172,19 @@ export default function UserDetailPage() {
               <InfoRow label="電子郵件" value={user.email ?? '—'} />
               <InfoRow label="生日"
                 value={user.birthday ? new Date(user.birthday).toLocaleDateString('zh-TW') : '—'} />
+              <InfoRow
+                label="所屬平台"
+                value={user.tenantAdmin ? (user.tenantAdmin.brandName || user.tenantAdmin.name) : '未分配'}
+              />
+              <div>
+                <span className="text-gray-400 block text-xs mb-0.5">社群身份</span>
+                {isOwner
+                  ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-amber-50 text-amber-700">社群主</span>
+                  : isMember
+                    ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-blue-50 text-blue-600">社群會員</span>
+                    : <span className="text-gray-300 font-medium">未加入</span>
+                }
+              </div>
             </div>
           </div>
 

@@ -74,10 +74,12 @@ export default function AdminDetailPage() {
   const [esimConfig, setEsimConfig] = useState<EsimConfig>(null)
   const [paymentConfigs, setPaymentConfigs] = useState<PaymentConfig[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('品牌設定')
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(false)
     try {
       const [adminRes, statsRes, esimRes, payRes] = await Promise.all([
         fetch(`/api/platform/admins/${adminId}`),
@@ -88,6 +90,7 @@ export default function AdminDetailPage() {
 
       if (adminRes.status === 401) { router.replace('/platform/login'); return }
       if (adminRes.status === 403 || adminRes.status === 404) { router.replace('/platform/admins'); return }
+      if (!adminRes.ok) { setLoadError(true); return }
 
       const [adminData, statsData, esimData, payData] = await Promise.all([
         adminRes.json(),
@@ -102,6 +105,7 @@ export default function AdminDetailPage() {
       setPaymentConfigs(payData.configs ?? [])
     } catch (e) {
       console.error('Admin detail load error:', e)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -110,6 +114,13 @@ export default function AdminDetailPage() {
   useEffect(() => { load() }, [load])
 
   if (loading) return <div className="text-gray-400 text-sm p-8">載入中…</div>
+  if (loadError) return (
+    <div className="p-8 text-center space-y-3">
+      <p className="text-red-500 font-medium">無法載入管理員資料</p>
+      <p className="text-xs text-gray-400">伺服器發生錯誤，請確認資料庫遷移是否已執行，或聯絡技術支援。</p>
+      <button onClick={load} className="text-sm text-blue-600 underline">重試</button>
+    </div>
+  )
   if (!admin) return null
 
   return (
@@ -657,7 +668,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
               className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {form.tenantSlug && (
-              <p className="text-xs text-gray-400 mt-0.5">LIFF 網址：/liff/<span className="font-mono">{form.tenantSlug}</span></p>
+              <EndpointUrlRow slug={form.tenantSlug} label="LIFF 網址" />
             )}
           </div>
 
@@ -670,7 +681,11 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
               placeholder="例：1234567890-abcdefgh"
               className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <p className="text-xs text-gray-400 mt-0.5">至 LINE Developers Console 申請，Endpoint URL 填 /liff/{form.tenantSlug || '[slug]'}</p>
+            {form.tenantSlug ? (
+              <EndpointUrlRow slug={form.tenantSlug} />
+            ) : (
+              <p className="text-xs text-gray-400 mt-0.5">至 LINE Developers Console 申請，填入 Endpoint URL 後存檔</p>
+            )}
           </div>
 
           {/* Logo 欄位：支援直接上傳或貼網址 */}
@@ -767,6 +782,35 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
           </button>
         </form>
       </div>
+    </div>
+  )
+}
+
+// ─── Endpoint URL Row ─────────────────────────────────────────────
+
+function EndpointUrlRow({ slug, label = 'Endpoint URL' }: { slug: string; label?: string }) {
+  const [copied, setCopied] = useState(false)
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const url = `${origin}/liff/${slug}`
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <div className="mt-1.5 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+      <span className="text-xs text-gray-500 shrink-0">{label}</span>
+      <span className="text-xs font-mono text-gray-800 flex-1 truncate">{url}</span>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className={`shrink-0 text-xs font-medium px-2 py-1 rounded transition ${copied ? 'bg-green-100 text-green-600' : 'bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300'}`}
+      >
+        {copied ? '已複製 ✓' : '複製'}
+      </button>
     </div>
   )
 }

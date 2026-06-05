@@ -11,7 +11,9 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const { id } = await params
 
-  const user = await prisma.user.findUnique({
+  let user
+  try {
+    user = await prisma.user.findUnique({
     where: { id },
     select: {
       id: true,
@@ -24,6 +26,9 @@ export async function GET(req: NextRequest, { params }: Params) {
       birthday: true,
       tenantAdminId: true,
       createdAt: true,
+      tenantAdmin: {
+        select: { id: true, name: true, brandName: true },
+      },
       ownedGroup: {
         select: { id: true, name: true, status: true, inviteCode: true },
       },
@@ -57,6 +62,10 @@ export async function GET(req: NextRequest, { params }: Params) {
       },
     },
   })
+  } catch (e) {
+    console.error('User detail DB error:', e)
+    return NextResponse.json({ error: 'DB error' }, { status: 500 })
+  }
 
   if (!user) return NextResponse.json({ error: '會員不存在' }, { status: 404 })
 

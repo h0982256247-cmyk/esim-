@@ -7,6 +7,7 @@ import TenantScopeBar from '@/components/platform/TenantScopeBar'
 type User = {
   id: string; lineUid: string; displayName: string; avatarUrl: string | null
   phone: string | null; email: string | null; createdAt: string
+  tenantAdmin: { id: string; name: string; brandName: string | null } | null
   groupMembership: { group: { name: string } } | null
   ownedGroup: { name: string; status: string } | null
   _count: { orders: number; coupons: number }
@@ -94,7 +95,7 @@ function UsersContent() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['會員', '聯絡資訊', '所屬社群', '訂單 / 券', '加入時間', ''].map(h => (
+                {['會員', '所屬平台', '社群身份', '訂單 / 券', '加入時間', ''].map(h => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -115,14 +116,30 @@ function UsersContent() {
                     </div>
                   </td>
                   <td className="px-5 py-3.5">
-                    <p className="text-xs text-gray-600">{u.phone ?? '—'}</p>
-                    <p className="text-xs text-gray-400">{u.email ?? '—'}</p>
+                    {u.tenantAdmin
+                      ? <span className="text-xs font-medium text-gray-700">{u.tenantAdmin.brandName || u.tenantAdmin.name}</span>
+                      : <span className="text-xs text-gray-300">未分配</span>
+                    }
                   </td>
                   <td className="px-5 py-3.5">
                     {u.ownedGroup
-                      ? <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-600"><span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />主：{u.ownedGroup.name}</span>
+                      ? (
+                        <div className="space-y-0.5">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-current" />社群主
+                          </span>
+                          <p className="text-xs text-gray-400 pl-1">{u.ownedGroup.name}</p>
+                        </div>
+                      )
                       : u.groupMembership
-                        ? <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-500"><span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />員：{u.groupMembership.group.name}</span>
+                        ? (
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-600">
+                              <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />社群會員
+                            </span>
+                            <p className="text-xs text-gray-400 pl-1">{u.groupMembership.group.name}</p>
+                          </div>
+                        )
                         : <span className="text-gray-300 text-xs">未加入</span>
                     }
                   </td>

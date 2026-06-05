@@ -15,18 +15,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'idToken is required' }, { status: 400 })
   }
 
-  let lineInfo
-  try {
-    lineInfo = await verifyLineIdToken(idToken)
-  } catch {
-    return NextResponse.json({ error: 'Invalid LINE token' }, { status: 401 })
-  }
-
-  // 從 tenantSlug 反查 tenantAdminId
+  // 先查租戶，從 liffId 拆出 Channel ID（格式：{channelId}-{suffix}）
   let tenantAdminId: string | undefined
+  let channelId: string | undefined
   if (tenantSlug) {
     const tenant = await getTenantBySlug(tenantSlug)
     tenantAdminId = tenant?.id
+    if (tenant?.liffId) {
+      channelId = tenant.liffId.split('-')[0]
+    }
+  }
+
+  let lineInfo
+  try {
+    lineInfo = await verifyLineIdToken(idToken, channelId)
+  } catch {
+    return NextResponse.json({ error: 'Invalid LINE token' }, { status: 401 })
   }
 
   const { user, isNewUser } = await findOrCreateUser(lineInfo, tenantAdminId)

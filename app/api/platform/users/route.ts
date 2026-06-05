@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
         phone: true,
         email: true,
         createdAt: true,
+        tenantAdmin: { select: { id: true, name: true, brandName: true } },
         groupMembership: { select: { group: { select: { name: true } } } },
         ownedGroup: { select: { name: true, status: true } },
         _count: { select: { orders: true, coupons: true } },

@@ -17,29 +17,35 @@ export async function GET(req: NextRequest, { params }: Params) {
   }
 
   const { id } = await params
-  const admin = await prisma.platformAdmin.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      isActive: true,
-      createdAt: true,
-      maxRebateRate: true,
-      tenantSlug: true,
-      brandName: true,
-      liffId: true,
-      logoUrl: true,
-      primaryColor: true,
-      lineAccessToken: true,
-      _count: { select: { ownedGroups: true } },
-    },
-  })
+
+  let admin
+  try {
+    admin = await prisma.platformAdmin.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        maxRebateRate: true,
+        tenantSlug: true,
+        brandName: true,
+        liffId: true,
+        logoUrl: true,
+        primaryColor: true,
+        lineAccessToken: true,
+        _count: { select: { ownedGroups: true } },
+      },
+    })
+  } catch (e) {
+    console.error('Admin GET DB error:', e)
+    return NextResponse.json({ error: 'DB error' }, { status: 500 })
+  }
 
   if (!admin) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Mask lineAccessToken before returning — never expose plaintext to frontend
   return NextResponse.json({
     admin: {
       ...admin,
