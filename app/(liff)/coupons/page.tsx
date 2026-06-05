@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { CouponIllustration } from '@/components/liff/LiffIllustrations'
 
 type Coupon = {
   id: string
@@ -13,22 +14,36 @@ type Coupon = {
   createdAt: string
 }
 
+const S = {
+  white: '#ffffff',
+  ink: '#0f172a',
+  muted: '#64748b',
+  faint: '#94a3b8',
+  line: 'rgba(0,0,0,0.07)',
+  accent: '#0284c7',
+} as const
+
 const TYPE_LABEL: Record<string, string> = {
   OFFICIAL_WELCOME: '歡迎券',
-  GROUP_JOIN: '入群券',
+  GROUP_JOIN:       '入群券',
   GROUP_REPURCHASE: '回購券',
-  GROUP_OWNER: '社群主專屬',
-  GROUP_ACTIVITY: '活動券',
+  GROUP_OWNER:      '社群主專屬',
+  GROUP_ACTIVITY:   '活動券',
 }
 
-const LEVEL_COLOR: Record<string, string> = {
-  A: 'bg-red-100 text-red-700',
-  B: 'bg-orange-100 text-orange-700',
-  C: 'bg-blue-100 text-blue-700',
+const LEVEL_META: Record<string, { bg: string; color: string; label: string }> = {
+  A: { bg: '#fef2f2', color: '#b91c1c', label: 'A' },
+  B: { bg: '#fff7ed', color: '#c2410c', label: 'B' },
+  C: { bg: '#eff6ff', color: '#1d4ed8', label: 'C' },
 }
 
 function discountLabel(d: number) {
-  return `${Math.round((1 - d) * 100)}% OFF`
+  const pct = Math.round((1 - d) * 100)
+  return `${pct}% OFF`
+}
+
+function discountFold(d: number) {
+  return `${Math.round(d * 10)} 折`
 }
 
 export default function CouponsPage() {
@@ -46,72 +61,118 @@ export default function CouponsPage() {
   const now = new Date()
   const available = coupons.filter(c => !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now))
   const used = coupons.filter(c => c.usedAt || (c.expiresAt && new Date(c.expiresAt) <= now))
-
   const list = tab === 'available' ? available : used
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">載入中…</p></div>
-  }
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: S.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
 
   return (
-    <div className="max-w-lg mx-auto pb-24">
-      <div className="px-4 pt-6 pb-2">
-        <h1 className="text-xl font-bold mb-4">我的優惠券</h1>
-        <div className="flex border-b">
+    <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96 }}>
+      <div style={{ padding: '24px 16px 0' }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: S.ink, margin: '0 0 16px' }}>優惠券</h1>
+
+        {/* Tab switcher */}
+        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 12, padding: 4, marginBottom: 16, gap: 4 }}>
           {(['available', 'used'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 pb-2 text-sm font-medium transition border-b-2 ${
-                tab === t ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400'
-              }`}
+              style={{
+                flex: 1, padding: '9px 0', borderRadius: 9,
+                fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                background: tab === t ? S.white : 'transparent',
+                color: tab === t ? S.ink : S.faint,
+                boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.15s',
+              }}
             >
-              {t === 'available' ? `可使用（${available.length}）` : `已使用 / 過期（${used.length}）`}
+              {t === 'available' ? `可使用  ${available.length}` : `已使用 / 過期  ${used.length}`}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="px-4 py-3 space-y-3">
+      <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {list.length === 0 && (
-          <p className="text-center text-gray-400 py-10">
-            {tab === 'available' ? '目前沒有可使用的優惠券' : '沒有使用紀錄'}
-          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '48px 0' }}>
+            <CouponIllustration size={80} />
+            <p style={{ fontSize: 14, color: S.faint }}>
+              {tab === 'available' ? '目前沒有可使用的優惠券' : '沒有使用紀錄'}
+            </p>
+          </div>
         )}
-        {list.map(c => (
-          <div
-            key={c.id}
-            className={`bg-white rounded-xl border p-4 shadow-sm ${c.usedAt ? 'opacity-50' : ''}`}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${LEVEL_COLOR[c.level]}`}>
-                    {c.level} 級券
-                  </span>
-                  {c.isOfficial && (
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">官方</span>
+
+        {list.map(c => {
+          const lv = LEVEL_META[c.level] ?? LEVEL_META.C
+          const expired = !c.usedAt && c.expiresAt && new Date(c.expiresAt) <= now
+          return (
+            <div
+              key={c.id}
+              style={{
+                background: S.white,
+                borderRadius: 16,
+                border: `1px solid ${S.line}`,
+                overflow: 'hidden',
+                opacity: c.usedAt || expired ? 0.5 : 1,
+                display: 'flex',
+              }}
+            >
+              {/* Left accent strip */}
+              <div style={{
+                width: 52,
+                background: c.usedAt || expired ? '#f1f5f9' : lv.bg,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 2,
+                borderRight: `1px dashed ${S.line}`,
+                padding: '16px 0',
+                flexShrink: 0,
+              }}>
+                <span style={{ fontSize: 16, fontWeight: 800, color: c.usedAt || expired ? S.faint : lv.color }}>{lv.label}</span>
+                <span style={{ fontSize: 9, color: c.usedAt || expired ? S.faint : lv.color, fontWeight: 600, letterSpacing: '0.05em' }}>LEVEL</span>
+              </div>
+
+              {/* Content */}
+              <div style={{ flex: 1, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: 0 }}>
+                      {TYPE_LABEL[c.type] ?? c.type}
+                    </p>
+                    {c.isOfficial && (
+                      <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 100 }}>
+                        官方
+                      </span>
+                    )}
+                  </div>
+                  {c.usedAt ? (
+                    <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>
+                      已於 {new Date(c.usedAt).toLocaleDateString('zh-TW')} 使用
+                    </p>
+                  ) : c.expiresAt ? (
+                    <p style={{ fontSize: 12, color: expired ? '#ef4444' : S.faint, margin: 0 }}>
+                      {expired ? '已過期' : `有效至 ${new Date(c.expiresAt).toLocaleDateString('zh-TW')}`}
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>無使用期限</p>
                   )}
                 </div>
-                <p className="font-semibold text-gray-800">{TYPE_LABEL[c.type] ?? c.type}</p>
-                {c.expiresAt && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    有效至 {new Date(c.expiresAt).toLocaleDateString('zh-TW')}
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <p style={{ fontSize: 20, fontWeight: 800, color: c.usedAt || expired ? S.faint : S.accent, margin: 0, letterSpacing: '-0.02em' }}>
+                    {discountLabel(c.discount)}
                   </p>
-                )}
-                {c.usedAt && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    已於 {new Date(c.usedAt).toLocaleDateString('zh-TW')} 使用
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-2xl font-extrabold text-blue-600">{discountLabel(c.discount)}</p>
-                <p className="text-xs text-gray-400">{Math.round(c.discount * 10)} 折</p>
+                  <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>{discountFold(c.discount)}</p>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

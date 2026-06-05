@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { SignalIllustration } from '@/components/liff/LiffIllustrations'
 
 type Product = {
   id: string
@@ -15,6 +16,33 @@ type Product = {
   sellPrice: number
 }
 
+const S = {
+  bg: '#f8f9fb',
+  white: '#ffffff',
+  ink: '#0f172a',
+  muted: '#64748b',
+  faint: '#94a3b8',
+  line: 'rgba(0,0,0,0.07)',
+  accent: '#0284c7',
+  accentLight: '#e0f2fe',
+} as const
+
+function BackArrow() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={S.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
 export default function ProductDetailPage() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
@@ -24,64 +52,121 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     fetch(`/api/products/${id}`)
-      .then(r => {
-        if (r.status === 404) { setNotFound(true); return null }
-        return r.json()
-      })
+      .then(r => { if (r.status === 404) { setNotFound(true); return null } return r.json() })
       .then(data => { if (data) setProduct(data.product) })
       .finally(() => setLoading(false))
   }, [id])
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">載入中…</p></div>
-  }
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: S.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
 
-  if (notFound || !product) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-        <p className="text-gray-500">商品不存在或已下架</p>
-        <button onClick={() => router.back()} className="text-blue-600 underline text-sm">回上一頁</button>
-      </div>
-    )
-  }
+  if (notFound || !product) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16 }}>
+      <p style={{ color: S.faint, fontSize: 14 }}>商品不存在或已下架</p>
+      <button onClick={() => router.back()} style={{ color: S.accent, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer' }}>返回上一頁</button>
+    </div>
+  )
+
+  const descLines = product.description?.split('\n').filter(Boolean) ?? []
 
   return (
-    <div className="max-w-lg mx-auto">
-      {/* Header */}
-      <div className="px-4 pt-6 pb-4">
-        <button onClick={() => router.back()} className="text-blue-600 text-sm mb-4">← 返回</button>
-        <div className="flex items-center gap-2 mb-1">
-          {product.countryFlag && <span className="text-3xl">{product.countryFlag}</span>}
+    <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 100 }}>
+      {/* Nav bar */}
+      <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          onClick={() => router.back()}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: S.muted, display: 'flex', alignItems: 'center', padding: 4 }}
+        >
+          <BackArrow />
+        </button>
+        <span style={{ fontSize: 14, color: S.muted }}>
+          {product.countryNameZh}
+        </span>
+      </div>
+
+      {/* Hero card */}
+      <div style={{ margin: '0 16px', background: S.white, borderRadius: 20, border: `1px solid ${S.line}`, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+        {/* Top band */}
+        <div style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', padding: '28px 24px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
-            <h1 className="text-xl font-bold">{product.countryNameZh}</h1>
-            <p className="text-sm text-gray-400">{product.countryNameEn}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              {product.countryFlag && <span style={{ fontSize: 24 }}>{product.countryFlag}</span>}
+              <div>
+                <p style={{ fontSize: 17, fontWeight: 700, color: S.ink, margin: 0 }}>{product.countryNameZh}</p>
+                <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{product.countryNameEn}</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: S.ink, letterSpacing: '-0.03em' }}>{product.displayDays}</span>
+              <span style={{ fontSize: 16, color: S.muted, fontWeight: 500 }}>天方案</span>
+            </div>
           </div>
+          <SignalIllustration size={56} />
+        </div>
+
+        {/* Specs */}
+        <div style={{ padding: '20px 24px' }}>
+          {product.dataCapacity && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <CheckIcon />
+              <span style={{ fontSize: 14, color: S.muted }}>{product.dataCapacity}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <CheckIcon />
+            <span style={{ fontSize: 14, color: S.muted }}>eSIM 即插即用，無需實體 SIM</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <CheckIcon />
+            <span style={{ fontSize: 14, color: S.muted }}>購買後即可收到安裝教學</span>
+          </div>
+
+          {descLines.length > 0 && (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${S.line}` }}>
+              {descLines.map((line, i) => (
+                <p key={i} style={{ fontSize: 13, color: S.faint, margin: i > 0 ? '4px 0 0' : 0 }}>{line}</p>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Product card */}
-      <div className="mx-4 bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-        <p className="text-4xl font-extrabold text-blue-600 mb-1">NT${product.sellPrice}</p>
-        <p className="text-gray-700 font-medium mb-3">{product.displayDays} 天方案</p>
-        {product.dataCapacity && (
-          <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-            <span>📶</span>
-            <span>{product.dataCapacity}</span>
-          </div>
-        )}
-        {product.description && (
-          <p className="text-sm text-gray-500 whitespace-pre-line mt-3 pt-3 border-t">{product.description}</p>
-        )}
-      </div>
-
       {/* Sticky CTA */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t px-4 py-3">
-        <button
-          onClick={() => router.push(`/checkout?productId=${product.id}`)}
-          className="w-full max-w-lg mx-auto block bg-blue-600 text-white py-3 rounded-xl font-semibold text-base active:bg-blue-700 transition"
-        >
-          立即購買 NT${product.sellPrice}
-        </button>
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: 'rgba(248,249,251,0.96)',
+        backdropFilter: 'blur(10px)',
+        borderTop: `1px solid ${S.line}`,
+        padding: '12px 16px',
+        paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
+      }}>
+        <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div>
+            <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>售價</p>
+            <p style={{ fontSize: 24, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.02em' }}>NT${product.sellPrice.toLocaleString()}</p>
+          </div>
+          <button
+            onClick={() => router.push(`/checkout?productId=${product.id}`)}
+            style={{
+              flex: 1,
+              background: S.accent,
+              border: 'none',
+              borderRadius: 14,
+              padding: '15px',
+              color: '#fff',
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: 'pointer',
+              letterSpacing: '0.02em',
+            }}
+          >
+            立即購買
+          </button>
+        </div>
       </div>
     </div>
   )
