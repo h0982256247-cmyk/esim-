@@ -1,5 +1,40 @@
 // Quality SVG illustrations for LIFF storefront
 
+export function BeeLogoSVG({ size = 80 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 80 80" fill="none" aria-label="Bee旅">
+      {/* Antennae */}
+      <line x1="34" y1="10" x2="28" y2="4" stroke="#1F1F1F" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="27" cy="3.5" r="2" fill="#FFC107" stroke="#1F1F1F" strokeWidth="1.2" />
+      <line x1="46" y1="10" x2="52" y2="4" stroke="#1F1F1F" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="53" cy="3.5" r="2" fill="#FFC107" stroke="#1F1F1F" strokeWidth="1.2" />
+
+      {/* Head */}
+      <ellipse cx="40" cy="16" rx="9" ry="8" fill="#FFC107" stroke="#1F1F1F" strokeWidth="1.8" />
+      {/* Eyes */}
+      <circle cx="36.5" cy="15" r="1.8" fill="#1F1F1F" />
+      <circle cx="43.5" cy="15" r="1.8" fill="#1F1F1F" />
+      {/* Smile */}
+      <path d="M36 19 Q40 22 44 19" stroke="#1F1F1F" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+
+      {/* Body */}
+      <ellipse cx="40" cy="44" rx="14" ry="18" fill="#FFC107" stroke="#1F1F1F" strokeWidth="1.8" />
+      {/* Stripes */}
+      <path d="M27.5 38 Q40 36 52.5 38" stroke="#1F1F1F" strokeWidth="3.5" strokeLinecap="round" />
+      <path d="M26.5 45 Q40 43 53.5 45" stroke="#1F1F1F" strokeWidth="3.5" strokeLinecap="round" />
+      <path d="M28 52 Q40 50 52 52" stroke="#1F1F1F" strokeWidth="3" strokeLinecap="round" />
+
+      {/* Stinger tip */}
+      <path d="M37 60 Q40 66 43 60" fill="#1F1F1F" />
+
+      {/* Left wing */}
+      <ellipse cx="22" cy="32" rx="11" ry="7" fill="rgba(255,255,255,0.7)" stroke="#1F1F1F" strokeWidth="1.5" transform="rotate(-20 22 32)" />
+      {/* Right wing */}
+      <ellipse cx="58" cy="32" rx="11" ry="7" fill="rgba(255,255,255,0.7)" stroke="#1F1F1F" strokeWidth="1.5" transform="rotate(20 58 32)" />
+    </svg>
+  )
+}
+
 export function GlobeIllustration({ size = 160 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 160 160" fill="none" aria-hidden="true">
