@@ -168,7 +168,7 @@ export async function getDashboardStats(tenantAdminId: string | null) {
       status: true,
       createdAt: true,
       user: { select: { displayName: true } },
-      items: {
+      orderItems: {
         take: 1,
         select: { productName: true },
       },
@@ -190,7 +190,7 @@ export async function getDashboardStats(tenantAdminId: string | null) {
       status: o.status,
       createdAt: o.createdAt.toISOString(),
       userName: o.user?.displayName ?? '—',
-      productName: o.items[0]?.productName ?? '—',
+      productName: o.orderItems[0]?.productName ?? '—',
     })),
   }
 }
