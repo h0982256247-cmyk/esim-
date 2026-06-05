@@ -3,6 +3,7 @@ import { issueCoupon } from '@/lib/services/coupon'
 import type { LineUserInfo } from '@/lib/auth/line'
 
 export interface UpdateProfileInput {
+  name: string
   phone: string
   email: string
   birthday: Date
@@ -44,6 +45,7 @@ export async function updateProfile(userId: string, input: UpdateProfileInput) {
   const updated = await prisma.user.update({
     where: { id: userId },
     data: {
+      realName: input.name,
       phone: input.phone,   // TODO: 加密
       email: input.email,   // TODO: 加密
       birthday: input.birthday,
@@ -74,6 +76,6 @@ export async function getUserById(userId: string) {
   })
 }
 
-export function isProfileComplete(user: { phone: string | null; email: string | null; birthday: Date | null }) {
-  return !!(user.phone && user.email && user.birthday)
+export function isProfileComplete(user: { realName?: string | null; phone: string | null; email: string | null; birthday: Date | null }) {
+  return !!(user.realName && user.phone && user.email && user.birthday)
 }

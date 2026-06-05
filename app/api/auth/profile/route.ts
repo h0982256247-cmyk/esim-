@@ -18,10 +18,10 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null)
-  const { phone, email, birthday } = body ?? {}
+  const { name, phone, email, birthday } = body ?? {}
 
-  if (!phone || !email || !birthday) {
-    return NextResponse.json({ error: '手機、Email、生日為必填' }, { status: 400 })
+  if (!name || !phone || !email || !birthday) {
+    return NextResponse.json({ error: '姓名、手機、Email、生日為必填' }, { status: 400 })
   }
 
   const phoneRegex = /^09\d{8}$/
@@ -39,7 +39,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: '生日格式不正確' }, { status: 400 })
   }
 
-  const user = await updateProfile(session.userId, { phone, email, birthday: birthdayDate })
+  const user = await updateProfile(session.userId, { name, phone, email, birthday: birthdayDate })
 
   return NextResponse.json({
     user: {

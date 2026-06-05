@@ -8,12 +8,13 @@ export default function ProfileSetup() {
   const { liff } = useLiff()
   const router = useRouter()
 
-  const [form, setForm] = useState({ phone: '', email: '', birthday: '' })
+  const [form, setForm] = useState({ name: '', phone: '', email: '', birthday: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
 
   function validate() {
     const e: Record<string, string> = {}
+    if (!form.name.trim()) e.name = '請輸入姓名'
     if (!/^09\d{8}$/.test(form.phone)) e.phone = '請輸入正確手機號碼（09xxxxxxxx）'
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = '請輸入正確 Email'
     if (!form.birthday) e.birthday = '請選擇生日'
@@ -59,6 +60,19 @@ export default function ProfileSetup() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5 flex-1">
+        {/* 姓名 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">姓名</label>
+          <input
+            type="text"
+            placeholder="請輸入真實姓名"
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+          {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+        </div>
+
         {/* 手機 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">手機號碼</label>
