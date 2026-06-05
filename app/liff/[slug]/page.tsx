@@ -19,47 +19,44 @@ export default function LiffHomePage() {
   const tenant = useTenant()
   const C = useTenantColors()
 
+  const brandName = tenant?.brandName ?? 'eSIM'
+  const primary   = tenant?.primaryColor ?? '#0284c7'
+
+  // ── 過場：每次 mount 都跑，與資料抓取無關 ──
+  const [splashOut, setSplashOut] = useState(false)
+  const [splashDone, setSplashDone] = useState(false)
+
+  useEffect(() => {
+    setSplashOut(false)
+    setSplashDone(false)
+    const t1 = setTimeout(() => setSplashOut(true), 700)
+    const t2 = setTimeout(() => setSplashDone(true), 1060)  // 700 + 360 fade
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, []) // 每次 mount 都重新計時
+
+  // ── 資料抓取 ──
   const [countries, setCountries] = useState<HomeCountry[]>([])
   const [showSetup, setShowSetup] = useState(false)
-  const [loaded, setLoaded] = useState(false)
-  const [splashOut, setSplashOut] = useState(false)
-
-  const brandName = tenant?.brandName ?? 'eSIM'
-  const primary = tenant?.primaryColor ?? '#0284c7'
 
   useEffect(() => {
     if (!isReady) return
-    async function init() {
+    async function fetchData() {
       try {
         const me = await fetch('/api/auth/me').then(r => r.ok ? r.json() : null)
         if (me && !me.profileComplete) setShowSetup(true)
       } catch {}
-
       try {
         const data = await fetch('/api/products').then(r => r.json())
         const products: Product[] = data.products ?? []
-        const minPriceMap: Record<string, number> = {}
+        const minMap: Record<string, number> = {}
         for (const p of products) {
-          if (!minPriceMap[p.countryCode] || p.sellPrice < minPriceMap[p.countryCode]) {
-            minPriceMap[p.countryCode] = p.sellPrice
-          }
+          if (!minMap[p.countryCode] || p.sellPrice < minMap[p.countryCode]) minMap[p.countryCode] = p.sellPrice
         }
-        setCountries((data.countries ?? []).map((c: HomeCountry) => ({
-          ...c, minPrice: minPriceMap[c.countryCode] ?? null,
-        })))
+        setCountries((data.countries ?? []).map((c: HomeCountry) => ({ ...c, minPrice: minMap[c.countryCode] ?? null })))
       } catch {}
-
-      // 最少顯示 splash 0.6s，fade-out 需要 0.35s
-      setTimeout(() => {
-        setSplashOut(true)
-        setTimeout(() => setLoaded(true), 350)
-      }, 600)
     }
-    init()
+    fetchData()
   }, [isReady])
-
-  const templateKey = tenant?.homeTemplate ?? 'landmark'
-  const HomeTemplate = HOME_TEMPLATES[templateKey]
 
   function handleNavigate(path: string) {
     const routes: Record<string, string> = {
@@ -73,6 +70,9 @@ export default function LiffHomePage() {
     router.push(routes[path] ?? `/liff/${slug}/${path}`)
   }
 
+  const templateKey = tenant?.homeTemplate ?? 'landmark'
+  const HomeTemplate = HOME_TEMPLATES[templateKey]
+
   if (error) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 24 }}>
@@ -83,77 +83,70 @@ export default function LiffHomePage() {
 
   return (
     <>
-      {/* ── Splash 過場 ── */}
-      {!loaded && (
+      {/* ── 過場 Splash（每次 mount 都出現）── */}
+      {!splashDone && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
-          background: '#fff',
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: 20,
-          transition: 'opacity 0.35s ease',
+          background: '#ffffff',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20,
+          transition: 'opacity 0.36s ease',
           opacity: splashOut ? 0 : 1,
           pointerEvents: splashOut ? 'none' : 'auto',
         }}>
-          {/* 旋轉圓環 */}
+          {/* 旋轉圓環 + Logo */}
           <div style={{ position: 'relative', width: 100, height: 100 }}>
-            <svg width="100" height="100" style={{ position: 'absolute', inset: 0, animation: 'spinRing 2.5s linear infinite' }}>
-              <circle cx="50" cy="50" r="44" fill="none" stroke={primary} strokeWidth="2" strokeDasharray="60 220" strokeLinecap="round" opacity="0.5"/>
+            <svg width="100" height="100" style={{ position: 'absolute', inset: 0, animation: 'spinRing 2s linear infinite' }}>
+              <circle cx="50" cy="50" r="44" fill="none" stroke={primary} strokeWidth="2.5"
+                strokeDasharray="55 221" strokeLinecap="round" opacity="0.6"/>
             </svg>
-            <div style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {tenant?.logoUrl
-                ? <img src={tenant.logoUrl} alt={brandName} style={{ width: 56, height: 56, objectFit: 'contain', borderRadius: 14 }} />
-                : <BeeLogoSVG size={52} />
+                ? <img src={tenant.logoUrl} alt={brandName} style={{ width: 60, height: 60, objectFit: 'contain', borderRadius: 16 }} />
+                : <BeeLogoSVG size={54} />
               }
             </div>
           </div>
 
           {/* 品牌名 */}
-          <div style={{ textAlign: 'center', animation: 'fadeUp 0.5s 0.1s ease both' }}>
+          <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 24, fontWeight: 900, color: '#1a1a1a', margin: 0, letterSpacing: '-0.02em' }}>{brandName}</p>
             <p style={{ fontSize: 12, color: '#9ca3af', margin: '6px 0 0', letterSpacing: '0.1em' }}>旅遊 eSIM 專門店</p>
           </div>
 
-          {/* 載入點點 */}
+          {/* 跳動點 */}
           <div style={{ display: 'flex', gap: 6 }}>
             {[0,1,2].map(i => (
               <div key={i} style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: primary,
+                width: 6, height: 6, borderRadius: '50%', background: primary,
                 animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite`,
               }}/>
             ))}
           </div>
 
           <style>{`
-            @keyframes spinRing  { to{transform:rotate(360deg)} }
-            @keyframes fadeUp    { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-            @keyframes dotPulse  { 0%,80%,100%{transform:scale(0.6);opacity:0.35} 40%{transform:scale(1.3);opacity:1} }
+            @keyframes spinRing { to{transform:rotate(360deg)} }
+            @keyframes dotPulse { 0%,80%,100%{transform:scale(0.6);opacity:0.35} 40%{transform:scale(1.3);opacity:1} }
           `}</style>
         </div>
       )}
 
-      {/* ── 首頁內容 ── */}
-      {loaded && (
-        <>
-          {showSetup && (
-            <SetupModal slug={slug} onDismiss={() => setShowSetup(false)} colors={C} logoUrl={tenant?.logoUrl ?? null} />
-          )}
-          <HomeTemplate
-            tenant={tenant}
-            slug={slug}
-            countries={countries}
-            colors={C}
-            showSetup={showSetup}
-            onDismissSetup={() => setShowSetup(false)}
-            onSelectCountry={code => router.push(`/liff/${slug}/products?country=${code}`)}
-            onNavigate={handleNavigate}
-            onSearch={q => router.push(`/liff/${slug}/products${q}`)}
-          />
-        </>
-      )}
+      {/* ── 首頁主體（過場進行中也在背景渲染）── */}
+      <div style={{ opacity: splashDone ? 1 : 0, transition: 'opacity 0.3s ease' }}>
+        {showSetup && (
+          <SetupModal slug={slug} onDismiss={() => setShowSetup(false)} colors={C} logoUrl={tenant?.logoUrl ?? null} />
+        )}
+        <HomeTemplate
+          tenant={tenant}
+          slug={slug}
+          countries={countries}
+          colors={C}
+          showSetup={showSetup}
+          onDismissSetup={() => setShowSetup(false)}
+          onSelectCountry={code => router.push(`/liff/${slug}/products?country=${code}`)}
+          onNavigate={handleNavigate}
+          onSearch={q => router.push(`/liff/${slug}/products${q}`)}
+        />
+      </div>
     </>
   )
 }

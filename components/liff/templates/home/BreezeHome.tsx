@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { IconMyEsim, IconGuide, IconDataPlan, IconDevices } from './HomeIcons'
+import FilterDropdown from './FilterDropdown'
 import type { HomePageProps } from './types'
 
 const QUICK_ACTIONS = [
@@ -12,8 +13,8 @@ const QUICK_ACTIONS = [
   { key: 'devices', label: '支援裝置',  Icon: IconDevices,  bg: '#F5F3FF', color: '#7c3aed' },
 ]
 
-const DAY_CHIPS  = ['3天','5天','7天','10天','15天']
-const DATA_CHIPS = ['1GB','3GB','5GB','不限流量']
+const DAY_OPTIONS  = ['3天','5天','7天','10天','15天']
+const DATA_OPTIONS = ['1GB','3GB','5GB','不限流量']
 
 const BREEZE_GRADS = ['#FFF7ED','#F0FDF4','#EFF6FF','#FDF4FF','#F0FDFA','#FFFBEB']
 function getBreezeGrad(code: string) {
@@ -67,34 +68,63 @@ export default function BreezeHome({
       </div>
 
       {/* 搜尋區塊 */}
-      <div style={{ padding: '16px 16px 0', position: 'relative' }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{
-            flex: 1, background: '#F7F8FA', borderRadius: 14,
-            display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px',
-          }}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.2" strokeLinecap="round">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input
-              type="text" placeholder="你要去哪裡？"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 16, color: '#111', padding: '13px 0' }}
-            />
-            {query && (
-              <button onClick={() => setQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex' }}>
-                <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </div>
-              </button>
+      <div style={{ padding: '16px 16px 0' }}>
+        <div style={{ display: 'flex', gap: 8, width: '100%', boxSizing: 'border-box' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+            <div style={{
+              background: '#F7F8FA', borderRadius: 14,
+              display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px',
+            }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.2" strokeLinecap="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                type="text" placeholder="你要去哪裡？"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 16, color: '#111', padding: '13px 0', minWidth: 0 }}
+              />
+              {query && (
+                <button onClick={() => setQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', flexShrink: 0 }}>
+                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </div>
+                </button>
+              )}
+            </div>
+
+            {/* 搜尋下拉 */}
+            {filtered.length > 0 && (
+              <div style={{
+                position: 'absolute', left: 0, right: 0, top: 'calc(100% + 4px)', zIndex: 30,
+                background: '#fff', borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                border: '1px solid rgba(0,0,0,0.06)', overflow: 'hidden', animation: 'dropIn 0.15s ease',
+              }}>
+                {filtered.map((c, i) => (
+                  <button key={c.countryCode} onClick={() => { setQuery(''); onSelectCountry(c.countryCode) }}
+                    style={{
+                      width: '100%', background: 'none', border: 'none',
+                      borderBottom: i < filtered.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none',
+                      padding: '12px 16px', cursor: 'pointer', textAlign: 'left',
+                      display: 'flex', alignItems: 'center', gap: 12,
+                    }}>
+                    <span style={{ fontSize: 22 }}>{c.countryFlag ?? '🌍'}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 14, fontWeight: 600, color: '#111', margin: 0 }}>{c.countryNameZh}</p>
+                      <p style={{ fontSize: 11, color: '#9ca3af', margin: 0 }}>{c.countryNameEn}</p>
+                    </div>
+                    {c.minPrice && <span style={{ fontSize: 13, fontWeight: 700, color: C.primary }}>NT${c.minPrice}起</span>}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
+
           <button onClick={handleSearch}
             style={{
               background: C.primary, border: 'none', borderRadius: 14,
-              padding: '0 18px', cursor: 'pointer', flexShrink: 0,
+              padding: '0 18px', cursor: 'pointer', flexShrink: 0, height: 48,
               color: '#fff', fontWeight: 700, fontSize: 15,
               boxShadow: `0 4px 14px ${C.primary}40`,
               display: 'flex', alignItems: 'center', gap: 6,
@@ -106,49 +136,11 @@ export default function BreezeHome({
           </button>
         </div>
 
-        {/* 篩選條件 */}
-        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {[{ chips: DAY_CHIPS, sel: selDays, setSel: setSelDays }, { chips: DATA_CHIPS, sel: selData, setSel: setSelData }].map((row, ri) => (
-            <div key={ri} style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              {row.chips.map(d => (
-                <button key={d} onClick={() => row.setSel(row.sel === d ? null : d)}
-                  style={{
-                    flexShrink: 0, padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    background: row.sel === d ? C.primary : '#F7F8FA',
-                    color: row.sel === d ? '#fff' : '#6b7280',
-                    border: row.sel === d ? `1.5px solid ${C.primary}` : '1.5px solid #e5e7eb',
-                    transition: 'all 0.15s',
-                  }}>{d}</button>
-              ))}
-            </div>
-          ))}
+        {/* 篩選下拉 */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <FilterDropdown label="天數" options={DAY_OPTIONS} value={selDays} onChange={setSelDays} primary={C.primary} />
+          <FilterDropdown label="流量" options={DATA_OPTIONS} value={selData} onChange={setSelData} primary={C.primary} />
         </div>
-
-        {/* 搜尋下拉 */}
-        {filtered.length > 0 && (
-          <div style={{
-            position: 'absolute', left: 16, right: 16, top: 'calc(100% - 0px)', zIndex: 30, marginTop: 6,
-            background: '#fff', borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-            border: '1px solid rgba(0,0,0,0.06)', overflow: 'hidden', animation: 'dropIn 0.15s ease',
-          }}>
-            {filtered.map((c, i) => (
-              <button key={c.countryCode} onClick={() => { setQuery(''); onSelectCountry(c.countryCode) }}
-                style={{
-                  width: '100%', background: 'none', border: 'none',
-                  borderBottom: i < filtered.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none',
-                  padding: '12px 16px', cursor: 'pointer', textAlign: 'left',
-                  display: 'flex', alignItems: 'center', gap: 12,
-                }}>
-                <span style={{ fontSize: 22 }}>{c.countryFlag ?? '🌍'}</span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: '#111', margin: 0 }}>{c.countryNameZh}</p>
-                  <p style={{ fontSize: 11, color: '#9ca3af', margin: 0 }}>{c.countryNameEn}</p>
-                </div>
-                {c.minPrice && <span style={{ fontSize: 13, fontWeight: 700, color: C.primary }}>NT${c.minPrice}起</span>}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* 快速功能 */}
