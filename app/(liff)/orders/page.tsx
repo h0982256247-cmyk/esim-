@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { EmptyOrdersIllustration } from '@/components/liff/LiffIllustrations'
+import { usePrimaryColor } from '@/components/liff/TenantContext'
 
 type Order = {
   id: string
@@ -37,6 +38,7 @@ function ChevronRight() {
 
 export default function OrdersPage() {
   const router = useRouter()
+  const primaryColor = usePrimaryColor()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -93,7 +95,7 @@ export default function OrdersPage() {
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 12, color: S.faint }}>#{o.id.slice(-8).toUpperCase()}</span>
-                  <span style={{ fontSize: 18, fontWeight: 800, color: S.accent, letterSpacing: '-0.02em' }}>NT${o.totalPaid.toLocaleString()}</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: primaryColor, letterSpacing: '-0.02em' }}>NT${o.totalPaid.toLocaleString()}</span>
                 </div>
               </div>
               <ChevronRight />

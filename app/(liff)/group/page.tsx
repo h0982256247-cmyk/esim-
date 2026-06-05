@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import { usePrimaryColor } from '@/components/liff/TenantContext'
 
 type GroupInfo    = { id: string; name: string; description: string | null; status: string; inviteCode: string }
 type Membership   = { group: { id: string; name: string; description: string | null }; joinedAt: string }
@@ -50,6 +51,7 @@ function MemberBadge() {
 export default function GroupPage() {
   const router = useRouter()
   const pathname = usePathname()
+  const primaryColor = usePrimaryColor()
   const slugMatch = pathname.match(/^(\/liff\/[^/]+)/)
   const base = slugMatch ? slugMatch[1] : ''
   const [ownedGroup, setOwnedGroup] = useState<GroupInfo | null>(null)
@@ -105,7 +107,7 @@ export default function GroupPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: S.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: primaryColor, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -244,7 +246,7 @@ export default function GroupPage() {
   const btnEnabled = (check: boolean) => ({
     width: '100%', border: 'none', borderRadius: 12, padding: '15px',
     fontSize: 15, fontWeight: 700, cursor: check ? 'pointer' : 'not-allowed' as const,
-    background: check ? S.accent : '#e2e8f0', color: check ? '#fff' : S.faint,
+    background: check ? primaryColor : '#e2e8f0', color: check ? '#fff' : S.faint,
     transition: 'all 0.15s',
   })
 

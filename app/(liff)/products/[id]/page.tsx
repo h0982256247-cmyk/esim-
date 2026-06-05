@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { SignalIllustration } from '@/components/liff/LiffIllustrations'
+import { usePrimaryColor } from '@/components/liff/TenantContext'
 
 type Product = {
   id: string
@@ -46,6 +47,7 @@ function CheckIcon() {
 export default function ProductDetailPage() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
+  const primaryColor = usePrimaryColor()
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -147,13 +149,13 @@ export default function ProductDetailPage() {
         <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div>
             <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>售價</p>
-            <p style={{ fontSize: 24, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.02em' }}>NT${product.sellPrice.toLocaleString()}</p>
+            <p style={{ fontSize: 24, fontWeight: 800, color: primaryColor, margin: 0, letterSpacing: '-0.02em' }}>NT${product.sellPrice.toLocaleString()}</p>
           </div>
           <button
             onClick={() => router.push(`/checkout?productId=${product.id}`)}
             style={{
               flex: 1,
-              background: S.accent,
+              background: primaryColor,
               border: 'none',
               borderRadius: 14,
               padding: '15px',

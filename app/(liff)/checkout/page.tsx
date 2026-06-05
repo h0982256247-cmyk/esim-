@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { usePrimaryColor } from '@/components/liff/TenantContext'
 
 type Product = {
   id: string
@@ -39,6 +40,7 @@ function CheckoutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const productId = searchParams.get('productId')
+  const primaryColor = usePrimaryColor()
 
   const [product, setProduct] = useState<Product | null>(null)
   const [coupons, setCoupons] = useState<Coupon[]>([])
@@ -134,7 +136,7 @@ function CheckoutContent() {
         <div className="bg-white rounded-xl border p-4 mb-4 shadow-sm">
           <p className="font-semibold">{product.countryNameZh} · {product.displayDays} 天</p>
           {product.dataCapacity && <p className="text-sm text-gray-500 mt-1">{product.dataCapacity}</p>}
-          <p className="text-xl font-bold text-blue-600 mt-2">NT${product.sellPrice}</p>
+          <p style={{ fontSize: 20, fontWeight: 800, color: primaryColor, marginTop: 8 }}>NT${product.sellPrice}</p>
         </div>
 
         {/* 優惠券選擇 */}
@@ -156,7 +158,7 @@ function CheckoutContent() {
                       <p className="text-xs text-gray-400">{c.level} 級券</p>
                     </div>
                   </div>
-                  <p className="font-bold text-blue-600">{Math.round((1 - c.discount) * 100)}% OFF</p>
+                  <p style={{ fontWeight: 700, color: primaryColor }}>{Math.round((1 - c.discount) * 100)}% OFF</p>
                 </label>
               ))}
             </div>
@@ -190,12 +192,17 @@ function CheckoutContent() {
             </div>
           )}
           <div className="flex justify-between font-bold text-base mb-3">
-            <span>實付金額</span><span className="text-blue-600">NT${displayPrice}</span>
+            <span>實付金額</span><span style={{ color: primaryColor }}>NT${displayPrice}</span>
           </div>
           <button
             onClick={handleSubmit}
             disabled={submitting || !!comboError}
-            className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold disabled:opacity-50 active:bg-blue-700 transition"
+            style={{
+              width: '100%', background: submitting || comboError ? '#94a3b8' : primaryColor,
+              color: '#fff', border: 'none', borderRadius: 12, padding: '14px',
+              fontSize: 16, fontWeight: 700, cursor: submitting || comboError ? 'not-allowed' : 'pointer',
+              transition: 'background 0.15s',
+            }}
           >
             {submitting ? '處理中…' : `確認付款 NT$${displayPrice}`}
           </button>

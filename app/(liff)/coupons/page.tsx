@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { CouponIllustration } from '@/components/liff/LiffIllustrations'
+import { usePrimaryColor } from '@/components/liff/TenantContext'
 
 type Coupon = {
   id: string
@@ -47,6 +48,7 @@ function discountFold(d: number) {
 }
 
 export default function CouponsPage() {
+  const primaryColor = usePrimaryColor()
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'available' | 'used'>('available')
@@ -65,7 +67,7 @@ export default function CouponsPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: S.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: primaryColor, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -164,7 +166,7 @@ export default function CouponsPage() {
                   )}
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <p style={{ fontSize: 20, fontWeight: 800, color: c.usedAt || expired ? S.faint : S.accent, margin: 0, letterSpacing: '-0.02em' }}>
+                  <p style={{ fontSize: 20, fontWeight: 800, color: c.usedAt || expired ? S.faint : primaryColor, margin: 0, letterSpacing: '-0.02em' }}>
                     {discountLabel(c.discount)}
                   </p>
                   <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>{discountFold(c.discount)}</p>
