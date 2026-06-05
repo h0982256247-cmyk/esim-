@@ -14,8 +14,8 @@ type Order = {
 }
 
 const S = {
-  white: '#ffffff', ink: '#0f172a', muted: '#64748b', faint: '#94a3b8',
-  line: 'rgba(0,0,0,0.07)', accent: '#0284c7',
+  white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
+  line: 'rgba(0,0,0,0.07)',
 } as const
 
 const STATUS_META: Record<string, { text: string; bg: string; color: string }> = {
@@ -48,15 +48,15 @@ export default function OrdersPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: S.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96 }}>
-      <div style={{ padding: '24px 16px 12px' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: S.ink, margin: 0 }}>我的訂單</h1>
+      <div style={{ padding: '24px 20px 16px' }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.02em' }}>我的訂單</h1>
       </div>
 
       <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -76,26 +76,34 @@ export default function OrdersPage() {
                 width: '100%', textAlign: 'left', background: S.white,
                 borderRadius: 16, border: `1px solid ${S.line}`,
                 padding: '16px', cursor: 'pointer',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                 display: 'flex', alignItems: 'center', gap: 12,
               }}
             >
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, padding: '2px 8px', borderRadius: 100 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    background: s.bg, color: s.color,
+                    padding: '3px 10px', borderRadius: 100,
+                  }}>
                     {s.text}
                   </span>
                   <span style={{ fontSize: 12, color: S.faint }}>
                     {new Date(o.createdAt).toLocaleDateString('zh-TW')}
                   </span>
                 </div>
-                <p style={{ fontSize: 15, fontWeight: 600, color: S.ink, margin: '0 0 4px' }}>
+                <p style={{ fontSize: 15, fontWeight: 600, color: S.ink, margin: '0 0 6px' }}>
                   {o.orderItems[0]?.productName ?? '—'}
-                  {o.orderItems.length > 1 && <span style={{ color: S.faint, fontWeight: 400 }}> 等 {o.orderItems.length} 項</span>}
+                  {o.orderItems.length > 1 && (
+                    <span style={{ color: S.faint, fontWeight: 400 }}> 等 {o.orderItems.length} 項</span>
+                  )}
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 12, color: S.faint }}>#{o.id.slice(-8).toUpperCase()}</span>
-                  <span style={{ fontSize: 18, fontWeight: 800, color: C.primary, letterSpacing: '-0.02em' }}>NT${o.totalPaid.toLocaleString()}</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: C.primary, letterSpacing: '-0.02em' }}>
+                    NT${o.totalPaid.toLocaleString()}
+                  </span>
                 </div>
               </div>
               <ChevronRight />

@@ -31,15 +31,20 @@ type EsimUsage = {
   unit: string
 }
 
-const STATUS_LABEL: Record<string, { text: string; color: string }> = {
-  PENDING:      { text: '待付款',       color: 'text-yellow-600' },
-  PROCESSING:   { text: '付款中',       color: 'text-blue-600' },
-  PAID:         { text: '付款成功',     color: 'text-green-600' },
-  COMPLETED:    { text: '已完成',       color: 'text-green-700' },
-  FAILED:       { text: '付款失敗',     color: 'text-red-600' },
-  ESIM_PENDING: { text: 'eSIM 處理中',  color: 'text-orange-600' },
-  REFUNDED:     { text: '已退款',       color: 'text-gray-600' },
+const STATUS_META: Record<string, { text: string; bg: string; color: string }> = {
+  PENDING:      { text: '待付款',       bg: '#fef9c3', color: '#a16207' },
+  PROCESSING:   { text: '付款中',       bg: '#e0f2fe', color: '#0369a1' },
+  PAID:         { text: '付款成功',     bg: '#dcfce7', color: '#15803d' },
+  COMPLETED:    { text: '已完成',       bg: '#d1fae5', color: '#065f46' },
+  FAILED:       { text: '付款失敗',     bg: '#fee2e2', color: '#b91c1c' },
+  ESIM_PENDING: { text: 'eSIM 處理中',  bg: '#ffedd5', color: '#c2410c' },
+  REFUNDED:     { text: '已退款',       bg: '#f1f5f9', color: '#475569' },
 }
+
+const S = {
+  white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
+  line: 'rgba(0,0,0,0.07)',
+} as const
 
 function UsageBar({ used, total }: { used: number; total: number }) {
   const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0
@@ -52,9 +57,7 @@ function UsageBar({ used, total }: { used: number; total: number }) {
 }
 
 function formatData(mb: number, unit: string): string {
-  if (unit === 'GB' || mb >= 1024) {
-    return `${(mb / 1024).toFixed(2)} GB`
-  }
+  if (unit === 'GB' || mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`
   return `${mb.toLocaleString()} MB`
 }
 
@@ -72,7 +75,6 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>
-
     const load = () =>
       fetch(`/api/orders/${id}`)
         .then(r => { if (r.status === 404) setNotFound(true); return r.json() })
@@ -83,7 +85,6 @@ export default function OrderDetailPage() {
           }
         })
         .finally(() => setLoading(false))
-
     load()
     return () => clearInterval(timer)
   }, [id])
@@ -94,11 +95,8 @@ export default function OrderDetailPage() {
     try {
       const res = await fetch(`/api/orders/${id}/usage`)
       const data = await res.json()
-      if (data.usage) {
-        setUsage(data.usage)
-      } else {
-        setUsageError(data.error ?? '無法取得用量')
-      }
+      if (data.usage) setUsage(data.usage)
+      else setUsageError(data.error ?? '無法取得用量')
     } catch {
       setUsageError('查詢失敗，請稍後再試')
     } finally {
@@ -108,66 +106,73 @@ export default function OrderDetailPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 
   if (notFound || !order) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 12 }}>
-      <p style={{ color: '#94a3b8' }}>訂單不存在</p>
+      <p style={{ color: S.faint }}>訂單不存在</p>
       <button onClick={() => router.push(`${base}/orders`)} style={{ color: C.primary, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
         查看所有訂單
       </button>
     </div>
   )
 
-  const s = STATUS_LABEL[order.status] ?? { text: order.status, color: 'text-gray-600' }
+  const s = STATUS_META[order.status] ?? { text: order.status, bg: '#f1f5f9', color: '#475569' }
 
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 16px 96px' }}>
+    <div style={{ maxWidth: 520, margin: '0 auto', padding: '20px 16px 96px' }}>
 
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
-        <button onClick={() => router.push(`${base}/orders`)} style={{ fontSize: 13, color: C.primary, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
-          ← 所有訂單
+        <button onClick={() => router.push(`${base}/orders`)} style={{ fontSize: 13, color: C.primary, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          所有訂單
         </button>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', margin: 0 }}>訂單詳情</h1>
-          <span style={{ fontSize: 13, fontWeight: 600, color: s.color.replace('text-', '').includes('-') ? undefined : s.color }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.02em' }}>訂單詳情</h1>
+          <span style={{
+            fontSize: 11, fontWeight: 700,
+            background: s.bg, color: s.color,
+            padding: '3px 10px', borderRadius: 100,
+          }}>
             {s.text}
           </span>
         </div>
-        <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>#{order.id.slice(-8).toUpperCase()}</p>
+        <p style={{ fontSize: 12, color: S.faint, marginTop: 4 }}>#{order.id.slice(-8).toUpperCase()}</p>
       </div>
 
-      {/* eSIM 啟動碼 + 流量 */}
+      {/* eSIM 啟動碼 */}
       {order.status === 'COMPLETED' && order.esimRcode && (
-        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 16, padding: '20px', marginBottom: 12 }}>
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1e40af', margin: '0 0 14px' }}>eSIM 啟動碼</h2>
+        <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px', marginBottom: 12 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: '0 0 14px' }}>eSIM 啟動碼</h2>
 
           {order.esimQrcode && (
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={order.esimQrcode} alt="eSIM QR Code" style={{ width: 140, height: 140, borderRadius: 12, background: '#fff' }} />
+              <img src={order.esimQrcode} alt="eSIM QR Code" style={{ width: 140, height: 140, borderRadius: 12, background: '#fff', padding: 4 }} />
             </div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
             <div>
-              <span style={{ color: '#64748b', display: 'block', marginBottom: 2 }}>啟動碼</span>
-              <span style={{ fontFamily: 'ui-monospace, monospace', color: '#1e3a8a', wordBreak: 'break-all' }}>{order.esimRcode}</span>
+              <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>啟動碼</span>
+              <span style={{ fontFamily: 'ui-monospace, monospace', color: S.ink, wordBreak: 'break-all', fontWeight: 600 }}>{order.esimRcode}</span>
             </div>
             {order.esimLpa && (
               <div>
-                <span style={{ color: '#64748b', display: 'block', marginBottom: 2 }}>LPA（iOS 一鍵安裝）</span>
-                <span style={{ fontFamily: 'ui-monospace, monospace', color: '#1e3a8a', fontSize: 11, wordBreak: 'break-all' }}>{order.esimLpa}</span>
+                <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>LPA（iOS 一鍵安裝）</span>
+                <span style={{ fontFamily: 'ui-monospace, monospace', color: S.ink, fontSize: 11, wordBreak: 'break-all' }}>{order.esimLpa}</span>
               </div>
             )}
             {order.activationStart && order.activationEnd && (
               <div>
-                <span style={{ color: '#64748b', display: 'block', marginBottom: 2 }}>使用期間</span>
-                <span style={{ color: '#1e3a8a' }}>
+                <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>使用期間</span>
+                <span style={{ color: S.ink, fontWeight: 600 }}>
                   {new Date(order.activationStart).toLocaleDateString('zh-TW')} ～ {new Date(order.activationEnd).toLocaleDateString('zh-TW')}
                 </span>
               </div>
@@ -176,46 +181,45 @@ export default function OrderDetailPage() {
 
           {/* 流量使用狀況 */}
           {order.esimIccid && (
-            <div style={{ marginTop: 16, borderTop: '1px solid #bfdbfe', paddingTop: 16 }}>
+            <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#1e40af' }}>流量使用狀況</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: S.ink }}>流量使用狀況</span>
                 <button
                   onClick={fetchUsage}
                   disabled={usageLoading}
                   style={{
-                    fontSize: 12, color: C.primary, background: usageLoading ? '#dbeafe' : '#eff6ff',
-                    border: '1px solid #bfdbfe', borderRadius: 8, padding: '4px 12px',
+                    fontSize: 12, color: C.primary,
+                    background: usageLoading ? C.light : S.white,
+                    border: `1px solid ${C.border}`, borderRadius: 100, padding: '5px 14px',
                     cursor: usageLoading ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 4,
+                    display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600,
                   }}
                 >
                   {usageLoading ? (
                     <>
-                      <span style={{ display: 'inline-block', width: 10, height: 10, border: '1.5px solid #bfdbfe', borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                      <span style={{ display: 'inline-block', width: 10, height: 10, border: `1.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
                       查詢中
                     </>
                   ) : '查詢流量'}
                 </button>
               </div>
 
-              {usageError && (
-                <p style={{ fontSize: 12, color: '#ef4444', margin: '0 0 8px' }}>{usageError}</p>
-              )}
+              {usageError && <p style={{ fontSize: 12, color: '#ef4444', margin: '0 0 8px' }}>{usageError}</p>}
 
               {usage ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <UsageBar used={usage.usedData} total={usage.totalData} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                    <span style={{ color: '#64748b' }}>已用 <strong style={{ color: '#0f172a' }}>{formatData(usage.usedData, usage.unit)}</strong></span>
-                    <span style={{ color: '#64748b' }}>剩餘 <strong style={{ color: '#16a34a' }}>{formatData(usage.remainingData, usage.unit)}</strong></span>
+                    <span style={{ color: S.muted }}>已用 <strong style={{ color: S.ink }}>{formatData(usage.usedData, usage.unit)}</strong></span>
+                    <span style={{ color: S.muted }}>剩餘 <strong style={{ color: '#16a34a' }}>{formatData(usage.remainingData, usage.unit)}</strong></span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>總流量 {formatData(usage.totalData, usage.unit)}</span>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>ICCID: {usage.iccid.slice(-8)}</span>
+                    <span style={{ fontSize: 11, color: S.faint }}>總流量 {formatData(usage.totalData, usage.unit)}</span>
+                    <span style={{ fontSize: 11, color: S.faint }}>ICCID: {usage.iccid.slice(-8)}</span>
                   </div>
                 </div>
               ) : !usageError && (
-                <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>點擊「查詢流量」取得即時用量資料</p>
+                <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>點擊「查詢流量」取得即時用量資料</p>
               )}
             </div>
           )}
@@ -227,7 +231,7 @@ export default function OrderDetailPage() {
         <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 16, padding: '18px 20px', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#f97316', animation: 'pulse 1.5s ease-in-out infinite' }} />
-            <p style={{ fontSize: 14, fontWeight: 600, color: '#c2410c', margin: 0 }}>eSIM 啟動碼準備中</p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: '#c2410c', margin: 0 }}>eSIM 啟動碼準備中</p>
           </div>
           <p style={{ fontSize: 13, color: '#ea580c', margin: 0, lineHeight: 1.6 }}>
             系統正在取得啟動碼，通常在幾分鐘內完成。若超過 30 分鐘仍未收到，請聯繫客服。
@@ -237,13 +241,14 @@ export default function OrderDetailPage() {
       )}
 
       {/* 訂單資訊 */}
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(0,0,0,0.07)', padding: 16, marginBottom: 12 }}>
+      <div style={{ background: S.white, borderRadius: 16, border: `1px solid ${S.line}`, padding: '18px 20px', marginBottom: 12 }}>
+        <p style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: '0 0 14px' }}>訂單資訊</p>
         <div style={{ marginBottom: 14 }}>
-          <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 4px' }}>商品</p>
-          <p style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', margin: 0 }}>{order.orderItems[0]?.productName ?? '—'}</p>
+          <p style={{ fontSize: 12, color: S.faint, margin: '0 0 4px' }}>商品</p>
+          <p style={{ fontSize: 15, fontWeight: 600, color: S.ink, margin: 0 }}>{order.orderItems[0]?.productName ?? '—'}</p>
         </div>
-        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
+        <div style={{ borderTop: `1px solid ${S.line}`, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: S.muted }}>
             <span>商品原價</span><span>NT${order.subtotal.toLocaleString()}</span>
           </div>
           {order.discountAmount > 0 && (
@@ -251,12 +256,12 @@ export default function OrderDetailPage() {
               <span>優惠折扣</span><span>-NT${order.discountAmount.toLocaleString()}</span>
             </div>
           )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 700, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
-            <span style={{ color: '#0f172a' }}>實付金額</span>
-            <span style={{ color: C.primary }}>NT${order.totalPaid.toLocaleString()}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, borderTop: `1px solid ${S.line}`, paddingTop: 12, marginTop: 2 }}>
+            <span style={{ color: S.ink }}>實付金額</span>
+            <span style={{ color: C.primary, letterSpacing: '-0.02em' }}>NT${order.totalPaid.toLocaleString()}</span>
           </div>
         </div>
-        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#94a3b8' }}>
+        <div style={{ borderTop: `1px solid ${S.line}`, paddingTop: 12, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: S.faint }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>付款方式</span>
             <span>{order.paymentMethod === 'CREDIT_CARD' ? '信用卡' : 'LINE Pay'}</span>
@@ -275,11 +280,12 @@ export default function OrderDetailPage() {
       </div>
 
       {/* 客服 */}
-      <div style={{ textAlign: 'center', marginTop: 8 }}>
-        <button onClick={() => router.push(`${base}/support`)} style={{ fontSize: 13, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+      <div style={{ textAlign: 'center', marginTop: 12 }}>
+        <button onClick={() => router.push(`${base}/support`)} style={{ fontSize: 13, color: S.faint, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
           需要協助？聯絡客服
         </button>
       </div>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 }

@@ -19,9 +19,18 @@ declare global {
   }
 }
 
+const S = {
+  white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
+  line: 'rgba(0,0,0,0.07)',
+} as const
+
 export default function PayPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">載入中…</p></div>}>
+    <Suspense fallback={
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <p style={{ color: S.faint }}>載入中…</p>
+      </div>
+    }>
       <PayContent />
     </Suspense>
   )
@@ -42,7 +51,6 @@ function PayContent() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tapPayConfigRef = useRef<{ appId: number; appKey: string; env: string } | null>(null)
 
-  // Fetch TapPay config from server (per-tenant, falls back to env vars)
   useEffect(() => {
     async function fetchConfig() {
       try {
@@ -53,9 +61,7 @@ function PayContent() {
           : '/api/liff/payment-config'
         const res = await fetch(url).then(r => r.json())
         tapPayConfigRef.current = res
-      } catch {
-        // Fallback handled server-side
-      }
+      } catch { /* fallback handled server-side */ }
     }
     fetchConfig()
   }, [liff])
@@ -69,23 +75,21 @@ function PayContent() {
     window.TPDirect.setupSDK(appId, appKey, env)
     window.TPDirect.card.setup({
       fields: {
-        number: { element: '#card-number', placeholder: '**** **** **** ****' },
+        number:         { element: '#card-number', placeholder: '**** **** **** ****' },
         expirationDate: { element: '#card-expiry', placeholder: 'MM / YY' },
-        ccv: { element: '#card-ccv', placeholder: 'CVV' },
+        ccv:            { element: '#card-ccv',    placeholder: 'CVV' },
       },
       styles: {
-        input: { color: '#374151', 'font-size': '16px' },
-        ':focus': { color: '#1d4ed8' },
-        '.valid': { color: '#059669' },
+        input:    { color: '#374151', 'font-size': '16px' },
+        ':focus': { color: S.ink },
+        '.valid':   { color: '#059669' },
         '.invalid': { color: '#dc2626' },
       },
     })
     setSdkReady(true)
 
-    // 輪詢確認卡號輸入完整
     pollRef.current = setInterval(() => {
-      const status = window.TPDirect.card.getTappayFieldsStatus()
-      setCanPay(status.canGetPrime)
+      setCanPay(window.TPDirect.card.getTappayFieldsStatus().canGetPrime)
     }, 500)
   }
 
@@ -120,58 +124,95 @@ function PayContent() {
     })
   }
 
+  const fieldStyle: React.CSSProperties = {
+    border: `1.5px solid rgba(0,0,0,0.1)`,
+    borderRadius: 12,
+    padding: '14px 16px',
+    background: '#fafafa',
+    minHeight: 48,
+  }
+
+  const disabled = !canPay || submitting || !sdkReady
+
   return (
     <>
-      <Script
-        src="https://js.tappaysdk.com/tappay.js"
-        onReady={initTapPay}
-      />
-      <div className="max-w-lg mx-auto px-4 pt-6 pb-32">
-        <button onClick={() => router.back()} className="text-blue-600 text-sm mb-4">← 返回</button>
-        <h1 className="text-xl font-bold mb-6">信用卡付款</h1>
+      <Script src="https://js.tappaysdk.com/tappay.js" onReady={initTapPay} />
 
-        <div className="bg-white rounded-xl border p-5 shadow-sm space-y-4 mb-6">
+      <div style={{ maxWidth: 520, margin: '0 auto', padding: '20px 16px 120px' }}>
+        {/* Header */}
+        <button
+          onClick={() => router.back()}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 4, color: C.primary, fontSize: 14 }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          返回
+        </button>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: '0 0 20px', letterSpacing: '-0.02em' }}>信用卡付款</h1>
+
+        {/* Card form */}
+        <div style={{ background: S.white, borderRadius: 16, border: `1px solid ${S.line}`, padding: '20px', marginBottom: 14, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <label className="text-sm text-gray-600 block mb-1">卡號</label>
-            <div id="card-number" className="border rounded-lg px-3 py-3 bg-gray-50 min-h-[44px]" />
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: S.muted, marginBottom: 6 }}>卡號</label>
+            <div id="card-number" style={fieldStyle} />
           </div>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label className="text-sm text-gray-600 block mb-1">有效期限</label>
-              <div id="card-expiry" className="border rounded-lg px-3 py-3 bg-gray-50 min-h-[44px]" />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: S.muted, marginBottom: 6 }}>有效期限</label>
+              <div id="card-expiry" style={fieldStyle} />
             </div>
-            <div className="flex-1">
-              <label className="text-sm text-gray-600 block mb-1">安全碼</label>
-              <div id="card-ccv" className="border rounded-lg px-3 py-3 bg-gray-50 min-h-[44px]" />
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: S.muted, marginBottom: 6 }}>安全碼</label>
+              <div id="card-ccv" style={fieldStyle} />
             </div>
           </div>
         </div>
 
         {errorMsg && (
-          <div className="bg-red-50 text-red-600 text-sm rounded-xl px-4 py-3 mb-4">{errorMsg}</div>
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '12px 16px', marginBottom: 12 }}>
+            <p style={{ fontSize: 13, color: '#dc2626', margin: 0 }}>{errorMsg}</p>
+          </div>
         )}
 
         {!sdkReady && (
-          <p className="text-gray-400 text-sm text-center mb-4">載入付款模組中…</p>
+          <p style={{ textAlign: 'center', color: S.faint, fontSize: 13, marginBottom: 8 }}>載入付款模組中…</p>
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t px-4 py-3">
-        <div className="max-w-lg mx-auto">
-          <p style={{ textAlign: 'center', color: '#64748b', fontSize: 14, marginBottom: 8 }}>
-            實付金額 <span style={{ fontWeight: 700, color: C.primary, fontSize: 16 }}>NT${amount}</span>
-          </p>
+      {/* Sticky bottom bar */}
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: S.white,
+        borderTop: `1px solid ${S.line}`,
+        boxShadow: '0 -4px 20px rgba(0,0,0,0.08)',
+        padding: '14px 20px',
+        paddingBottom: 'calc(14px + env(safe-area-inset-bottom))',
+      }}>
+        <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div>
+            <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>實付金額</p>
+            <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+              NT${amount}
+            </p>
+          </div>
           <button
             onClick={handlePay}
-            disabled={!canPay || submitting || !sdkReady}
+            disabled={disabled}
             style={{
-              width: '100%', background: (!canPay || submitting || !sdkReady) ? '#94a3b8' : C.primary,
-              color: C.onPrimary, border: 'none', borderRadius: 12, padding: '14px',
-              fontSize: 16, fontWeight: 700, cursor: (!canPay || submitting || !sdkReady) ? 'not-allowed' : 'pointer',
+              flex: 1,
+              background: disabled ? '#94a3b8' : C.primary,
+              color: C.onPrimary,
+              border: 'none', borderRadius: 100,
+              padding: '15px 24px',
+              fontSize: 16, fontWeight: 800,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.02em',
               transition: 'background 0.15s',
+              whiteSpace: 'nowrap',
             }}
           >
-            {submitting ? '付款中…' : '確認付款'}
+            {submitting ? '付款中…' : '確認付款 →'}
           </button>
         </div>
       </div>

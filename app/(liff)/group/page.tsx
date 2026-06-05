@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useTenantColors } from '@/components/liff/TenantContext'
 
-type GroupInfo    = { id: string; name: string; description: string | null; status: string; inviteCode: string }
-type Membership   = { group: { id: string; name: string; description: string | null }; joinedAt: string }
-type GroupStats   = { memberCount: number; pendingAmount: number; settledAmount: number; recentCommissions: { id: string; amount: number; status: string; createdAt: string; orderTotal: number }[] }
+type GroupInfo  = { id: string; name: string; description: string | null; status: string; inviteCode: string }
+type Membership = { group: { id: string; name: string; description: string | null }; joinedAt: string }
+type GroupStats = { memberCount: number; pendingAmount: number; settledAmount: number; recentCommissions: { id: string; amount: number; status: string; createdAt: string; orderTotal: number }[] }
 
 const S = {
-  white: '#ffffff', ink: '#0f172a', muted: '#64748b', faint: '#94a3b8',
+  white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
   line: 'rgba(0,0,0,0.07)',
 } as const
 
@@ -107,21 +107,36 @@ export default function GroupPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 14,
+    padding: '13px 16px', fontSize: 14, outline: 'none',
+    boxSizing: 'border-box', background: S.white, color: S.ink,
+  }
+
+  const btnEnabled = (enabled: boolean): React.CSSProperties => ({
+    width: '100%', border: 'none', borderRadius: 100, padding: '15px',
+    fontSize: 15, fontWeight: 800, cursor: enabled ? 'pointer' : 'not-allowed',
+    background: enabled ? C.primary : '#e2e8f0',
+    color: enabled ? C.onPrimary : S.faint,
+    transition: 'all 0.15s',
+    letterSpacing: '0.02em',
+  })
 
   // ── 社群主視角 ──
   if (ownedGroup) {
     const s = STATUS_META[ownedGroup.status] ?? STATUS_META.PENDING
     return (
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '28px 16px 96px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
           <GroupOwnerBadge />
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h1 style={{ fontSize: 18, fontWeight: 700, color: S.ink, margin: 0 }}>{ownedGroup.name}</h1>
+              <h1 style={{ fontSize: 18, fontWeight: 800, color: S.ink, margin: 0 }}>{ownedGroup.name}</h1>
               <span style={{ fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, padding: '2px 8px', borderRadius: 100 }}>{s.text}</span>
             </div>
             <p style={{ fontSize: 13, color: S.faint, margin: '3px 0 0' }}>社群主</p>
@@ -134,18 +149,17 @@ export default function GroupPage() {
 
         {ownedGroup.status === 'APPROVED' && (
           <>
-            {/* 儀表板數字 */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px' }}>
+              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
                 <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 4px' }}>社群人數</p>
-                <p style={{ fontSize: 28, fontWeight: 800, color: S.ink, margin: 0, lineHeight: 1 }}>
+                <p style={{ fontSize: 28, fontWeight: 800, color: S.ink, margin: 0, lineHeight: 1, letterSpacing: '-0.02em' }}>
                   {stats ? stats.memberCount.toLocaleString() : '—'}
                 </p>
                 <p style={{ fontSize: 11, color: S.faint, margin: '4px 0 0' }}>位會員</p>
               </div>
-              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px' }}>
+              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
                 <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 4px' }}>待結算分潤</p>
-                <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, lineHeight: 1 }}>
+                <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, lineHeight: 1, letterSpacing: '-0.02em' }}>
                   {stats ? `NT$${Number(stats.pendingAmount).toLocaleString()}` : '—'}
                 </p>
                 <p style={{ fontSize: 11, color: S.faint, margin: '4px 0 0' }}>
@@ -154,28 +168,22 @@ export default function GroupPage() {
               </div>
             </div>
 
-            {/* 邀請碼 */}
-            <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px', marginBottom: 12 }}>
+            <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 6px' }}>邀請碼</p>
               <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 26, fontWeight: 800, color: S.ink, letterSpacing: '0.2em', margin: 0 }}>
                 {ownedGroup.inviteCode}
               </p>
             </div>
 
-            {/* 近期分潤明細 */}
             {stats && stats.recentCommissions.length > 0 && (
-              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px', marginBottom: 12 }}>
-                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 10px' }}>近期分潤明細</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 12px' }}>近期分潤明細</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {stats.recentCommissions.map(c => (
                     <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div>
-                        <p style={{ fontSize: 12, color: S.muted, margin: 0 }}>
-                          訂單金額 NT${Number(c.orderTotal).toLocaleString()}
-                        </p>
-                        <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0' }}>
-                          {new Date(c.createdAt).toLocaleDateString('zh-TW')}
-                        </p>
+                        <p style={{ fontSize: 13, color: S.muted, margin: 0 }}>訂單金額 NT${Number(c.orderTotal).toLocaleString()}</p>
+                        <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0' }}>{new Date(c.createdAt).toLocaleDateString('zh-TW')}</p>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <p style={{ fontSize: 14, fontWeight: 700, color: c.status === 'SETTLED' ? '#15803d' : C.primary, margin: 0 }}>
@@ -195,7 +203,7 @@ export default function GroupPage() {
               onClick={() => router.push(`${base}/group-admin`)}
               style={{
                 width: '100%', background: '#fffbeb', border: '1px solid #fde68a',
-                borderRadius: 14, padding: '15px 16px', cursor: 'pointer',
+                borderRadius: 14, padding: '15px 18px', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}
             >
@@ -209,8 +217,8 @@ export default function GroupPage() {
         )}
 
         {ownedGroup.status === 'PENDING' && (
-          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '14px 16px' }}>
-            <p style={{ fontSize: 13, color: '#92400e', margin: 0 }}>申請審核中，平台通過後即可使用社群功能。</p>
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 14, padding: '14px 16px' }}>
+            <p style={{ fontSize: 13, color: '#92400e', margin: 0, lineHeight: 1.6 }}>申請審核中，平台通過後即可使用社群功能。</p>
           </div>
         )}
       </div>
@@ -221,10 +229,10 @@ export default function GroupPage() {
   if (membership) {
     return (
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '28px 16px 96px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
           <MemberBadge />
           <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: S.ink, margin: 0 }}>{membership.group.name}</h1>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: S.ink, margin: 0 }}>{membership.group.name}</h1>
             <p style={{ fontSize: 13, color: S.faint, margin: '3px 0 0' }}>
               加入於 {new Date(membership.joinedAt).toLocaleDateString('zh-TW')}
             </p>
@@ -238,21 +246,9 @@ export default function GroupPage() {
   }
 
   // ── 未加入 ──
-  const inputStyle: React.CSSProperties = {
-    width: '100%', border: `1.5px solid #e2e8f0`, borderRadius: 12,
-    padding: '13px 16px', fontSize: 14, outline: 'none', boxSizing: 'border-box',
-    background: S.white, color: S.ink,
-  }
-  const btnEnabled = (check: boolean) => ({
-    width: '100%', border: 'none', borderRadius: 12, padding: '15px',
-    fontSize: 15, fontWeight: 700, cursor: check ? 'pointer' : 'not-allowed' as const,
-    background: check ? C.primary : '#e2e8f0', color: check ? C.onPrimary : S.faint,
-    transition: 'all 0.15s',
-  })
-
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '28px 16px 96px' }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700, color: S.ink, margin: '0 0 20px' }}>社群</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: '0 0 20px', letterSpacing: '-0.02em' }}>社群</h1>
 
       {/* Tabs */}
       <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 12, padding: 4, marginBottom: 20, gap: 4 }}>
@@ -277,10 +273,10 @@ export default function GroupPage() {
             onChange={e => setInviteCode(e.target.value.toUpperCase())}
             placeholder="輸入邀請碼"
             maxLength={8}
-            style={{ ...inputStyle, fontFamily: 'ui-monospace, monospace', fontSize: 22, fontWeight: 700, letterSpacing: '0.2em', textAlign: 'center' }}
+            style={{ ...inputStyle, fontFamily: 'ui-monospace, monospace', fontSize: 24, fontWeight: 800, letterSpacing: '0.2em', textAlign: 'center' }}
           />
           {joinMsg && (
-            <div style={{ background: joinMsg.ok ? '#dcfce7' : '#fee2e2', borderRadius: 10, padding: '10px 14px' }}>
+            <div style={{ background: joinMsg.ok ? '#dcfce7' : '#fee2e2', borderRadius: 12, padding: '12px 16px' }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: joinMsg.ok ? '#15803d' : '#b91c1c', margin: 0 }}>{joinMsg.text}</p>
             </div>
           )}
@@ -297,7 +293,7 @@ export default function GroupPage() {
           <textarea value={applyDesc} onChange={e => setApplyDesc(e.target.value)} placeholder="社群簡介（選填）" rows={3}
             style={{ ...inputStyle, resize: 'none' }} />
           {applyMsg && (
-            <div style={{ background: applyMsg.ok ? '#dcfce7' : '#fee2e2', borderRadius: 10, padding: '10px 14px' }}>
+            <div style={{ background: applyMsg.ok ? '#dcfce7' : '#fee2e2', borderRadius: 12, padding: '12px 16px' }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: applyMsg.ok ? '#15803d' : '#b91c1c', margin: 0 }}>{applyMsg.text}</p>
             </div>
           )}

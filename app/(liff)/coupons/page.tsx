@@ -16,12 +16,8 @@ type Coupon = {
 }
 
 const S = {
-  white: '#ffffff',
-  ink: '#0f172a',
-  muted: '#64748b',
-  faint: '#94a3b8',
+  white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
   line: 'rgba(0,0,0,0.07)',
-  accent: '#0284c7',
 } as const
 
 const TYPE_LABEL: Record<string, string> = {
@@ -32,15 +28,14 @@ const TYPE_LABEL: Record<string, string> = {
   GROUP_ACTIVITY:   '活動券',
 }
 
-const LEVEL_META: Record<string, { bg: string; color: string; label: string }> = {
-  A: { bg: '#fef2f2', color: '#b91c1c', label: 'A' },
-  B: { bg: '#fff7ed', color: '#c2410c', label: 'B' },
-  C: { bg: '#eff6ff', color: '#1d4ed8', label: 'C' },
+const LEVEL_META: Record<string, { bg: string; color: string }> = {
+  A: { bg: '#fef2f2', color: '#b91c1c' },
+  B: { bg: '#fff7ed', color: '#c2410c' },
+  C: { bg: '#f0fdf4', color: '#15803d' },
 }
 
 function discountLabel(d: number) {
-  const pct = Math.round((1 - d) * 100)
-  return `${pct}% OFF`
+  return `${Math.round((1 - d) * 100)}% OFF`
 }
 
 function discountFold(d: number) {
@@ -67,15 +62,15 @@ export default function CouponsPage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.soft}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96 }}>
-      <div style={{ padding: '24px 16px 0' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: S.ink, margin: '0 0 16px' }}>優惠券</h1>
+      <div style={{ padding: '24px 20px 0' }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: '0 0 16px', letterSpacing: '-0.02em' }}>優惠券</h1>
 
         {/* Tab switcher */}
         <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 12, padding: 4, marginBottom: 16, gap: 4 }}>
@@ -88,12 +83,11 @@ export default function CouponsPage() {
                 fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
                 background: tab === t ? S.white : 'transparent',
                 color: tab === t ? C.primary : S.faint,
-                boxShadow: tab === t ? `0 1px 3px ${C.border}` : 'none',
-                borderBottom: tab === t ? `2px solid ${C.primary}` : '2px solid transparent',
+                boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                 transition: 'all 0.15s',
               }}
             >
-              {t === 'available' ? `可使用  ${available.length}` : `已使用 / 過期  ${used.length}`}
+              {t === 'available' ? `可使用 ${available.length}` : `已使用／過期 ${used.length}`}
             </button>
           ))}
         </div>
@@ -112,33 +106,28 @@ export default function CouponsPage() {
         {list.map(c => {
           const lv = LEVEL_META[c.level] ?? LEVEL_META.C
           const expired = !c.usedAt && c.expiresAt && new Date(c.expiresAt) <= now
+          const inactive = !!(c.usedAt || expired)
           return (
             <div
               key={c.id}
               style={{
-                background: S.white,
-                borderRadius: 16,
+                background: S.white, borderRadius: 16,
                 border: `1px solid ${S.line}`,
-                overflow: 'hidden',
-                opacity: c.usedAt || expired ? 0.5 : 1,
-                display: 'flex',
+                overflow: 'hidden', opacity: inactive ? 0.5 : 1,
+                display: 'flex', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
               }}
             >
               {/* Left accent strip */}
               <div style={{
-                width: 52,
-                background: c.usedAt || expired ? '#f1f5f9' : lv.bg,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 2,
+                width: 56, flexShrink: 0,
+                background: inactive ? '#f8f9fb' : lv.bg,
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: 2,
                 borderRight: `1px dashed ${S.line}`,
                 padding: '16px 0',
-                flexShrink: 0,
               }}>
-                <span style={{ fontSize: 16, fontWeight: 800, color: c.usedAt || expired ? S.faint : lv.color }}>{lv.label}</span>
-                <span style={{ fontSize: 9, color: c.usedAt || expired ? S.faint : lv.color, fontWeight: 600, letterSpacing: '0.05em' }}>LEVEL</span>
+                <span style={{ fontSize: 18, fontWeight: 800, color: inactive ? S.faint : lv.color }}>{c.level}</span>
+                <span style={{ fontSize: 9, color: inactive ? S.faint : lv.color, fontWeight: 600, letterSpacing: '0.05em' }}>LEVEL</span>
               </div>
 
               {/* Content */}
@@ -149,15 +138,13 @@ export default function CouponsPage() {
                       {TYPE_LABEL[c.type] ?? c.type}
                     </p>
                     {c.isOfficial && (
-                      <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 100 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '1px 7px', borderRadius: 100 }}>
                         官方
                       </span>
                     )}
                   </div>
                   {c.usedAt ? (
-                    <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>
-                      已於 {new Date(c.usedAt).toLocaleDateString('zh-TW')} 使用
-                    </p>
+                    <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>已於 {new Date(c.usedAt).toLocaleDateString('zh-TW')} 使用</p>
                   ) : c.expiresAt ? (
                     <p style={{ fontSize: 12, color: expired ? '#ef4444' : S.faint, margin: 0 }}>
                       {expired ? '已過期' : `有效至 ${new Date(c.expiresAt).toLocaleDateString('zh-TW')}`}
@@ -167,7 +154,7 @@ export default function CouponsPage() {
                   )}
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <p style={{ fontSize: 20, fontWeight: 800, color: c.usedAt || expired ? S.faint : C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                  <p style={{ fontSize: 20, fontWeight: 800, color: inactive ? S.faint : C.primary, margin: 0, letterSpacing: '-0.02em' }}>
                     {discountLabel(c.discount)}
                   </p>
                   <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>{discountFold(c.discount)}</p>

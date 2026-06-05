@@ -15,13 +15,8 @@ type UserInfo = {
 }
 
 const S = {
-  bg: '#f8f9fb',
-  white: '#ffffff',
-  ink: '#0f172a',
-  muted: '#64748b',
-  faint: '#94a3b8',
+  white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
   line: 'rgba(0,0,0,0.07)',
-  accent: '#0284c7',
 } as const
 
 function ChevronRight() {
@@ -34,7 +29,7 @@ function ChevronRight() {
 
 function IconEdit() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={S.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={S.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
@@ -43,7 +38,7 @@ function IconEdit() {
 
 function IconGroup() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={S.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={S.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -54,7 +49,7 @@ function IconGroup() {
 
 function IconSupport() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={S.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={S.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   )
@@ -62,7 +57,7 @@ function IconSupport() {
 
 function IconAdmin() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
     </svg>
@@ -87,7 +82,7 @@ export default function ProfilePage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-      <div style={{ width: 28, height: 28, border: '2.5px solid #e0f2fe', borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -102,6 +97,12 @@ export default function ProfilePage() {
     ? `會員 · ${user.membership!.group.name}`
     : '尚未加入社群'
 
+  const menuItems = [
+    { label: '個人資料', sub: '姓名、電話、電郵', icon: <IconEdit />, href: `${base}/profile/setup` },
+    { label: '我的社群', sub: groupLabel,           icon: <IconGroup />, href: `${base}/group` },
+    { label: '客服中心', sub: '問題回報與聯絡',    icon: <IconSupport />, href: `${base}/support` },
+  ]
+
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '28px 16px 96px' }}>
 
@@ -110,7 +111,7 @@ export default function ProfilePage() {
         {user.avatarUrl
           ? <img src={user.avatarUrl} alt="" style={{ width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${S.line}` }} />
           : (
-            <div style={{ width: 68, height: 68, borderRadius: '50%', background: C.soft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 68, height: 68, borderRadius: '50%', background: C.soft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                 <circle cx="12" cy="7" r="4" />
@@ -136,9 +137,9 @@ export default function ProfilePage() {
         <button
           onClick={() => router.push(`${base}/profile/setup`)}
           style={{
-            width: '100%', marginBottom: 16,
+            width: '100%', marginBottom: 14,
             background: '#fff7ed', border: '1px solid #fed7aa',
-            borderRadius: 12, padding: '12px 16px',
+            borderRadius: 14, padding: '13px 16px',
             display: 'flex', alignItems: 'center', gap: 10,
             cursor: 'pointer', textAlign: 'left',
           }}
@@ -160,9 +161,9 @@ export default function ProfilePage() {
         <button
           onClick={() => router.push(`${base}/group-admin`)}
           style={{
-            width: '100%', marginBottom: 16,
+            width: '100%', marginBottom: 14,
             background: '#fffbeb', border: '1px solid #fde68a',
-            borderRadius: 12, padding: '14px 16px',
+            borderRadius: 14, padding: '14px 16px',
             display: 'flex', alignItems: 'center', gap: 12,
             cursor: 'pointer', textAlign: 'left',
           }}
@@ -177,26 +178,22 @@ export default function ProfilePage() {
       )}
 
       {/* Settings menu */}
-      <div style={{ background: S.white, borderRadius: 16, border: `1px solid ${S.line}`, overflow: 'hidden' }}>
-        {[
-          { label: '個人資料', sub: '姓名、電話、電郵', icon: <IconEdit />, href: `${base}/profile/setup` },
-          { label: '我的社群', sub: groupLabel, icon: <IconGroup />, href: `${base}/group` },
-          { label: '客服中心', sub: '問題回報與聯絡', icon: <IconSupport />, href: `${base}/support` },
-        ].map((item, i) => (
+      <div style={{ background: S.white, borderRadius: 16, border: `1px solid ${S.line}`, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+        {menuItems.map((item, i) => (
           <button
             key={item.label}
             onClick={() => router.push(item.href)}
             style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-              padding: '14px 16px', background: 'transparent', border: 'none',
+              width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+              padding: '15px 16px', background: 'transparent', border: 'none',
               borderTop: i > 0 ? `1px solid ${S.line}` : 'none',
               cursor: 'pointer', textAlign: 'left',
             }}
           >
-            <span style={{ width: 20, display: 'flex', justifyContent: 'center' }}>{item.icon}</span>
+            <span style={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>{item.icon}</span>
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: 14, fontWeight: 600, color: S.ink, margin: 0 }}>{item.label}</p>
-              <p style={{ fontSize: 12, color: S.faint, marginTop: 1 }}>{item.sub}</p>
+              <p style={{ fontSize: 12, color: S.faint, marginTop: 2 }}>{item.sub}</p>
             </div>
             <ChevronRight />
           </button>
