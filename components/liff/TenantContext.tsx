@@ -2,6 +2,9 @@
 
 import { createContext, useContext, type ReactNode } from 'react'
 
+export type HomeTemplate = 'landmark' | 'gradient' | 'minimal'
+export type ProductsTemplate = 'classic' | 'magazine' | 'compact'
+
 export interface TenantConfig {
   id: string
   slug: string
@@ -9,6 +12,8 @@ export interface TenantConfig {
   liffId: string
   logoUrl: string | null
   primaryColor: string | null
+  homeTemplate: HomeTemplate | null
+  productsTemplate: ProductsTemplate | null
 }
 
 const TenantContext = createContext<TenantConfig | null>(null)

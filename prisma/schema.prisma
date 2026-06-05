@@ -424,7 +424,9 @@ model PlatformAdmin {
   tenantSlug   String?           @unique @map("tenant_slug")   // URL 識別碼，如 bii-travel
   brandName    String?           @map("brand_name")            // 顯示名稱，如「Bii旅」
   logoUrl      String?           @map("logo_url")              // Logo 圖片網址
-  primaryColor String?           @map("primary_color")         // 主題色，如 #FF5A00
+  primaryColor     String?           @map("primary_color")          // 主題色，如 #FF5A00
+  homeTemplate     String?           @map("home_template")           // landmark | gradient | minimal
+  productsTemplate String?           @map("products_template")       // classic | magazine | compact
   lineAccessToken String?        @map("line_access_token")
   liffId       String?           @map("liff_id")              // 該 Platform 的 LINE LIFF App ID
   createdAt    DateTime          @default(now()) @map("created_at")
