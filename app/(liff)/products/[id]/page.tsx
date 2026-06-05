@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { SignalIllustration } from '@/components/liff/LiffIllustrations'
 import { useTenantColors } from '@/components/liff/TenantContext'
+import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
 
 type Product = {
   id: string
@@ -47,14 +48,28 @@ export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
   const C = useTenantColors()
   const [product, setProduct] = useState<Product | null>(null)
+  const [coupons, setCoupons] = useState<CouponItem[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
-    fetch(`/api/products/${id}`)
-      .then(r => { if (r.status === 404) { setNotFound(true); return null } return r.json() })
-      .then(data => { if (data) setProduct(data.product) })
-      .finally(() => setLoading(false))
+    Promise.all([
+      fetch(`/api/products/${id}`).then(r => {
+        if (r.status === 404) { setNotFound(true); return null }
+        return r.json()
+      }),
+      fetch('/api/coupons').then(r => r.json()).catch(() => ({ coupons: [] })),
+    ]).then(([prodData, couponData]) => {
+      if (prodData) setProduct(prodData.product)
+      const now = new Date()
+      setCoupons(
+        (couponData.coupons ?? [])
+          .filter((c: CouponItem & { usedAt?: string | null; expiresAt?: string | null }) =>
+            !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now)
+          )
+          .map((c: CouponItem) => ({ id: c.id, discount: c.discount }))
+      )
+    }).finally(() => setLoading(false))
   }, [id])
 
   if (loading) return (
@@ -154,10 +169,29 @@ export default function ProductDetailPage() {
       }}>
         <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div>
-            <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>售價</p>
-            <p style={{ fontSize: 26, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-              NT${product.sellPrice.toLocaleString()}
-            </p>
+            {(() => {
+              const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, product.sellPrice)
+              return hasDiscount ? (
+                <>
+                  <p style={{ fontSize: 11, color: S.faint, margin: 0, textDecoration: 'line-through' }}>
+                    NT${product.sellPrice.toLocaleString()}
+                  </p>
+                  <p style={{ fontSize: 26, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                    NT${bestPrice.toLocaleString()}
+                  </p>
+                  <p style={{ fontSize: 11, color: '#16a34a', marginTop: 1, fontWeight: 600 }}>
+                    套用優惠券省 NT${savedAmount.toLocaleString()}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>售價</p>
+                  <p style={{ fontSize: 26, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                    NT${product.sellPrice.toLocaleString()}
+                  </p>
+                </>
+              )
+            })()}
           </div>
           <button
             onClick={() => router.push(`/checkout?productId=${product.id}`)}

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { GlobeIllustration, BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
+import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
 
 type Country = {
   countryCode: string
@@ -168,6 +169,7 @@ function ProductsContent() {
 
   const [countries, setCountries] = useState<Country[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [coupons, setCoupons] = useState<CouponItem[]>([])
   const [loading, setLoading] = useState(true)
 
   function dismissSetup() {
@@ -185,9 +187,20 @@ function ProductsContent() {
       const params = new URLSearchParams()
       if (selectedCountry) params.set('country', selectedCountry)
       if (lineUid) params.set('lineUid', lineUid)
-      const data = await fetch(`/api/products${params.toString() ? `?${params}` : ''}`).then(r => r.json())
-      setCountries(data.countries ?? [])
-      setProducts(data.products ?? [])
+      const [prodData, couponData] = await Promise.all([
+        fetch(`/api/products${params.toString() ? `?${params}` : ''}`).then(r => r.json()),
+        fetch('/api/coupons').then(r => r.json()).catch(() => ({ coupons: [] })),
+      ])
+      setCountries(prodData.countries ?? [])
+      setProducts(prodData.products ?? [])
+      const now = new Date()
+      setCoupons(
+        (couponData.coupons ?? [])
+          .filter((c: CouponItem & { usedAt?: string | null; expiresAt?: string | null }) =>
+            !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now)
+          )
+          .map((c: CouponItem) => ({ id: c.id, discount: c.discount }))
+      )
       setLoading(false)
     }
     load()
@@ -327,10 +340,29 @@ function ProductsContent() {
                 )}
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
-                  NT${p.sellPrice.toLocaleString()}
-                </p>
-                <p style={{ fontSize: 11, color: S.faint, marginTop: 2 }}>點選購買</p>
+                {(() => {
+                  const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
+                  return hasDiscount ? (
+                    <>
+                      <p style={{ fontSize: 12, color: S.faint, margin: 0, textDecoration: 'line-through' }}>
+                        NT${p.sellPrice.toLocaleString()}
+                      </p>
+                      <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                        NT${bestPrice.toLocaleString()}
+                      </p>
+                      <p style={{ fontSize: 11, color: '#16a34a', marginTop: 1, fontWeight: 600 }}>
+                        省 NT${savedAmount.toLocaleString()}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                        NT${p.sellPrice.toLocaleString()}
+                      </p>
+                      <p style={{ fontSize: 11, color: S.faint, marginTop: 2 }}>點選購買</p>
+                    </>
+                  )
+                })()}
               </div>
             </button>
           ))}
