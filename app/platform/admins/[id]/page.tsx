@@ -306,44 +306,63 @@ function PaymentConfigTab({
   onSaved: () => void
 }) {
   const gateways = ['tappay_credit', 'tappay_linepay']
+  // 共用設定從任一已存在的 config 讀取（兩者應相同）
+  const anyConfig = configs[0] ?? null
 
   return (
     <div className="space-y-4 max-w-xl">
-      <p className="text-xs text-gray-400">各金流設定將覆蓋系統預設環境變數，僅適用於此 Platform Admin。</p>
-      {gateways.map(gw => {
-        const existing = configs.find(c => c.gateway === gw) ?? null
-        return (
-          <GatewayCard
-            key={gw}
-            adminId={adminId}
-            gateway={gw}
-            existing={existing}
-            onSaved={onSaved}
-          />
-        )
-      })}
+      <p className="text-xs text-gray-400">金流設定將覆蓋系統預設環境變數，僅適用於此 Platform Admin。</p>
+
+      {/* ── 共用設定卡片 ─────────────────────────── */}
+      <SharedTapPayCard
+        adminId={adminId}
+        anyConfig={anyConfig}
+        allGateways={gateways}
+        configs={configs}
+        onSaved={onSaved}
+      />
+
+      {/* ── 各 Gateway 只設定 Merchant ID ──────── */}
+      <div className="bg-gray-50 rounded-2xl border border-gray-200 p-1 space-y-1">
+        <p className="text-xs text-gray-400 px-3 py-2 font-medium">各金流 Merchant ID</p>
+        {gateways.map(gw => {
+          const existing = configs.find(c => c.gateway === gw) ?? null
+          return (
+            <MerchantIdCard
+              key={gw}
+              adminId={adminId}
+              gateway={gw}
+              existing={existing}
+              anyConfig={anyConfig}
+              onSaved={onSaved}
+            />
+          )
+        })}
+      </div>
     </div>
   )
 }
 
-function GatewayCard({
+// 共用設定（Partner Key / App ID / App Key / 環境）
+function SharedTapPayCard({
   adminId,
-  gateway,
-  existing,
+  anyConfig,
+  allGateways,
+  configs,
   onSaved,
 }: {
   adminId: string
-  gateway: string
-  existing: PaymentConfig | null
+  anyConfig: PaymentConfig | null
+  allGateways: string[]
+  configs: PaymentConfig[]
   onSaved: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [form, setForm] = useState({
-    partnerKey: existing?.partnerKey ?? '',
-    merchantId: existing?.merchantId ?? '',
-    env: existing?.env ?? 'sandbox',
-    appId: existing?.appId ?? '',
-    appKey: existing?.appKey ?? '',
+    partnerKey: anyConfig?.partnerKey ?? '',
+    appId: anyConfig?.appId ?? '',
+    appKey: anyConfig?.appKey ?? '',
+    env: anyConfig?.env ?? 'sandbox',
   })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -352,39 +371,46 @@ function GatewayCard({
     e.preventDefault()
     setSaving(true)
     setMsg(null)
-    const r = await fetch(`/api/platform/admins/${adminId}/payment-config`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gateway, ...form }),
-    }).then(x => x.json())
+    // 同步更新所有 gateway（保留各自 merchantId）
+    const results = await Promise.all(
+      allGateways.map(gw => {
+        const existingMerchantId = configs.find(c => c.gateway === gw)?.merchantId ?? ''
+        return fetch(`/api/platform/admins/${adminId}/payment-config`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gateway: gw, ...form, merchantId: existingMerchantId }),
+        }).then(x => x.json())
+      })
+    )
     setSaving(false)
-    if (r.ok) {
-      setMsg({ ok: true, text: '✅ 已儲存' })
+    const allOk = results.every(r => r.ok)
+    if (allOk) {
+      setMsg({ ok: true, text: '✅ 共用設定已儲存' })
       setExpanded(false)
       onSaved()
     } else {
-      setMsg({ ok: false, text: `❌ ${r.error}` })
+      setMsg({ ok: false, text: `❌ ${results.find(r => !r.ok)?.error ?? '儲存失敗'}` })
     }
   }
 
+  const isSet = !!(anyConfig?.partnerKey || anyConfig?.appId)
+
   return (
-    <div className="bg-white rounded-2xl border shadow-sm p-5">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-sm">{GATEWAY_LABEL[gateway] ?? gateway}</p>
-          {existing ? (
-            <p className="text-xs text-gray-400 mt-0.5">
-              Merchant: {existing.merchantId} · {existing.env === 'production' ? '🟢 正式' : '🟡 沙箱'} · 更新：{new Date(existing.updatedAt).toLocaleDateString('zh-TW')}
-            </p>
-          ) : (
-            <p className="text-xs text-gray-400 mt-0.5">尚未設定（使用系統預設）</p>
-          )}
+          <p className="font-semibold text-sm text-gray-800 flex items-center gap-2">
+            TapPay 共用設定
+            <span className="text-xs font-normal text-gray-400">（套用全部金流）</span>
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {isSet
+              ? `App ID：${anyConfig?.appId || '—'} · ${anyConfig?.env === 'production' ? '🟢 正式環境' : '🟡 沙箱測試'}`
+              : '尚未設定（使用系統預設）'}
+          </p>
         </div>
-        <button
-          onClick={() => setExpanded(p => !p)}
-          className="text-xs text-blue-600 hover:underline"
-        >
-          {expanded ? '收起' : (existing ? '編輯' : '設定')}
+        <button onClick={() => setExpanded(p => !p)} className="text-xs text-blue-600 hover:underline">
+          {expanded ? '收起' : (isSet ? '編輯' : '設定')}
         </button>
       </div>
 
@@ -396,42 +422,33 @@ function GatewayCard({
               type="password"
               value={form.partnerKey}
               onChange={e => setForm(p => ({ ...p, partnerKey: e.target.value }))}
-              placeholder={existing ? '留空保留現有 Key' : '輸入 Partner Key'}
-              required={!existing}
+              placeholder={anyConfig ? '留空保留現有 Key' : '輸入 Partner Key'}
+              required={!anyConfig}
               className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            {existing && <p className="text-xs text-gray-400 mt-1">現有 Key：{existing.partnerKey}</p>}
+            {anyConfig?.partnerKey && <p className="text-xs text-gray-400 mt-1">現有：{anyConfig.partnerKey}</p>}
           </div>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Merchant ID</label>
-            <input
-              type="text"
-              value={form.merchantId}
-              onChange={e => setForm(p => ({ ...p, merchantId: e.target.value }))}
-              required
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">App ID（前端 SDK）</label>
-            <input
-              type="text"
-              value={form.appId}
-              onChange={e => setForm(p => ({ ...p, appId: e.target.value }))}
-              placeholder="例：12345"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">App Key（前端 SDK）</label>
-            <input
-              type="password"
-              value={form.appKey}
-              onChange={e => setForm(p => ({ ...p, appKey: e.target.value }))}
-              placeholder={existing?.appKey ? '留空保留現有 Key' : '輸入 App Key'}
-              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {existing?.appKey && <p className="text-xs text-gray-400 mt-1">現有 Key：{existing.appKey}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">App ID（前端 SDK）</label>
+              <input
+                type="text"
+                value={form.appId}
+                onChange={e => setForm(p => ({ ...p, appId: e.target.value }))}
+                placeholder="例：12345"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">App Key（前端 SDK）</label>
+              <input
+                type="password"
+                value={form.appKey}
+                onChange={e => setForm(p => ({ ...p, appKey: e.target.value }))}
+                placeholder={anyConfig?.appKey ? '留空保留現有 Key' : '輸入 App Key'}
+                className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">環境</label>
@@ -448,12 +465,98 @@ function GatewayCard({
           {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
 
           <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">
+            <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+              {saving ? '儲存中…' : '儲存並同步所有金流'}
+            </button>
+            <button type="button" onClick={() => setExpanded(false)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm">取消</button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
+// 各 Gateway 只設定 Merchant ID
+function MerchantIdCard({
+  adminId,
+  gateway,
+  existing,
+  anyConfig,
+  onSaved,
+}: {
+  adminId: string
+  gateway: string
+  existing: PaymentConfig | null
+  anyConfig: PaymentConfig | null
+  onSaved: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [merchantId, setMerchantId] = useState(existing?.merchantId ?? '')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setMsg(null)
+    const r = await fetch(`/api/platform/admins/${adminId}/payment-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        gateway,
+        merchantId,
+        // 帶入共用設定（保留現有加密值）
+        partnerKey: existing?.partnerKey ?? anyConfig?.partnerKey ?? '',
+        appId: existing?.appId ?? anyConfig?.appId ?? '',
+        appKey: existing?.appKey ?? anyConfig?.appKey ?? '',
+        env: existing?.env ?? anyConfig?.env ?? 'sandbox',
+      }),
+    }).then(x => x.json())
+    setSaving(false)
+    if (r.ok) {
+      setMsg({ ok: true, text: '✅ 已儲存' })
+      setExpanded(false)
+      onSaved()
+    } else {
+      setMsg({ ok: false, text: `❌ ${r.error}` })
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-medium text-sm text-gray-800">{GATEWAY_LABEL[gateway] ?? gateway}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {existing?.merchantId
+              ? `Merchant ID：${existing.merchantId}`
+              : '尚未設定 Merchant ID'}
+          </p>
+        </div>
+        <button onClick={() => setExpanded(p => !p)} className="text-xs text-blue-600 hover:underline">
+          {expanded ? '收起' : (existing?.merchantId ? '編輯' : '設定')}
+        </button>
+      </div>
+
+      {expanded && (
+        <form onSubmit={handleSave} className="mt-3 space-y-2 border-t pt-3">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Merchant ID</label>
+            <input
+              type="text"
+              value={merchantId}
+              onChange={e => setMerchantId(e.target.value)}
+              required
+              placeholder={`輸入 ${GATEWAY_LABEL[gateway]} 的 Merchant ID`}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
               {saving ? '儲存中…' : '儲存'}
             </button>
-            <button type="button" onClick={() => setExpanded(false)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm">
-              取消
-            </button>
+            <button type="button" onClick={() => setExpanded(false)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm">取消</button>
           </div>
         </form>
       )}
