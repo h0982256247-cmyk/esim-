@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 import { markOrderPaid, markOrderFailed, markOrderRefunded, markOrderCancelled, isOrderExpired } from '@/lib/services/order'
 import { triggerEsimActivation } from '@/lib/services/esim'
 import { calculateAndSaveCommission } from '@/lib/services/commission'
+import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
 import { notifyOrderPaid } from '@/lib/services/notification'
 import { tapPayRefund } from '@/lib/services/tappay'
 import { encrypt } from '@/lib/utils/crypto'
@@ -108,6 +109,7 @@ export async function POST(req: NextRequest) {
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
   triggerEsimActivation(order.id).catch(() => {})
   calculateAndSaveCommission(order.id).catch(() => {})
+  issueRepurchaseCouponForOrder(order.id).catch(() => {})
   notifyOrderPaid(order.userId, productName, order.totalPaid).catch(() => {})
 
   return NextResponse.json({ message: 'ok' })

@@ -57,6 +57,9 @@ function buildMessage(type: NotificationType, data: Record<string, string>): str
     case NotificationType.GROUP_REJECTED:
       return `😔 你的社群申請「${data.groupName}」未通過審核。\n如有疑問請聯繫客服。`
 
+    case NotificationType.GIFT_CLAIMED:
+      return `🎁 ${data.recipientName} 已接受你轉贈的 eSIM\n商品：${data.productName}\n感謝你的分享！`
+
     default:
       return data.content ?? ''
   }
@@ -147,6 +150,14 @@ export async function notifyGroupRejected(userId: string, groupName: string, ten
     type: NotificationType.GROUP_REJECTED,
     data: { groupName },
     tenantAdminId,
+  })
+}
+
+export async function notifyGiftClaimed(senderUserId: string, recipientName: string, productName: string) {
+  await sendNotification({
+    userId: senderUserId,
+    type: NotificationType.GIFT_CLAIMED,
+    data: { recipientName, productName },
   })
 }
 

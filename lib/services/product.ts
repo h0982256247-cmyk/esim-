@@ -1,10 +1,13 @@
 import { prisma } from '@/lib/db/prisma'
-import { ProductStatus, SupplierProductType } from '@prisma/client'
+import { ProductStatus, SupplierProductStatus, SupplierProductType } from '@prisma/client'
+import type { SupplierProductMap } from './esim'
 
 export async function getActiveProducts(countryCode?: string, tenantAdminId?: string | null) {
   return prisma.product.findMany({
     where: {
       status: ProductStatus.ACTIVE,
+      // 雙重保險：供應商側下架的方案也不應出現在前台
+      supplierProduct: { status: SupplierProductStatus.ACTIVE },
       ...(countryCode ? { countryCode } : {}),
       ...(tenantAdminId != null ? { tenantAdminId } : {}),
     },
@@ -37,6 +40,7 @@ export async function getProductById(id: string) {
       dataCapacity: true,
       description: true,
       sellPrice: true,
+      costPrice: true,    // 下單時寫入 OrderItem.unitCost 作為成本快照
       status: true,
       supplierSkuId: true,
     },
@@ -47,6 +51,7 @@ export async function getAvailableCountries(tenantAdminId?: string | null) {
   const products = await prisma.product.findMany({
     where: {
       status: ProductStatus.ACTIVE,
+      supplierProduct: { status: SupplierProductStatus.ACTIVE },
       ...(tenantAdminId != null ? { tenantAdminId } : {}),
     },
     select: {
@@ -69,7 +74,7 @@ export async function getAllProductsAdmin(tenantAdminId?: string | null) {
     orderBy: [{ countryCode: 'asc' }, { displayDays: 'asc' }],
     include: {
       supplierProduct: {
-        select: { wmProductId: true, productName: true, status: true },
+        select: { wmProductId: true, productName: true, status: true, lastSyncAt: true },
       },
     },
   })
@@ -123,28 +128,61 @@ export type CsvProductRow = {
   sortOrder?: number
 }
 
+// WM productType (0/1/2) → Prisma enum 對應
+const WM_PRODUCT_TYPE_MAP: Record<number, SupplierProductType> = {
+  0: SupplierProductType.ESIM,
+  1: SupplierProductType.SIM,
+  2: SupplierProductType.SIM_TOPUP,
+}
+
 // All-or-nothing: any DB error rolls back the entire batch
-export async function batchCreateProducts(rows: CsvProductRow[], tenantAdminId?: string | null): Promise<{ count: number }> {
+// 若有提供 supplierMap（由 myQueryAll 取回），SupplierProduct 會以供應商真實資料為準寫入/覆蓋
+export async function batchCreateProducts(
+  rows: CsvProductRow[],
+  tenantAdminId?: string | null,
+  supplierMap?: SupplierProductMap,
+): Promise<{ count: number }> {
   return prisma.$transaction(async tx => {
     let count = 0
+    const now = new Date()
+
     for (const row of rows) {
-      // SupplierProduct 以 wmProductId = supplierSkuId 做 upsert
-      // 若供應商目錄中已有此 SKU 則沿用，否則自動建立 stub 記錄
+      const wmInfo = supplierMap?.get(row.supplierSkuId)
+
+      // SupplierProduct = WM 真實鏡像；Product = CSV 那次匯入的快照
       const supplierProduct = await tx.supplierProduct.upsert({
-        where:  { wmProductId: row.supplierSkuId },
-        update: {},   // 已存在則不覆蓋任何欄位
+        where: { wmProductId: row.supplierSkuId },
+        update: wmInfo
+          ? {
+              productName: wmInfo.productName ?? undefined,
+              productId:   wmInfo.productId   ?? undefined,
+              productRegion: wmInfo.productRegion ?? undefined,
+              productType: WM_PRODUCT_TYPE_MAP[wmInfo.productType] ?? SupplierProductType.ESIM,
+              costPrice:   wmInfo.productPrice,
+              isEsim:      wmInfo.leSIM,
+              status:      SupplierProductStatus.ACTIVE,
+              lastSyncAt:  now,
+            }
+          : {},
         create: {
-          wmProductId: row.supplierSkuId,
-          productName: row.countryNameZh || row.supplierSkuId,
-          productType: SupplierProductType.ESIM,
-          costPrice:   row.costPrice,
+          wmProductId:   row.supplierSkuId,
+          productId:     wmInfo?.productId ?? null,
+          productName:   wmInfo?.productName ?? (row.countryNameZh || row.supplierSkuId),
+          productRegion: wmInfo?.productRegion ?? null,
+          productType:   wmInfo
+            ? (WM_PRODUCT_TYPE_MAP[wmInfo.productType] ?? SupplierProductType.ESIM)
+            : SupplierProductType.ESIM,
+          costPrice:     wmInfo?.productPrice ?? row.costPrice,
+          isEsim:        wmInfo?.leSIM ?? true,
+          status:        SupplierProductStatus.ACTIVE,
+          lastSyncAt:    wmInfo ? now : null,
         },
       })
 
       await tx.product.create({
         data: {
           ...row,
-          supplierSkuId: supplierProduct.id,   // 使用 SupplierProduct 的 cuid
+          supplierSkuId: supplierProduct.id,
           tenantAdminId: tenantAdminId ?? null,
         },
       })

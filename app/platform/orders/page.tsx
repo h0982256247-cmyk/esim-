@@ -55,7 +55,38 @@ function OrdersContent() {
   }
   useEffect(load, [page,statusFilter,filterTenantId,router])
   const handleRetry = async (id:string) => { setActionLoading(id); await fetch(`/api/platform/orders/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'retry_esim'})}); setActionLoading(null); load() }
-  const handleRefund = async (id:string) => { if(!confirm('確定要退款此筆訂單？'))return; setActionLoading(id); await fetch(`/api/platform/orders/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'refund'})}); setActionLoading(null); load() }
+
+  const handleRefund = async (o: Order) => {
+    // 依訂單狀態給不同警語
+    const baseMsg = `將退還 NT$${o.totalPaid.toLocaleString()} 給用戶（透過 TapPay）。`
+    let warning = ''
+    if (o.status === 'COMPLETED') {
+      warning = '\n\n⚠ 此訂單已完成（用戶已取得 eSIM 兌換碼）\n  · 供應商成本無法回收，平台需自行吸收\n  · 社群主已產生的分潤將自動扣抵'
+    } else if (o.status === 'ESIM_PENDING') {
+      warning = '\n\n⚠ 此訂單 eSIM 尚未交付\n  · 平台應主動向供應商（世界移動）確認是否計費\n  · 若已計費，平台需自行吸收'
+    } else if (o.status === 'PAID') {
+      warning = '\n\n⚠ eSIM 流程已啟動，供應商成本可能已產生'
+    }
+    if (!confirm(baseMsg + warning + '\n\n確定要退款嗎？')) return
+
+    setActionLoading(o.id)
+    const r = await fetch(`/api/platform/orders/${o.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'refund' }),
+    }).then(x => x.json())
+    setActionLoading(null)
+
+    if (r.error) {
+      alert(`退款失敗：${r.error}`)
+      return
+    }
+    const parts: string[] = [`✅ 已退款 NT$${r.refundedAmount.toLocaleString()}`]
+    if (r.restoredCoupons > 0) parts.push(`歸還優惠券 ${r.restoredCoupons} 張`)
+    if (r.voidedCoupons   > 0) parts.push(`作廢回購券 ${r.voidedCoupons} 張`)
+    alert(parts.join('\n'))
+    load()
+  }
   const totalPages = Math.ceil(total/20)
   return (
     <div className="space-y-5">
@@ -115,8 +146,8 @@ function OrdersContent() {
                         {o.status==='ESIM_PENDING'&&(
                           <button onClick={()=>handleRetry(o.id)} disabled={actionLoading===o.id} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">補發</button>
                         )}
-                        {(o.status==='PAID'||o.status==='COMPLETED')&&(
-                          <button onClick={()=>handleRefund(o.id)} disabled={actionLoading===o.id} className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">退款</button>
+                        {(o.status==='PAID'||o.status==='COMPLETED'||o.status==='ESIM_PENDING')&&(
+                          <button onClick={()=>handleRefund(o)} disabled={actionLoading===o.id} className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">退款</button>
                         )}
                       </div>
                     </td>

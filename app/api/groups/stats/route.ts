@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   if (!group) return NextResponse.json({ error: 'Not a group owner' }, { status: 403 })
 
-  const [memberCount, pending, settled, recentCommissions] = await Promise.all([
+  const [memberCount, pending, settled, recentCommissions, settlements] = await Promise.all([
     prisma.groupMember.count({
       where: { groupId: group.id, leftAt: null },
     }),
@@ -43,18 +43,38 @@ export async function GET(req: NextRequest) {
         order: { select: { totalPaid: true } },
       },
     }),
+    // 最近 6 個月的月結記錄
+    prisma.commissionSettlement.findMany({
+      where: { groupId: group.id },
+      orderBy: { period: 'desc' },
+      take: 6,
+      select: { id: true, period: true, totalAmount: true, status: true, paidAt: true, createdAt: true },
+    }),
   ])
+
+  // 下次月結時間：下個月 2 號 02:00 (台灣時間) — 對應 vercel.json 的 `0 18 1 * *` UTC
+  const now = new Date()
+  const nextSettleAt = new Date(now.getFullYear(), now.getMonth() + 1, 2, 2, 0, 0)
 
   return NextResponse.json({
     memberCount,
     pendingAmount: pending._sum.commissionAmount ?? 0,
     settledAmount: settled._sum.commissionAmount ?? 0,
+    nextSettleAt: nextSettleAt.toISOString(),
     recentCommissions: recentCommissions.map(c => ({
       id: c.id,
       amount: c.commissionAmount,
       status: c.status,
       createdAt: c.createdAt.toISOString(),
       orderTotal: c.order.totalPaid,
+    })),
+    settlements: settlements.map(s => ({
+      id: s.id,
+      period: s.period,                              // YYYY-MM
+      totalAmount: s.totalAmount,
+      status: s.status,                              // PENDING / PAID / REJECTED
+      paidAt: s.paidAt?.toISOString() ?? null,
+      createdAt: s.createdAt.toISOString(),
     })),
   })
 }

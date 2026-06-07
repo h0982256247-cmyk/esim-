@@ -65,6 +65,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     const o = await tx.order.create({
       data: {
         userId: input.userId,
+        currentOwnerId: input.userId,   // 預設買家就是擁有者；轉贈後會改成接收者
         orderNumber,
         status: OrderStatus.PENDING,
         subtotal,
@@ -78,6 +79,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
             productName: `${product.countryNameZh} ${product.displayDays}天`,
             qty: 1,
             unitPrice: subtotal,
+            unitCost: product.costPrice,   // 鎖死成本快照，後續供應商改價不影響歷史訂單
           },
         },
         orderCoupons: {
@@ -138,16 +140,30 @@ export async function markOrderPaid(orderId: string, tapPayRecTradeId: string) {
 }
 
 export async function markOrderFailed(orderId: string) {
-  return prisma.order.update({
-    where: { id: orderId },
-    data: { status: OrderStatus.FAILED },
+  // 一併歸還訂單創建時佔用的優惠券（usedAt/usedOrderId 還原）
+  // 保留原 expiresAt，因為券「沒實際被消耗」，不需要寬限期
+  return prisma.$transaction(async tx => {
+    await tx.order.update({
+      where: { id: orderId },
+      data: { status: OrderStatus.FAILED },
+    })
+    await tx.coupon.updateMany({
+      where: { usedOrderId: orderId },
+      data: { usedAt: null, usedOrderId: null },
+    })
   })
 }
 
 export async function markOrderCancelled(orderId: string) {
-  return prisma.order.update({
-    where: { id: orderId },
-    data: { status: OrderStatus.CANCELLED },
+  return prisma.$transaction(async tx => {
+    await tx.order.update({
+      where: { id: orderId },
+      data: { status: OrderStatus.CANCELLED },
+    })
+    await tx.coupon.updateMany({
+      where: { usedOrderId: orderId },
+      data: { usedAt: null, usedOrderId: null },
+    })
   })
 }
 
@@ -158,17 +174,28 @@ export async function markOrderRefunded(orderId: string) {
   })
 }
 
-// 取消超過 30 分鐘仍為 PENDING 的訂單
+// 取消超過 30 分鐘仍為 PENDING 的訂單，並歸還該訂單佔用的優惠券
 export async function cancelExpiredPendingOrders(): Promise<number> {
   const cutoff = new Date(Date.now() - 30 * 60 * 1000)
-  const result = await prisma.order.updateMany({
-    where: {
-      status: OrderStatus.PENDING,
-      createdAt: { lt: cutoff },
-    },
-    data: { status: OrderStatus.CANCELLED },
+
+  return prisma.$transaction(async tx => {
+    const expired = await tx.order.findMany({
+      where: { status: OrderStatus.PENDING, createdAt: { lt: cutoff } },
+      select: { id: true },
+    })
+    if (expired.length === 0) return 0
+
+    const ids = expired.map(o => o.id)
+    await tx.order.updateMany({
+      where: { id: { in: ids } },
+      data: { status: OrderStatus.CANCELLED },
+    })
+    await tx.coupon.updateMany({
+      where: { usedOrderId: { in: ids } },
+      data: { usedAt: null, usedOrderId: null },
+    })
+    return ids.length
   })
-  return result.count
 }
 
 export async function markOrderEsimPending(orderId: string) {
@@ -207,8 +234,9 @@ export async function markOrderCompleted(orderId: string, esimData: {
 // ─── 查詢 ─────────────────────────────────────────────────────────
 
 export async function getUserOrders(userId: string) {
+  // 用 currentOwnerId 取「目前擁有的訂單」（含轉贈進來的）
   return prisma.order.findMany({
-    where: { userId },
+    where: { currentOwnerId: userId },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -220,8 +248,24 @@ export async function getUserOrders(userId: string) {
       paymentMethod: true,
       paidAt: true,
       createdAt: true,
+      userId: true,
+      currentOwnerId: true,
+      esimRcode: true,
+      esimQrcode: true,
+      redeemedAt: true,
+      activatedAt: true,
       orderItems: {
         select: { productName: true, qty: true, unitPrice: true },
+      },
+      gift: {
+        select: {
+          claimedAt: true,
+          cancelledAt: true,
+          expiresAt: true,
+          fromUser:    { select: { displayName: true } },
+          toUser:      { select: { displayName: true } },
+          recipientName: true,
+        },
       },
     },
   })
@@ -238,8 +282,9 @@ export async function getOrderById(orderId: string) {
 }
 
 export async function getOrderByIdForUser(orderId: string, userId: string) {
+  // 用 currentOwnerId 查詢：原買家轉贈出去後就不再能存取此訂單細節（QR/兌換碼）
   return prisma.order.findFirst({
-    where: { id: orderId, userId },
+    where: { id: orderId, currentOwnerId: userId },
     select: {
       id: true,
       orderNumber: true,
@@ -251,14 +296,29 @@ export async function getOrderByIdForUser(orderId: string, userId: string) {
       paidAt: true,
       createdAt: true,
       updatedAt: true,
+      userId: true,
+      currentOwnerId: true,
       esimRcode: true,
       esimQrcode: true,
       esimLpa: true,
       esimIccid: true,
       activationStart: true,
       activationEnd: true,
+      redeemedAt: true,
+      activatedAt: true,
       orderItems: {
         select: { productName: true, qty: true, unitPrice: true },
+      },
+      gift: {
+        select: {
+          token: true,
+          sharedAt: true,
+          expiresAt: true,
+          claimedAt: true,
+          cancelledAt: true,
+          recipientName: true,
+          toUser: { select: { displayName: true } },
+        },
       },
     },
   })

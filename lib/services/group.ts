@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/db/prisma'
 import { GroupStatus } from '@prisma/client'
-import { issueCoupon } from './coupon'
+import { issueCoupon, getCouponLevel } from './coupon'
 import { notifyGroupApproved, notifyGroupRejected } from './notification'
+import { safeDecrypt } from '@/lib/utils/crypto'
 import { randomBytes } from 'crypto'
 
 // ─── 申請社群主 ───────────────────────────────────────────────────
@@ -50,30 +51,84 @@ export async function joinGroup(userId: string, lineUid: string, inviteCode: str
   const existing = await prisma.groupMember.findUnique({ where: { userId } })
   if (existing) return { ok: false, reason: '已屬於其他社群，如需換群請聯絡客服' }
 
+  // 入群券折扣 = 1 − 社群當下讓利比例（snapshot；之後社群主調整不影響已發出的券）
+  //   rebateRate 0%   → 不發券（無折扣可給）
+  //   rebateRate 10%  → 90 折
+  //   rebateRate 30%  → 70 折
+  const rebateRate = Number(group.rebateRate)
+  const couponDiscount = Math.round((1 - rebateRate) * 100) / 100
+  const shouldIssueCoupon = rebateRate > 0
+
   await prisma.$transaction(async tx => {
     await tx.groupMember.create({
       data: { groupId: group.id, userId },
     })
 
-    // 發放入群券（C 級，折扣視讓利比例 → 固定 0.95）
-    const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true, lineUid: true } })
-    if (user) {
-      await tx.coupon.create({
-        data: {
-          ownerId: user.id,
-          ownerUid: user.lineUid,
-          type: 'GROUP_JOIN',
-          level: 'C',
-          discount: 0.95,
-          isOfficial: false,
-          sourceGroupId: group.id,
-          expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 天
-        },
-      })
+    if (shouldIssueCoupon) {
+      const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true, lineUid: true } })
+      if (user) {
+        await tx.coupon.create({
+          data: {
+            ownerId: user.id,
+            ownerUid: user.lineUid,
+            type: 'GROUP_JOIN',
+            level: getCouponLevel(couponDiscount),
+            discount: couponDiscount,
+            isOfficial: false,
+            sourceGroupId: group.id,
+            expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 天
+          },
+        })
+      }
     }
   })
 
   return { ok: true, groupName: group.name }
+}
+
+// ─── 退出社群 ─────────────────────────────────────────────────────
+
+export type LeaveGroupResult =
+  | { ok: true; groupName: string; expiredCoupons: number }
+  | { ok: false; reason: string }
+
+export async function leaveGroup(userId: string): Promise<LeaveGroupResult> {
+  const membership = await prisma.groupMember.findUnique({
+    where: { userId },
+    include: { group: { select: { id: true, name: true, ownerId: true } } },
+  })
+
+  if (!membership || membership.leftAt) return { ok: false, reason: '尚未加入任何社群' }
+
+  // 社群主不能退出自己的社群（會破壞分潤歸屬）
+  if (membership.group.ownerId === userId) {
+    return { ok: false, reason: '社群主無法退出自己的社群，請先停權社群' }
+  }
+
+  const now = new Date()
+  let expiredCoupons = 0
+
+  await prisma.$transaction(async tx => {
+    await tx.groupMember.update({
+      where: { userId },
+      data: { leftAt: now },
+    })
+
+    // 將該社群發出且仍未使用的券全部設為立即過期
+    // 注意：已使用 (usedAt 非 null) 的券不動，保留歷史
+    const r = await tx.coupon.updateMany({
+      where: {
+        ownerId: userId,
+        sourceGroupId: membership.group.id,
+        usedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      data: { expiresAt: now },
+    })
+    expiredCoupons = r.count
+  })
+
+  return { ok: true, groupName: membership.group.name, expiredCoupons }
 }
 
 // ─── 社群主後台：設定讓利比例 ─────────────────────────────────────
@@ -162,7 +217,7 @@ export async function issueActivityCoupon(
 // ─── 查詢 ─────────────────────────────────────────────────────────
 
 export async function getGroupByOwnerId(ownerId: string) {
-  return prisma.group.findUnique({
+  const group = await prisma.group.findUnique({
     where: { ownerId },
     include: {
       members: {
@@ -172,6 +227,14 @@ export async function getGroupByOwnerId(ownerId: string) {
       },
     },
   })
+  if (!group) return null
+  // 解密銀行欄位（safeDecrypt 對舊資料的明碼會原樣回傳，便於漸進遷移）
+  return {
+    ...group,
+    bankAccount:    group.bankAccount    ? safeDecrypt(group.bankAccount)    : null,
+    bankBranch:     group.bankBranch     ? safeDecrypt(group.bankBranch)     : null,
+    bankHolderName: group.bankHolderName ? safeDecrypt(group.bankHolderName) : null,
+  }
 }
 
 export async function getGroupByInviteCode(inviteCode: string) {
@@ -219,6 +282,44 @@ export async function approveGroup(groupId: string, tenantAdminId?: string | nul
 
   notifyGroupApproved(group.owner.id, group.name, group.tenantAdminId).catch(() => {})
   return group
+}
+
+// ─── Admin：停權社群 ──────────────────────────────────────────────
+
+// 停權後：
+//   1. group.status = SUSPENDED
+//   2. 該社群相關的所有未使用券（GROUP_OWNER / GROUP_JOIN / GROUP_REPURCHASE / GROUP_ACTIVITY）
+//      立即作廢，避免社群主自用 7 折券或成員繼續享受優惠
+export async function suspendGroup(
+  groupId: string,
+  tenantAdminId?: string | null,
+  // note 暫未持久化（schema 沒有 statusNote 欄位），保留參數待之後擴充
+  _note?: string,
+): Promise<{ voidedCoupons: number }> {
+  if (tenantAdminId != null) {
+    const existing = await prisma.group.findUnique({ where: { id: groupId }, select: { tenantAdminId: true } })
+    if (!existing || existing.tenantAdminId !== tenantAdminId) throw new Error('無權操作此社群')
+  }
+
+  const now = new Date()
+
+  return prisma.$transaction(async tx => {
+    await tx.group.update({
+      where: { id: groupId },
+      data: { status: GroupStatus.SUSPENDED },
+    })
+
+    const result = await tx.coupon.updateMany({
+      where: {
+        sourceGroupId: groupId,
+        usedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      data: { expiresAt: now },
+    })
+
+    return { voidedCoupons: result.count }
+  })
 }
 
 export async function rejectGroup(groupId: string, note?: string, tenantAdminId?: string | null) {

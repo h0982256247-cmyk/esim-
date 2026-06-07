@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { batchCreateProducts, type CsvProductRow } from '@/lib/services/product'
+import { fetchSupplierProductMap } from '@/lib/services/esim'
 
 // ── 欄位別名對應表（中文欄位名 → 內部英文名）──────────────────────
 const HEADER_ALIAS: Record<string, string> = {
@@ -192,9 +193,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'CSV 沒有有效資料列' }, { status: 400 })
   }
 
+  // ── 供應商 API 驗證（非阻斷）：一次取回全部清單，批次比對 ──
+  let notFound = 0
+  let priceMismatch = 0
+  let supplierMap: Awaited<ReturnType<typeof fetchSupplierProductMap>> | undefined
+
   try {
-    const result = await batchCreateProducts(rows, auth.tenantAdminId)
-    return NextResponse.json({ message: `成功匯入 ${result.count} 筆商品` })
+    supplierMap = await fetchSupplierProductMap(auth.tenantAdminId)
+    for (const row of rows) {
+      const info = supplierMap.get(row.supplierSkuId)
+      if (!info) {
+        notFound++
+      } else if (info.productPrice !== row.costPrice) {
+        priceMismatch++
+      }
+    }
+  } catch {
+    // API 不可用時略過驗證，繼續匯入；SupplierProduct 將以 CSV 資料 stub
+  }
+
+  try {
+    const result = await batchCreateProducts(rows, auth.tenantAdminId, supplierMap)
+
+    const warns: string[] = []
+    if (notFound      > 0) warns.push(`供應商查無 ${notFound} 筆`)
+    if (priceMismatch > 0) warns.push(`成本價不符 ${priceMismatch} 筆`)
+
+    return NextResponse.json({
+      message:  `成功匯入 ${result.count} 筆商品`,
+      warnings: warns.length > 0 ? warns : undefined,
+    })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : '匯入失敗'
     return NextResponse.json({ error: message }, { status: 500 })

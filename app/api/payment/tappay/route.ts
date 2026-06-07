@@ -4,6 +4,7 @@ import { getOrderByIdForUser, markOrderProcessing, markOrderPaid, markOrderFaile
 import { tapPayCharge, tapPayChargeByToken } from '@/lib/services/tappay'
 import { triggerEsimActivation } from '@/lib/services/esim'
 import { calculateAndSaveCommission } from '@/lib/services/commission'
+import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
 import { getUserById } from '@/lib/services/user'
 import { notifyOrderPaid } from '@/lib/services/notification'
 import { prisma } from '@/lib/db/prisma'
@@ -113,6 +114,7 @@ export async function POST(req: NextRequest) {
 
   triggerEsimActivation(orderId).catch(() => {})
   calculateAndSaveCommission(orderId).catch(() => {})
+  issueRepurchaseCouponForOrder(orderId).catch(() => {})
   notifyOrderPaid(session.userId, productName, order.totalPaid).catch(() => {})
 
   return NextResponse.json({ ok: true, orderId })

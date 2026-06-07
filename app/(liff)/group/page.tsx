@@ -6,7 +6,16 @@ import { useTenantColors } from '@/components/liff/TenantContext'
 
 type GroupInfo  = { id: string; name: string; description: string | null; status: string; inviteCode: string }
 type Membership = { group: { id: string; name: string; description: string | null }; joinedAt: string }
-type GroupStats = { memberCount: number; pendingAmount: number; settledAmount: number; recentCommissions: { id: string; amount: number; status: string; createdAt: string; orderTotal: number }[] }
+type GroupStats = {
+  memberCount: number
+  pendingAmount: number
+  settledAmount: number
+  nextSettleAt: string
+  recentCommissions: { id: string; amount: number; status: string; createdAt: string; orderTotal: number }[]
+  settlements: { id: string; period: string; totalAmount: number; status: string; paidAt: string | null; createdAt: string }[]
+}
+type WithdrawalRecord = { id: string; amount: number; status: string; appliedAt: string; processedAt: string | null; note: string | null }
+type WithdrawalBalance = { settled: number; locked: number; paid: number; pending: number; available: number; pendingAdjustment: number }
 
 const S = {
   white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
@@ -69,6 +78,56 @@ export default function GroupPage() {
   const [applying, setApplying] = useState(false)
   const [applyMsg, setApplyMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  const [leaving, setLeaving] = useState(false)
+
+  // 提領
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([])
+  const [balance, setBalance] = useState<WithdrawalBalance | null>(null)
+  const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [requesting, setRequesting] = useState(false)
+
+  const loadWithdrawals = async () => {
+    const r = await fetch('/api/withdrawals').then(x => x.json())
+    if (!r.error) {
+      setWithdrawals(r.withdrawals ?? [])
+      setBalance(r.balance ?? null)
+    }
+  }
+
+  const handleRequestWithdrawal = async () => {
+    const amount = parseInt(withdrawAmount)
+    if (!Number.isInteger(amount) || amount <= 0) {
+      window.alert('請輸入正整數金額')
+      return
+    }
+    setRequesting(true)
+    const r = await fetch('/api/withdrawals', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount }),
+    }).then(x => x.json())
+    setRequesting(false)
+    if (r.error) {
+      window.alert(r.error)
+      return
+    }
+    setWithdrawAmount('')
+    loadWithdrawals()
+  }
+
+  const handleLeave = async () => {
+    const ok = window.confirm('退出社群後，此社群發出的未使用優惠券將立即失效。確定要退出嗎？')
+    if (!ok) return
+    setLeaving(true)
+    const r = await fetch('/api/groups/leave', { method: 'POST' }).then(x => x.json())
+    setLeaving(false)
+    if (r.error) {
+      window.alert(`退出失敗：${r.error}`)
+      return
+    }
+    window.alert(`已退出「${r.groupName}」${r.expiredCoupons > 0 ? `\n失效優惠券：${r.expiredCoupons} 張` : ''}`)
+    location.reload()
+  }
+
   const reload = async () => {
     const d = await fetch('/api/groups').then(r => r.json())
     setOwnedGroup(d.ownedGroup ?? null)
@@ -76,6 +135,7 @@ export default function GroupPage() {
     if (d.ownedGroup?.status === 'APPROVED') {
       const s = await fetch('/api/groups/stats').then(r => r.json())
       if (!s.error) setStats(s)
+      loadWithdrawals()
     }
   }
 
@@ -158,12 +218,14 @@ export default function GroupPage() {
                 <p style={{ fontSize: 11, color: S.faint, margin: '4px 0 0' }}>位會員</p>
               </div>
               <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 4px' }}>待結算分潤</p>
+                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 4px' }}>本月累積中</p>
                 <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, lineHeight: 1, letterSpacing: '-0.02em' }}>
                   {stats ? `NT$${Number(stats.pendingAmount).toLocaleString()}` : '—'}
                 </p>
                 <p style={{ fontSize: 11, color: S.faint, margin: '4px 0 0' }}>
-                  已結算 {stats ? `NT$${Number(stats.settledAmount).toLocaleString()}` : '—'}
+                  {stats?.nextSettleAt
+                    ? `下次結算 ${new Date(stats.nextSettleAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}`
+                    : '每月 1 號結算'}
                 </p>
               </div>
             </div>
@@ -174,6 +236,47 @@ export default function GroupPage() {
                 {ownedGroup.inviteCode}
               </p>
             </div>
+
+            {/* 月結明細 */}
+            {stats && stats.settlements.length > 0 && (
+              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 12px' }}>月結明細</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {stats.settlements.map(s => {
+                    const [yr, mo] = s.period.split('-')
+                    const label = `${yr}/${mo}`
+                    const settledDate = new Date(s.createdAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+                    const paidDate = s.paidAt ? new Date(s.paidAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' }) : null
+                    const statusText = s.status === 'PAID' ? `已撥款 · ${paidDate}` : `已結算 · ${settledDate} 入帳`
+                    const statusColor = s.status === 'PAID' ? '#15803d' : C.primary
+                    return (
+                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <p style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: 0 }}>{label}</p>
+                          <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0' }}>{statusText}</p>
+                        </div>
+                        <p style={{ fontSize: 16, fontWeight: 800, color: statusColor, margin: 0 }}>
+                          NT${Number(s.totalAmount).toLocaleString()}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+                {stats.pendingAmount > 0 && (
+                  <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px dashed ${S.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: S.muted, margin: 0 }}>本月累積中</p>
+                      <p style={{ fontSize: 10, color: S.faint, margin: '2px 0 0' }}>
+                        {stats.nextSettleAt && `待 ${new Date(stats.nextSettleAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} 結算`}
+                      </p>
+                    </div>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: S.muted, margin: 0 }}>
+                      +NT${Number(stats.pendingAmount).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {stats && stats.recentCommissions.length > 0 && (
               <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -196,6 +299,103 @@ export default function GroupPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* 提領分潤 */}
+            {balance && (
+              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 8px' }}>提領分潤</p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>可提領</p>
+                    <p style={{ fontSize: 22, fontWeight: 800, color: '#15803d', margin: '3px 0 0', letterSpacing: '-0.02em' }}>
+                      NT${balance.available.toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>已撥款累計</p>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: S.muted, margin: '3px 0 0' }}>
+                      NT${balance.paid.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                {balance.pendingAdjustment > 0 && (
+                  <div style={{ marginBottom: 12, padding: '10px 12px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 10 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: '#92400e', margin: 0 }}>
+                      ⚠ 退款扣抵 NT${balance.pendingAdjustment.toLocaleString()}
+                    </p>
+                    <p style={{ fontSize: 11, color: '#92400e', margin: '3px 0 0', lineHeight: 1.5 }}>
+                      有訂單退款後造成的待扣抵金額，會從之後新增的分潤自動扣回。
+                    </p>
+                  </div>
+                )}
+
+                {balance.available > 0 ? (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      type="number" min={1} max={balance.available}
+                      value={withdrawAmount}
+                      onChange={e => setWithdrawAmount(e.target.value)}
+                      placeholder={`最多 NT$${balance.available}`}
+                      style={{
+                        flex: 1, border: '1.5px solid #e2e8f0', borderRadius: 10,
+                        padding: '10px 14px', fontSize: 14, outline: 'none', background: S.white,
+                      }}
+                    />
+                    <button
+                      onClick={handleRequestWithdrawal}
+                      disabled={requesting || !withdrawAmount}
+                      style={{
+                        background: C.primary, color: C.onPrimary, border: 'none', borderRadius: 10,
+                        padding: '10px 18px', fontSize: 13, fontWeight: 700,
+                        cursor: (requesting || !withdrawAmount) ? 'not-allowed' : 'pointer',
+                        opacity: (requesting || !withdrawAmount) ? 0.5 : 1,
+                      }}
+                    >
+                      {requesting ? '送出中…' : '申請'}
+                    </button>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>
+                    {balance.settled === 0
+                      ? '尚無已結算分潤可提領'
+                      : balance.pending > 0
+                        ? `已申請待審 NT$${balance.pending.toLocaleString()}，請等待處理`
+                        : '本期無可提領餘額'}
+                  </p>
+                )}
+
+                {withdrawals.length > 0 && (
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${S.line}` }}>
+                    <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, margin: '0 0 8px' }}>提領記錄</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {withdrawals.slice(0, 5).map(w => {
+                        const meta: Record<string, { text: string; color: string }> = {
+                          PENDING:  { text: '審核中', color: '#a16207' },
+                          APPROVED: { text: '已核准·待撥款', color: '#1d4ed8' },
+                          PAID:     { text: '已撥款', color: '#15803d' },
+                          REJECTED: { text: '已拒絕', color: '#b91c1c' },
+                        }
+                        const m = meta[w.status] ?? { text: w.status, color: S.faint }
+                        return (
+                          <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <p style={{ fontSize: 13, color: S.ink, margin: 0, fontWeight: 600 }}>NT${w.amount.toLocaleString()}</p>
+                              <p style={{ fontSize: 10, color: S.faint, margin: '2px 0 0' }}>
+                                {new Date(w.appliedAt).toLocaleDateString('zh-TW')}
+                                {w.note && ` · ${w.note}`}
+                              </p>
+                            </div>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: m.color }}>{m.text}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -241,6 +441,24 @@ export default function GroupPage() {
         {membership.group.description && (
           <p style={{ fontSize: 14, color: S.muted, lineHeight: 1.6 }}>{membership.group.description}</p>
         )}
+
+        <div style={{ marginTop: 32, padding: 16, background: '#fef2f2', borderRadius: 14, border: '1px solid #fecaca' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#991b1b', margin: '0 0 6px' }}>退出社群</p>
+          <p style={{ fontSize: 12, color: '#7f1d1d', lineHeight: 1.6, margin: '0 0 12px' }}>
+            退出後，此社群發出的未使用優惠券將立即失效。
+          </p>
+          <button
+            onClick={handleLeave}
+            disabled={leaving}
+            style={{
+              width: '100%', padding: '10px 16px', borderRadius: 10, border: '1px solid #dc2626',
+              background: '#fff', color: '#dc2626', fontSize: 13, fontWeight: 600,
+              cursor: leaving ? 'not-allowed' : 'pointer', opacity: leaving ? 0.5 : 1,
+            }}
+          >
+            {leaving ? '退出中…' : '退出社群'}
+          </button>
+        </div>
       </div>
     )
   }

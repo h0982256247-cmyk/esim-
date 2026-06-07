@@ -3,7 +3,16 @@ import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
 import { retryEsimActivation } from '@/lib/services/esim'
 import { cancelCommission } from '@/lib/services/commission'
+import { restoreCouponsForRefundedOrder } from '@/lib/services/coupon'
+import { tapPayRefund } from '@/lib/services/tappay'
 import { OrderStatus } from '@prisma/client'
+
+// 退款可生效的狀態（已實際扣款者）
+const REFUNDABLE_STATUSES: OrderStatus[] = [
+  OrderStatus.PAID,
+  OrderStatus.COMPLETED,
+  OrderStatus.ESIM_PENDING,
+]
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -46,12 +55,71 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   if (action === 'refund') {
+    // 1. 撈訂單資料 + tappayRecTradeId（退款必須）
+    const order = await prisma.order.findUnique({
+      where: { id },
+      select: {
+        status: true,
+        totalPaid: true,
+        tapPayRecTradeId: true,
+        user: { select: { tenantAdminId: true } },
+        gift: { select: { id: true, claimedAt: true, cancelledAt: true, toUser: { select: { displayName: true } } } },
+      },
+    })
+    if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
+    if (order.status === OrderStatus.REFUNDED) {
+      return NextResponse.json({ error: '此訂單已退款，請勿重複操作' }, { status: 409 })
+    }
+    if (!REFUNDABLE_STATUSES.includes(order.status)) {
+      return NextResponse.json({ error: `訂單狀態為「${order.status}」，無法退款` }, { status: 409 })
+    }
+    if (!order.tapPayRecTradeId) {
+      return NextResponse.json({ error: '此訂單無 TapPay 交易紀錄，無法自動退款。請手動處理。' }, { status: 400 })
+    }
+    // 已被領取的轉贈擋退款（避免「轉贈後退款」詐騙）
+    if (order.gift?.claimedAt) {
+      const who = order.gift.toUser?.displayName ?? '對方'
+      return NextResponse.json(
+        { error: `此訂單已被「${who}」領取使用，無法自動退款。如需退款請聯絡客服。` },
+        { status: 409 },
+      )
+    }
+
+    // 2. 先打 TapPay refund — 失敗就 abort、DB 不動
+    const refund = await tapPayRefund(
+      order.tapPayRecTradeId,
+      order.totalPaid,
+      order.user.tenantAdminId ?? null,
+    )
+    if (!refund.ok) {
+      return NextResponse.json(
+        { error: `TapPay 退款失敗：${refund.message ?? '未知錯誤'}` },
+        { status: 502 },
+      )
+    }
+
+    // 3. TapPay 退款成功 → 更新 DB（訂單、分潤、優惠券、未領取的轉贈）
     await prisma.order.update({
       where: { id },
       data: { status: OrderStatus.REFUNDED },
     })
     await cancelCommission(id)
-    return NextResponse.json({ ok: true })
+    const couponResult = await restoreCouponsForRefundedOrder(id)
+
+    // 未領取的 gift 一併作廢（已領取的在上面已 abort，不會走到這）
+    if (order.gift?.id && !order.gift.cancelledAt && !order.gift.claimedAt) {
+      await prisma.orderGift.update({
+        where: { id: order.gift.id },
+        data: { cancelledAt: new Date(), cancelReason: 'order_refund' },
+      })
+    }
+
+    return NextResponse.json({
+      ok: true,
+      refundedAmount:  order.totalPaid,
+      restoredCoupons: couponResult.restored,
+      voidedCoupons:   couponResult.voided,
+    })
   }
 
   return NextResponse.json({ error: 'action 無效' }, { status: 400 })

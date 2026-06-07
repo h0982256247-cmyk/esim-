@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-type TenantStat = { id:string;name:string;brandName:string|null;revenue:number;orders:number;groups:number;users:number;pendingCommissions:number }
-type FinanceData = { month:string|null;global:{revenue:number;orders:number};tenants:TenantStat[] }
+type MarginFields = { cost:number; grossProfit:number; marginRate:number; eligibleRevenue:number; ordersIncluded:number; ordersExcluded:number }
+type TenantStat   = { id:string;name:string;brandName:string|null;revenue:number;orders:number;groups:number;users:number;pendingCommissions:number } & MarginFields
+type FinanceData  = { month:string|null;global:{revenue:number;orders:number} & MarginFields;tenants:TenantStat[] }
 
 export default function FinancePage() {
   const router = useRouter()
@@ -68,6 +69,49 @@ export default function FinancePage() {
             ))}
           </div>
 
+          {/* Margin summary */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="font-semibold text-gray-800 text-sm">毛利分析</h2>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  納入毛利之營收 NT$ {Number(data.global.eligibleRevenue).toLocaleString()}
+                  （{data.global.ordersIncluded.toLocaleString()} 筆訂單）
+                </p>
+              </div>
+              {data.global.ordersExcluded > 0 && (
+                <span className="text-xs text-amber-600"
+                  title="這些訂單建立於 unitCost 欄位上線之前，缺乏成本快照，因此不計入毛利計算。">
+                  ⚠ 不含 {data.global.ordersExcluded.toLocaleString()} 筆無成本資料
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-4 gap-4">
+              <div>
+                <p className="text-xs text-gray-400">成本</p>
+                <p className="text-xl font-bold text-gray-700 mt-1">NT$ {Number(data.global.cost).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">分潤支出（PEND+SETTLED）</p>
+                <p className="text-xl font-bold text-orange-600 mt-1">
+                  NT$ {Number(data.global.eligibleRevenue - data.global.cost - data.global.grossProfit).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">毛利</p>
+                <p className={`text-xl font-bold mt-1 ${data.global.grossProfit < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  NT$ {Number(data.global.grossProfit).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">毛利率</p>
+                <p className={`text-xl font-bold mt-1 ${data.global.marginRate < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {(data.global.marginRate * 100).toFixed(1)}%
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Per-tenant table */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -77,27 +121,32 @@ export default function FinancePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {['平台名稱','訂單數','營收','佔比','待結算分潤','社群','會員','操作'].map(h=>(
+                  {['平台名稱','訂單數','營收','成本','毛利','毛利率','待結算分潤','社群','會員','操作'].map(h=>(
                     <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {sorted.map(t=>{
-                  const pct=totalTenantRevenue>0?(Number(t.revenue)/totalTenantRevenue*100):0
                   return (
                     <tr key={t.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-5 py-3.5">
                         <p className="font-medium text-gray-800">{t.brandName??t.name}</p>
                         {t.brandName&&<p className="text-xs text-gray-400">{t.name}</p>}
                       </td>
-                      <td className="px-5 py-3.5 font-medium text-gray-700">{t.orders.toLocaleString()}</td>
+                      <td className="px-5 py-3.5 font-medium text-gray-700">
+                        {t.orders.toLocaleString()}
+                        {t.ordersExcluded>0&&(
+                          <span className="ml-1 text-[10px] text-amber-600" title={`其中 ${t.ordersExcluded} 筆未含成本快照，不計入毛利`}>⚠</span>
+                        )}
+                      </td>
                       <td className="px-5 py-3.5 font-semibold text-blue-600">NT$ {Number(t.revenue).toLocaleString()}</td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 bg-gray-100 rounded-full h-1.5"><div className="bg-blue-500 h-1.5 rounded-full" style={{width:`${Math.min(pct,100)}%`}}/></div>
-                          <span className="text-xs text-gray-500">{pct.toFixed(1)}%</span>
-                        </div>
+                      <td className="px-5 py-3.5 text-sm text-gray-600">NT$ {Number(t.cost).toLocaleString()}</td>
+                      <td className={`px-5 py-3.5 text-sm font-semibold ${t.grossProfit<0?'text-red-600':'text-emerald-600'}`}>
+                        NT$ {Number(t.grossProfit).toLocaleString()}
+                      </td>
+                      <td className={`px-5 py-3.5 text-sm font-medium ${t.marginRate<0?'text-red-600':'text-emerald-600'}`}>
+                        {(t.marginRate*100).toFixed(1)}%
                       </td>
                       <td className="px-5 py-3.5 text-sm text-orange-600 font-medium">NT$ {Number(t.pendingCommissions).toLocaleString()}</td>
                       <td className="px-5 py-3.5 text-sm text-gray-600">{t.groups}</td>
@@ -108,22 +157,31 @@ export default function FinancePage() {
                     </tr>
                   )
                 })}
-                {sorted.length===0&&<tr><td colSpan={8} className="text-center text-gray-400 py-12 text-sm">暫無資料</td></tr>}
+                {sorted.length===0&&<tr><td colSpan={10} className="text-center text-gray-400 py-12 text-sm">暫無資料</td></tr>}
               </tbody>
-              {sorted.length>0&&(
+              {sorted.length>0&&(() => {
+                const totCost     = sorted.reduce((s,t)=>s+t.cost,0)
+                const totProfit   = sorted.reduce((s,t)=>s+t.grossProfit,0)
+                const totEligible = sorted.reduce((s,t)=>s+t.eligibleRevenue,0)
+                // 精確毛利率：總毛利 / 納入毛利之營收
+                const totRate     = totEligible>0?(totProfit/totEligible*100):0
+                return (
                 <tfoot className="border-t border-gray-100 bg-gray-50">
                   <tr>
                     <td className="px-5 py-3 text-xs font-semibold text-gray-600">合計</td>
                     <td className="px-5 py-3 text-xs font-semibold text-gray-700">{sorted.reduce((s,t)=>s+t.orders,0).toLocaleString()}</td>
                     <td className="px-5 py-3 text-xs font-semibold text-blue-600">NT$ {totalTenantRevenue.toLocaleString()}</td>
-                    <td className="px-5 py-3"/>
+                    <td className="px-5 py-3 text-xs font-semibold text-gray-700">NT$ {totCost.toLocaleString()}</td>
+                    <td className={`px-5 py-3 text-xs font-semibold ${totProfit<0?'text-red-600':'text-emerald-600'}`}>NT$ {totProfit.toLocaleString()}</td>
+                    <td className={`px-5 py-3 text-xs font-semibold ${totRate<0?'text-red-600':'text-emerald-600'}`}>{totRate.toFixed(1)}%</td>
                     <td className="px-5 py-3 text-xs font-semibold text-orange-600">NT$ {sorted.reduce((s,t)=>s+Number(t.pendingCommissions),0).toLocaleString()}</td>
                     <td className="px-5 py-3 text-xs font-semibold text-gray-700">{sorted.reduce((s,t)=>s+t.groups,0)}</td>
                     <td className="px-5 py-3 text-xs font-semibold text-gray-700">{sorted.reduce((s,t)=>s+t.users,0)}</td>
                     <td className="px-5 py-3"/>
                   </tr>
                 </tfoot>
-              )}
+                )
+              })()}
             </table>
           </div>
         </>

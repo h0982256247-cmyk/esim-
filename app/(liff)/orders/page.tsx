@@ -11,7 +11,21 @@ type Order = {
   status: string
   totalPaid: number
   createdAt: string
+  userId: string
+  currentOwnerId: string
+  esimRcode: string | null
+  esimQrcode: string | null
+  redeemedAt: string | null
+  activatedAt: string | null
   orderItems: { productName: string; qty: number; unitPrice: number }[]
+  gift: {
+    claimedAt: string | null
+    cancelledAt: string | null
+    expiresAt: string
+    fromUser: { displayName: string } | null
+    toUser: { displayName: string } | null
+    recipientName: string | null
+  } | null
 }
 
 const S = {
@@ -36,6 +50,36 @@ function ChevronRight() {
       <polyline points="9 18 15 12 9 6" />
     </svg>
   )
+}
+
+// 主要 eSIM 階段 chip（顯示在最前）
+function esimChip(o: Order): { text: string; bg: string; color: string } | null {
+  if (o.activatedAt)                              return { text: '✅ 已激活',  bg: '#dcfce7', color: '#15803d' }
+  if (o.redeemedAt && o.esimQrcode)               return { text: '📱 可安裝',  bg: '#dbeafe', color: '#1d4ed8' }
+  if (o.redeemedAt && !o.esimQrcode)              return { text: '⏳ 兌換中',  bg: '#fef3c7', color: '#a16207' }
+  if (o.esimRcode && !o.redeemedAt && o.status === 'COMPLETED')
+                                                  return { text: '📦 未使用',  bg: '#e0e7ff', color: '#4338ca' }
+  if (o.status === 'PAID' || o.status === 'ESIM_PENDING')
+                                                  return { text: '⏳ 處理中',  bg: '#fef3c7', color: '#a16207' }
+  return null
+}
+
+// 轉贈 chip（次要，gift 狀態用）
+function giftChip(o: Order): { text: string; bg: string; color: string } | null {
+  const g = o.gift
+  if (!g) return null
+  if (g.cancelledAt) return null
+  if (o.currentOwnerId !== o.userId && g.claimedAt && g.fromUser) {
+    return { text: `📩 ${g.fromUser.displayName} 轉贈`, bg: '#ede9fe', color: '#6d28d9' }
+  }
+  if (g.claimedAt) {
+    const who = g.toUser?.displayName ?? g.recipientName ?? '對方'
+    return { text: `📤 已給 ${who}`, bg: '#f1f5f9', color: '#475569' }
+  }
+  if (new Date(g.expiresAt) > new Date()) {
+    return { text: '📤 等待領取', bg: '#ffedd5', color: '#c2410c' }
+  }
+  return null
 }
 
 export default function OrdersPage() {
@@ -69,7 +113,11 @@ export default function OrdersPage() {
           </div>
         )}
         {orders.map(o => {
-          const s = STATUS_META[o.status] ?? { text: o.status, bg: '#f1f5f9', color: '#475569' }
+          // 主 chip 優先用 eSIM 階段；非正常路徑 fallback 到 Order.status
+          const e = esimChip(o)
+          const sFallback = STATUS_META[o.status] ?? { text: o.status, bg: '#f1f5f9', color: '#475569' }
+          const mainChip = e ?? sFallback
+          const g = giftChip(o)
           return (
             <button
               key={o.id}
@@ -83,14 +131,25 @@ export default function OrdersPage() {
               }}
             >
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700,
-                    background: s.bg, color: s.color,
-                    padding: '3px 10px', borderRadius: 100,
-                  }}>
-                    {s.text}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700,
+                      background: mainChip.bg, color: mainChip.color,
+                      padding: '3px 10px', borderRadius: 100,
+                    }}>
+                      {mainChip.text}
+                    </span>
+                    {g && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 700,
+                        background: g.bg, color: g.color,
+                        padding: '3px 10px', borderRadius: 100,
+                      }}>
+                        {g.text}
+                      </span>
+                    )}
+                  </div>
                   <span style={{ fontSize: 12, color: S.faint }}>
                     {new Date(o.createdAt).toLocaleDateString('zh-TW')}
                   </span>

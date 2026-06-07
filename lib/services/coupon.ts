@@ -1,6 +1,101 @@
 import { prisma } from '@/lib/db/prisma'
 import type { CouponType, CouponLevel } from '@prisma/client'
 
+// ─── 訂單付款後發回購券 ───────────────────────────────────────────
+
+// 用戶付款成功後發給該用戶一張「下次購買可用」的回饋券。
+// 折扣 = 1 − 用戶所屬社群當下的 rebateRate。
+// rebateRate = 0 或未加入社群 → 不發券。
+// 用 sourceOrderId 連結回原訂單，退款時可精準作廢未使用的券。
+export async function issueRepurchaseCouponForOrder(orderId: string): Promise<void> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true, userId: true,
+      user: {
+        select: {
+          id: true, lineUid: true,
+          groupMembership: {
+            where: { leftAt: null },
+            select: {
+              group: { select: { id: true, status: true, rebateRate: true } },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!order) return
+  const member = order.user?.groupMembership
+  if (!member || member.group.status !== 'APPROVED') return
+
+  const rebateRate = Number(member.group.rebateRate)
+  if (rebateRate <= 0) return  // 無讓利 → 無券可發
+
+  const discount = Math.round((1 - rebateRate) * 100) / 100
+
+  // 冪等檢查：同一訂單已發過回購券就不再發
+  const existing = await prisma.coupon.findFirst({
+    where: { sourceOrderId: orderId, type: 'GROUP_REPURCHASE' },
+    select: { id: true },
+  })
+  if (existing) return
+
+  await prisma.coupon.create({
+    data: {
+      ownerId: order.user!.id,
+      ownerUid: order.user!.lineUid,
+      type: 'GROUP_REPURCHASE',
+      level: getCouponLevel(discount),
+      discount,
+      isOfficial: false,
+      sourceGroupId: member.group.id,
+      sourceOrderId: orderId,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 天
+    },
+  })
+}
+
+// ─── 訂單退款：歸還已使用的券 + 作廢由該訂單發出的回購券 ──────────
+
+export async function restoreCouponsForRefundedOrder(orderId: string): Promise<{ restored: number; voided: number }> {
+  const now = new Date()
+  const graceUntil = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)  // 14 天寬限
+
+  return prisma.$transaction(async tx => {
+    // 找出此訂單使用過的所有券
+    const consumed = await tx.coupon.findMany({
+      where: { usedOrderId: orderId },
+      select: { id: true, expiresAt: true },
+    })
+
+    // 歸還：清 usedAt / usedOrderId；過期的話延 14 天
+    for (const c of consumed) {
+      await tx.coupon.update({
+        where: { id: c.id },
+        data: {
+          usedAt: null,
+          usedOrderId: null,
+          expiresAt: c.expiresAt && c.expiresAt < now ? graceUntil : c.expiresAt,
+        },
+      })
+    }
+
+    // 作廢此訂單發出但未使用的回購券
+    const voided = await tx.coupon.updateMany({
+      where: {
+        sourceOrderId: orderId,
+        usedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      data: { expiresAt: now },
+    })
+
+    return { restored: consumed.length, voided: voided.count }
+  })
+}
+
 export interface IssueCouponInput {
   ownerId: string
   ownerUid: string

@@ -3,21 +3,29 @@ import { CommissionStatus } from '@prisma/client'
 
 // ─── 分潤計算（付款成功後呼叫）──────────────────────────────────
 
-// 計算基準：含稅實付金額
-// ownerRate = 0.30 - rebateRate（讓利比例由社群主設定）
-// commissionAmount = ROUND(paidAmount × ownerRate)
+// 平台對每筆訂單抽 30% 作為「平台分配池」，這 30% 拆成：
+//   user discount = rebateRate × subtotal    （由 GROUP_JOIN/REPURCHASE 券給用戶）
+//   owner commission = (0.30 − rebateRate) × subtotal
+//
+// 用 subtotal（折扣前金額）而非 totalPaid 計算，這樣 OFFICIAL 券折扣不會影響社群主分潤
+// （OFFICIAL 折扣由平台自行吸收）。
+//
+// 注意：rebateRate 取訂單發生時刻的 Group 設定值。社群主中途調整會影響後續訂單。
+const PLATFORM_SHARE = 0.30
+
 export async function calculateAndSaveCommission(orderId: string): Promise<void> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: {
       id: true,
+      subtotal: true,
       totalPaid: true,
       status: true,
       commission: { select: { id: true } },
       orderCoupons: {
         select: {
           coupon: {
-            select: { sourceGroupId: true, isOfficial: true, type: true },
+            select: { sourceGroupId: true, isOfficial: true, type: true, discount: true },
           },
         },
       },
@@ -41,13 +49,18 @@ export async function calculateAndSaveCommission(orderId: string): Promise<void>
 
   if (!group || group.status !== 'APPROVED') return
 
-  const rebateRate = Number(group.rebateRate)
-  const ownerRate = 0.30 - rebateRate
-  if (ownerRate <= 0) return // 讓利 >= 30% 時平台無分潤，不建立記錄
-
-  const commissionAmount = Math.round(order.totalPaid * ownerRate)
+  // 從 coupon snapshot 推導實際讓利比例（取消「群組中途調整影響歷史訂單」的問題）
+  //   coupon.discount = 1 - rebateRate_at_issue
+  //   effectiveRebateRate = 1 - coupon.discount
+  // 這樣 commission 與用戶實際拿到的折扣對齊，三方金流永遠一致。
+  const effectiveRebateRate = 1 - Number(commissionSource.discount)
+  const ownerRate = PLATFORM_SHARE - effectiveRebateRate
+  if (ownerRate <= 0) return                     // 讓利 ≥ 30% 時社群主沒分潤，不建立記錄
+  const commissionAmount = Math.round(order.subtotal * ownerRate)
+  if (commissionAmount <= 0) return
 
   // upsert 保證冪等（orderId unique constraint）
+  // rebateRate 欄位儲存「實際用於計算的值」（從 coupon snapshot 推導），而非 group.rebateRate 當下值
   await prisma.commission.upsert({
     where: { orderId },
     create: {
@@ -55,7 +68,7 @@ export async function calculateAndSaveCommission(orderId: string): Promise<void>
       groupId: group.id,
       groupOwnerId: group.ownerId,
       paidAmount: order.totalPaid,
-      rebateRate,
+      rebateRate: effectiveRebateRate,
       ownerRate,
       commissionAmount,
     },
@@ -149,11 +162,25 @@ export async function getPendingBalance(groupId: string): Promise<number> {
 
 // ─── 退款取消分潤 ─────────────────────────────────────────────────
 
-export async function cancelCommission(orderId: string): Promise<void> {
-  await prisma.commission.updateMany({
-    where: { orderId, status: CommissionStatus.PENDING },
-    data: { status: CommissionStatus.CANCELLED },
-  })
+// 同時處理 PENDING 與 SETTLED 兩種狀態：
+//   PENDING  → 直接 CANCELLED，無副作用（還沒撥款）
+//   SETTLED  → CANCELLED，社群主可提領餘額自然減少。若該 settled 金額已被
+//              撥款給社群主（PAID withdrawal），會讓 available 變負數，
+//              由 getWithdrawalBalance 在前端 clamp 顯示為 0，
+//              並透露給社群主「待扣抵 NT$X」。等到新 commission 進來抵掉
+//              即恢復正常（從下次提領自動扣回）。
+export async function cancelCommission(orderId: string): Promise<{ cancelledPending: number; cancelledSettled: number }> {
+  const [pending, settled] = await Promise.all([
+    prisma.commission.updateMany({
+      where: { orderId, status: CommissionStatus.PENDING },
+      data: { status: CommissionStatus.CANCELLED },
+    }),
+    prisma.commission.updateMany({
+      where: { orderId, status: CommissionStatus.SETTLED },
+      data: { status: CommissionStatus.CANCELLED },
+    }),
+  ])
+  return { cancelledPending: pending.count, cancelledSettled: settled.count }
 }
 
 // ─── Admin：所有待結算分潤 ────────────────────────────────────────

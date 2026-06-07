@@ -8,13 +8,25 @@ type Commission = {
   id: string; paidAmount: number; commissionAmount: number; status: string
   createdAt: string; group: { name: string }; order: { paidAt: string | null }
 }
+type GroupOption = { id: string; name: string; status: string }
+
+// Default to previous month (YYYY-MM)
+function defaultPeriod(): string {
+  const d = new Date()
+  d.setDate(1); d.setMonth(d.getMonth() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 export default function PlatformCommissionsPage() {
   const router = useRouter()
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [loading, setLoading] = useState(true)
-  const [settleForm, setSettleForm] = useState({groupId:'',period:''})
+  const [groups, setGroups] = useState<GroupOption[]>([])
+  const [settleForm, setSettleForm] = useState({groupId:'',period:defaultPeriod()})
   const [settling, setSettling] = useState(false)
   const [settleMsg, setSettleMsg] = useState<{ok:boolean;text:string}|null>(null)
+  const [batchPeriod, setBatchPeriod] = useState(defaultPeriod())
+  const [batching, setBatching] = useState(false)
   const [currentRole, setCurrentRole] = useState<string|null>(null)
   const [platformAdmins, setPlatformAdmins] = useState<{id:string;name:string;brandName:string|null}[]>([])
   const [filterTenantId, setFilterTenantId] = useState<string>('')
@@ -28,12 +40,46 @@ export default function PlatformCommissionsPage() {
     fetch(`/api/admin/commissions${filterTenantId?`?tenantAdminId=${filterTenantId}`:''}`)
       .then(r=>r.status===401?(router.replace('/platform/login'),null):r.json())
       .then(d=>{if(d)setCommissions(d.commissions)}).finally(()=>setLoading(false))
+    // 載入該 tenant 內的 APPROVED 社群供下拉選單
+    fetch(`/api/admin/groups?status=APPROVED${filterTenantId?`&tenantAdminId=${filterTenantId}`:''}`)
+      .then(r=>r.json())
+      .then(d=>{if(d?.groups) setGroups(d.groups)})
   }, [filterTenantId,router])
 
   const handleSettle = async (e: React.FormEvent) => {
-    e.preventDefault(); setSettling(true); setSettleMsg(null)
+    e.preventDefault()
+    if (!settleForm.groupId) { setSettleMsg({ok:false,text:'請選擇社群'}); return }
+    setSettling(true); setSettleMsg(null)
     const r = await fetch('/api/admin/commissions/settle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(settleForm)}).then(x=>x.json())
-    setSettling(false); setSettleMsg(r.ok?{ok:true,text:'月結執行完成'}:{ok:false,text:r.error??'執行失敗'})
+    setSettling(false)
+    if (r.ok) {
+      setSettleMsg({ok:true,text:'月結執行完成'})
+      fetch(`/api/admin/commissions${filterTenantId?`?tenantAdminId=${filterTenantId}`:''}`).then(r=>r.json()).then(d=>{if(d)setCommissions(d.commissions)})
+    } else {
+      setSettleMsg({ok:false,text:r.error??'執行失敗'})
+    }
+  }
+
+  const handleSettleAll = async () => {
+    if (!batchPeriod) return
+    if (!window.confirm(`對所有 ${groups.length} 個 APPROVED 社群執行 ${batchPeriod} 月結？\n沒有 PENDING 分潤的社群會自動跳過。`)) return
+    setBatching(true); setSettleMsg(null)
+    const r = await fetch('/api/admin/commissions/settle-all',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({period:batchPeriod}),
+    }).then(x=>x.json())
+    setBatching(false)
+    if (r.error) {
+      setSettleMsg({ok:false,text:r.error})
+      return
+    }
+    const errLines = (r.errors as {groupName:string;error:string}[]).map(e=>`${e.groupName}: ${e.error}`).join('\n')
+    setSettleMsg({
+      ok: r.errors.length === 0,
+      text: `已結算 ${r.settled} / ${r.totalGroups} 個社群${r.errors.length>0?`，失敗 ${r.errors.length} 個：\n${errLines}`:''}`,
+    })
+    fetch(`/api/admin/commissions${filterTenantId?`?tenantAdminId=${filterTenantId}`:''}`).then(r=>r.json()).then(d=>{if(d)setCommissions(d.commissions)})
   }
   const totalPending = commissions.reduce((s,c)=>s+c.commissionAmount,0)
   return (
@@ -64,32 +110,60 @@ export default function PlatformCommissionsPage() {
       </div>
 
       {/* Settle form */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          執行月結
-        </h2>
-        <form onSubmit={handleSettle} className="flex flex-wrap gap-3 items-end">
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">社群 ID</label>
-            <input value={settleForm.groupId} onChange={e=>setSettleForm(p=>({...p,groupId:e.target.value}))}
-              placeholder="輸入 Group ID" required
-              className="border border-gray-200 rounded-xl px-3 py-2 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-white" />
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-5">
+        <div>
+          <h2 className="font-semibold text-gray-800 mb-1 flex items-center gap-2">
+            <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            執行月結
+          </h2>
+          <p className="text-xs text-gray-400">結算後該期間的 PENDING 分潤會變為 SETTLED，社群主就能申請提領</p>
+        </div>
+
+        {/* 批次月結 */}
+        <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+          <p className="text-sm font-semibold text-blue-900 mb-2">批次月結（推薦）</p>
+          <p className="text-xs text-blue-700 mb-3">對所有 APPROVED 社群執行月結；無 PENDING 分潤的社群會自動跳過</p>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <label className="text-xs text-gray-600 block mb-1">結算期間</label>
+              <input type="month" value={batchPeriod} onChange={e=>setBatchPeriod(e.target.value)} required
+                className="border border-blue-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white" />
+            </div>
+            <button onClick={handleSettleAll} disabled={batching || groups.length===0}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-medium disabled:opacity-50 transition">
+              {batching?'執行中…':`結算所有社群（${groups.length} 個）`}
+            </button>
           </div>
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">結算期間</label>
-            <input type="month" value={settleForm.period} onChange={e=>setSettleForm(p=>({...p,period:e.target.value}))} required
-              className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-white" />
+        </div>
+
+        {/* 單一社群月結 */}
+        <div>
+          <p className="text-sm font-semibold text-gray-700 mb-2">單一社群月結</p>
+          <form onSubmit={handleSettle} className="flex flex-wrap gap-3 items-end">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">社群</label>
+              <select value={settleForm.groupId} onChange={e=>setSettleForm(p=>({...p,groupId:e.target.value}))} required
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm w-60 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-white">
+                <option value="">請選擇社群</option>
+                {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">結算期間</label>
+              <input type="month" value={settleForm.period} onChange={e=>setSettleForm(p=>({...p,period:e.target.value}))} required
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-white" />
+            </div>
+            <button type="submit" disabled={settling} className="bg-gray-700 hover:bg-gray-800 text-white px-5 py-2 rounded-xl text-sm font-medium disabled:opacity-50 transition">
+              {settling?'執行中…':'執行月結'}
+            </button>
+          </form>
+        </div>
+
+        {settleMsg && (
+          <div className={`text-sm whitespace-pre-line p-3 rounded-lg ${settleMsg.ok?'text-green-700 bg-green-50':'text-red-600 bg-red-50'}`}>
+            {settleMsg.ok?'✅':'❌'} {settleMsg.text}
           </div>
-          <button type="submit" disabled={settling} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-medium disabled:opacity-50 transition">
-            {settling?'執行中…':'執行月結'}
-          </button>
-          {settleMsg&&(
-            <span className={`text-sm font-medium ${settleMsg.ok?'text-green-600':'text-red-500'}`}>
-              {settleMsg.ok?'✅':'❌'} {settleMsg.text}
-            </span>
-          )}
-        </form>
+        )}
       </div>
 
       {/* Table */}

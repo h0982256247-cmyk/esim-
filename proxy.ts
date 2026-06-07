@@ -3,7 +3,20 @@ import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 import { verifyPlatformSession, PLATFORM_COOKIE } from '@/lib/auth/platform'
 
 // 完全公開（無需任何驗證）
-const PUBLIC_API = ['/api/auth/line', '/api/tenant/', '/api/platform/auth/']
+//   /api/auth/line        — LINE 登入用
+//   /api/tenant/          — Tenant 公開設定（前台讀取品牌、模板等）
+//   /api/platform/auth/   — Platform admin 登入
+//   /api/webhooks/        — 第三方 (WM 等) push 過來的 callback，由 route 內部驗證 payload
+//   /api/cron/            — Vercel Cron，由 route 內部驗證 CRON_SECRET
+//   /api/gifts/           — 轉贈連結預覽 (GET 不需登入)；claim 子路徑由 route 內部驗 session
+const PUBLIC_API = [
+  '/api/auth/line',
+  '/api/tenant/',
+  '/api/platform/auth/',
+  '/api/webhooks/',
+  '/api/cron/',
+  '/api/gifts/',
+]
 
 // 平台後台路由前綴（使用 PLATFORM_COOKIE 驗證）
 // /api/platform/* 為新式命名；/api/admin/* 為舊式命名，路由內部同樣使用 requirePlatformAuth

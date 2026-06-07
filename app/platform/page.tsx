@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-type MonthlyRevenue = { month: string; revenue: number }
+type MonthlyRevenue = { month: string; revenue: number; grossProfit: number }
 
 type RecentOrder = {
   id: string
@@ -25,6 +25,14 @@ type Stats = {
   esimPendingOrders: number
   monthlyRevenue: MonthlyRevenue[]
   recentOrders: RecentOrder[]
+  // 毛利相關
+  eligibleRevenue: number
+  totalCost: number
+  commissionPaid: number
+  grossProfit: number
+  marginRate: number
+  ordersIncluded: number
+  ordersExcluded: number
 }
 
 const ORDER_STATUS: Record<string, { label: string; cls: string }> = {
@@ -37,21 +45,27 @@ const ORDER_STATUS: Record<string, { label: string; cls: string }> = {
 }
 
 function MiniChart({ data }: { data: MonthlyRevenue[] }) {
-  const max = Math.max(...data.map(d => d.revenue), 1)
+  // 每個月並排顯示：藍 = 營收, 綠 = 毛利
+  const max = Math.max(...data.map(d => Math.max(d.revenue, d.grossProfit)), 1)
   return (
     <div className="flex items-end gap-1.5 h-16">
       {data.map((d, i) => {
-        const pct = max === 0 ? 0 : (d.revenue / max) * 100
+        const revPct    = max === 0 ? 0 : (d.revenue / max) * 100
+        const profitPct = max === 0 ? 0 : (Math.max(d.grossProfit, 0) / max) * 100
         const isLast = i === data.length - 1
         return (
-          <div key={d.month} className="flex-1 flex flex-col items-center gap-1 group relative">
+          <div key={d.month} className="flex-1 flex items-end gap-0.5 group relative">
             <div
-              className={`w-full rounded-t-sm transition-all ${isLast ? 'bg-blue-600' : 'bg-blue-200'}`}
-              style={{ height: `${Math.max(pct, 4)}%`, minHeight: 3 }}
+              className={`flex-1 rounded-t-sm transition-all ${isLast ? 'bg-blue-600' : 'bg-blue-200'}`}
+              style={{ height: `${Math.max(revPct, 4)}%`, minHeight: 3 }}
+            />
+            <div
+              className={`flex-1 rounded-t-sm transition-all ${isLast ? 'bg-emerald-600' : 'bg-emerald-200'}`}
+              style={{ height: `${Math.max(profitPct, 2)}%`, minHeight: 2 }}
             />
             {/* tooltip */}
             <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-10">
-              {d.month} NT${d.revenue.toLocaleString()}
+              {d.month}　營收 NT${d.revenue.toLocaleString()}　毛利 NT${d.grossProfit.toLocaleString()}
             </div>
           </div>
         )
@@ -141,14 +155,49 @@ export default function PlatformDashboard() {
         </div>
       </div>
 
+      {/* Top KPI row: 毛利為核心 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+          <p className="text-xs text-gray-400">累計營收</p>
+          <p className="text-2xl font-bold text-blue-600 mt-1">NT${stats.totalRevenue.toLocaleString()}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">用戶實付總額</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+          <p className="text-xs text-gray-400">累計成本</p>
+          <p className="text-2xl font-bold text-gray-700 mt-1">NT${stats.totalCost.toLocaleString()}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">供應商成本</p>
+        </div>
+        <div className="bg-white rounded-2xl border-2 border-emerald-100 p-4 shadow-sm">
+          <p className="text-xs text-emerald-700 font-medium">累計毛利</p>
+          <p className={`text-2xl font-bold mt-1 ${stats.grossProfit < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+            NT${stats.grossProfit.toLocaleString()}
+          </p>
+          <p className="text-[10px] text-gray-400 mt-0.5">營收 − 成本 − 已產生分潤</p>
+        </div>
+        <div className="bg-white rounded-2xl border-2 border-emerald-100 p-4 shadow-sm">
+          <p className="text-xs text-emerald-700 font-medium">毛利率</p>
+          <p className={`text-2xl font-bold mt-1 ${stats.marginRate < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+            {(stats.marginRate * 100).toFixed(1)}%
+          </p>
+          <p className="text-[10px] text-gray-400 mt-0.5">
+            納入 {stats.ordersIncluded} 筆
+            {stats.ordersExcluded > 0 && (
+              <span className="text-amber-600 ml-1" title="這些訂單建立於 unitCost 上線前">
+                · 不含 {stats.ordersExcluded} 筆
+              </span>
+            )}
+          </p>
+        </div>
+      </div>
+
       {/* Revenue + Stats Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Revenue Card */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Revenue Overview</p>
-              <p className="text-sm font-medium text-gray-600 mt-0.5">累計營收</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Revenue & Profit</p>
+              <p className="text-sm font-medium text-gray-600 mt-0.5">營收與毛利趨勢</p>
               <p className="text-3xl font-bold text-blue-600 mt-1">
                 NT${stats.totalRevenue.toLocaleString()}
               </p>
@@ -163,10 +212,9 @@ export default function PlatformDashboard() {
                 <span className="text-xs text-gray-400">vs 上個月</span>
               </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
+            <div className="flex flex-col items-end gap-1.5 text-[10px]">
+              <span className="flex items-center gap-1 text-gray-500"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block"/>營收</span>
+              <span className="flex items-center gap-1 text-gray-500"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block"/>毛利</span>
             </div>
           </div>
           {/* Bar chart */}
@@ -200,6 +248,7 @@ export default function PlatformDashboard() {
             icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/></svg>}
             label="待結算分潤"
             value={`NT$${stats.pendingCommissions.toLocaleString()}`}
+            sub="尚未付給社群主"
           />
         </div>
       </div>

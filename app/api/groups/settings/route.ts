@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/prisma'
 import { setRebateRate } from '@/lib/services/group'
+import { encrypt } from '@/lib/utils/crypto'
 
 // PATCH /api/groups/settings — 社群主更新讓利比例 / 基本設定
 export async function PATCH(req: NextRequest) {
@@ -32,10 +33,11 @@ export async function PATCH(req: NextRequest) {
     updates.rebateRate = body.rebateRate
   }
 
+  // 銀行欄位加密儲存（bankName 為公開資訊不加密）
   if (body.bankName !== undefined) updates.bankName = body.bankName
-  if (body.bankAccount !== undefined) updates.bankAccount = body.bankAccount
-  if (body.bankBranch !== undefined) updates.bankBranch = body.bankBranch
-  if (body.bankHolderName !== undefined) updates.bankHolderName = body.bankHolderName
+  if (body.bankAccount !== undefined)    updates.bankAccount    = body.bankAccount    ? encrypt(body.bankAccount)    : null
+  if (body.bankBranch !== undefined)     updates.bankBranch     = body.bankBranch     ? encrypt(body.bankBranch)     : null
+  if (body.bankHolderName !== undefined) updates.bankHolderName = body.bankHolderName ? encrypt(body.bankHolderName) : null
   if (body.description !== undefined) updates.description = body.description
 
   if (Object.keys(updates).length === 0) {

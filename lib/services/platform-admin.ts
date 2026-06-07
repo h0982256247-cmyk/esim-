@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db/prisma'
 import { Prisma, PlatformAdminRole } from '@prisma/client'
+import { aggregateMargin } from './finance-metrics'
 
 // ─── 登入驗證 ─────────────────────────────────────────────────────
 
@@ -114,6 +115,11 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     ? { user: { tenantAdminId } }
     : {}
 
+  const paidOrderWhere: Prisma.OrderWhereInput = {
+    status: { in: ['PAID', 'COMPLETED'] },
+    ...orderTenantWhere,
+  }
+
   const [
     totalUsers,
     totalOrders,
@@ -121,11 +127,12 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     pendingGroups,
     pendingCommissions,
     esimPendingOrders,
+    margin,
   ] = await Promise.all([
     prisma.user.count({ where: userTenantWhere }),
     prisma.order.count({ where: orderTenantWhere }),
     prisma.order.aggregate({
-      where: { status: { in: ['PAID', 'COMPLETED'] }, ...orderTenantWhere },
+      where: paidOrderWhere,
       _sum: { totalPaid: true },
     }),
     prisma.group.count({ where: pendingGroupsWhere }),
@@ -137,25 +144,30 @@ export async function getDashboardStats(tenantAdminId: string | null) {
       _sum: { commissionAmount: true },
     }),
     prisma.order.count({ where: { status: 'ESIM_PENDING', ...orderTenantWhere } }),
+    aggregateMargin(paidOrderWhere),
   ])
 
-  // Recent 6 months revenue (for chart)
+  // Recent 6 months: revenue + grossProfit
   const now = new Date()
-  const monthlyRevenue: { month: string; revenue: number }[] = []
+  const monthlyRevenue: { month: string; revenue: number; grossProfit: number }[] = []
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const nextD = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
-    const agg = await prisma.order.aggregate({
-      where: {
-        status: { in: ['PAID', 'COMPLETED'] },
-        createdAt: { gte: d, lt: nextD },
-        ...orderTenantWhere,
-      },
-      _sum: { totalPaid: true },
-    })
+    const monthOrderWhere: Prisma.OrderWhereInput = {
+      ...paidOrderWhere,
+      createdAt: { gte: d, lt: nextD },
+    }
+    const [agg, m] = await Promise.all([
+      prisma.order.aggregate({
+        where: monthOrderWhere,
+        _sum: { totalPaid: true },
+      }),
+      aggregateMargin(monthOrderWhere),
+    ])
     monthlyRevenue.push({
       month: `${d.getMonth() + 1}月`,
       revenue: agg._sum.totalPaid ?? 0,
+      grossProfit: m.grossProfit,
     })
   }
 
@@ -186,6 +198,14 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     pendingCommissions: pendingCommissions._sum.commissionAmount ?? 0,
     esimPendingOrders,
     monthlyRevenue,
+    // 平台實際毛利
+    eligibleRevenue: margin.eligibleRevenue,
+    totalCost:       margin.cost,
+    commissionPaid:  margin.commission,
+    grossProfit:     margin.grossProfit,
+    marginRate:      margin.marginRate,
+    ordersIncluded:  margin.ordersIncluded,
+    ordersExcluded:  margin.ordersExcluded,
     recentOrders: recentOrders.map(o => ({
       id: o.id,
       orderNo: o.wmOrderSn ?? o.id.slice(-8).toUpperCase(),

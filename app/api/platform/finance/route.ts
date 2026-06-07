@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
 import { PlatformAdminRole, OrderStatus } from '@prisma/client'
+import { aggregateMargin } from '@/lib/services/finance-metrics'
 
 export async function GET(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
@@ -34,9 +35,10 @@ export async function GET(req: NextRequest) {
     ...(dateFrom && dateTo ? { paidAt: { gte: dateFrom, lt: dateTo } } : {}),
   }
 
-  const [globalRevenue, globalOrders] = await Promise.all([
+  const [globalRevenue, globalOrders, globalMargin] = await Promise.all([
     prisma.order.aggregate({ where: globalOrderWhere, _sum: { totalPaid: true } }),
     prisma.order.count({ where: globalOrderWhere }),
+    aggregateMargin(globalOrderWhere),
   ])
 
   // Per-tenant stats
@@ -53,7 +55,7 @@ export async function GET(req: NextRequest) {
         },
       }
 
-      const [revenue, orders, groups, users, pendingCommissions] = await Promise.all([
+      const [revenue, orders, groups, users, pendingCommissions, margin] = await Promise.all([
         prisma.order.aggregate({ where: tenantOrderWhere, _sum: { totalPaid: true } }),
         prisma.order.count({ where: tenantOrderWhere }),
         prisma.group.count({ where: { tenantAdminId: admin.id, status: 'APPROVED' } }),
@@ -69,6 +71,7 @@ export async function GET(req: NextRequest) {
           where: { status: 'PENDING', group: { tenantAdminId: admin.id } },
           _sum: { commissionAmount: true },
         }),
+        aggregateMargin(tenantOrderWhere),
       ])
 
       return {
@@ -80,6 +83,12 @@ export async function GET(req: NextRequest) {
         groups,
         users,
         pendingCommissions: pendingCommissions._sum.commissionAmount ?? 0,
+        cost:            margin.cost,
+        grossProfit:     margin.grossProfit,
+        marginRate:      margin.marginRate,
+        eligibleRevenue: margin.eligibleRevenue,
+        ordersIncluded:  margin.ordersIncluded,
+        ordersExcluded:  margin.ordersExcluded,
       }
     })
   )
@@ -89,6 +98,12 @@ export async function GET(req: NextRequest) {
     global: {
       revenue: globalRevenue._sum.totalPaid ?? 0,
       orders: globalOrders,
+      cost:            globalMargin.cost,
+      grossProfit:     globalMargin.grossProfit,
+      marginRate:      globalMargin.marginRate,
+      eligibleRevenue: globalMargin.eligibleRevenue,
+      ordersIncluded:  globalMargin.ordersIncluded,
+      ordersExcluded:  globalMargin.ordersExcluded,
     },
     tenants: tenantStats,
   })

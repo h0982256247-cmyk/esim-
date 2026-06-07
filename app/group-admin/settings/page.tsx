@@ -69,9 +69,15 @@ export default function GroupAdminSettingsPage() {
       {/* 讓利比例 */}
       <div className="bg-white rounded-xl border p-4 shadow-sm">
         <h2 className="font-semibold mb-3">讓利比例設定</h2>
-        <p className="text-xs text-gray-500 mb-3">
-          讓利比例越高，成員優惠越大，但你的分潤收益越少。<br />
-          平台固定分 30%，你的分潤 = 30% − 讓利比例。
+        <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+          平台對每筆訂單收取 30% 分配池，其中：
+        </p>
+        <ul className="text-xs text-gray-500 mb-3 list-disc pl-5 space-y-1">
+          <li><strong>讓利比例 → 會員</strong>：發給會員的入群券與回購券折扣</li>
+          <li><strong>30% − 讓利比例 → 您</strong>：每筆訂單您的分潤比例</li>
+        </ul>
+        <p className="text-xs text-gray-400 mb-3">
+          讓利越多 → 會員越便宜、您分潤越少。設 0% 時不會發券（沒折扣可給）。
         </p>
         <div className="flex items-center gap-3">
           <input
@@ -84,7 +90,31 @@ export default function GroupAdminSettingsPage() {
           />
           <span className="text-xl font-bold text-blue-600 w-16 text-right">{rebateRate}%</span>
         </div>
-        <p className="text-xs text-gray-400 mt-2">你的分潤比例：{30 - parseInt(rebateRate)}%</p>
+        {(() => {
+          const r = parseInt(rebateRate) || 0
+          const memberDiscountPct = 100 - r  // 顯示成「X 折」就是 (100-r)/10 折
+          // 範例：商品 1000 元
+          const samplePaid = Math.round(1000 * memberDiscountPct / 100)
+          const sampleCommission = Math.round(1000 * (0.30 - r / 100))
+          return (
+            <div className="text-xs text-gray-500 mt-3 bg-gray-50 rounded-lg p-3 leading-relaxed">
+              {r === 0 ? (
+                <p className="font-semibold text-amber-700">當前 0%：不會發優惠券，每筆訂單您拿 30%。</p>
+              ) : (
+                <>
+                  <p className="font-semibold text-gray-700 mb-1">
+                    會員入群券 / 回購券：{memberDiscountPct >= 10 ? `${memberDiscountPct/10}` : `0.${memberDiscountPct}`} 折
+                  </p>
+                  <p>
+                    範例：原價 NT$1,000 商品<br />
+                    → 會員實付 <strong>NT${samplePaid.toLocaleString()}</strong>　·　您分潤 <strong>NT${sampleCommission.toLocaleString()}</strong>
+                  </p>
+                </>
+              )}
+              <p className="text-gray-400 mt-1 text-[11px]">※ 調整後僅影響新發出的券，既有未使用券不變</p>
+            </div>
+          )
+        })()}
       </div>
 
       {/* 社群簡介 */}

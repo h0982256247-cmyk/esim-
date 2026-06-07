@@ -20,7 +20,36 @@ type Product = {
   costPrice: number
   sortOrder: number
   status: string
-  supplierProduct: { wmProductId: string; productName: string } | null
+  supplierProduct: { wmProductId: string; productName: string; status: string; lastSyncAt: string | null } | null
+}
+
+const THROTTLE_MS = 5 * 60 * 1000  // 5 分鐘內再次驗證會跳確認
+
+type IssueBase = { id: string; skuId: string; name: string; countryFlag: string }
+type PriceMismatchIssue = IssueBase & { currentCost: number; supplierCost: number }
+type ValidateResult = {
+  total: number
+  clean: number
+  lastSyncAt: string | null
+  issues: {
+    notFound:      IssueBase[]
+    inactive:      IssueBase[]
+    priceMismatch: PriceMismatchIssue[]
+  }
+}
+
+type ApplyResult = { disabled: number; repriced: number; syncedAt: string }
+
+function formatRelativeTime(iso: string | null): string {
+  if (!iso) return '從未同步'
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1)   return '剛剛'
+  if (mins < 60)  return `${mins} 分鐘前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours} 小時前`
+  const days = Math.floor(hours / 24)
+  return `${days} 天前`
 }
 
 type EditForm = {
@@ -54,8 +83,17 @@ export default function PlatformProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const [uploadMsg, setUploadMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [uploadMsg, setUploadMsg] = useState<{ ok: boolean; warn?: boolean; text: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Validate modal state
+  const [validating, setValidating] = useState(false)
+  const [validateResult, setValidateResult] = useState<ValidateResult | null>(null)
+  const [applying, setApplying] = useState(false)
+  const [applyResult, setApplyResult] = useState<ApplyResult | null>(null)
+
+  // 驗證後標記受影響的 product id，給表格 row 顯示需處理徽章
+  const [affectedIds, setAffectedIds] = useState<Map<string, 'notfound' | 'mismatch'>>(new Map())
 
   // Edit modal state
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
@@ -93,13 +131,73 @@ export default function PlatformProductsPage() {
     const r = await fetch('/api/admin/products/import', { method: 'POST', body: formData }).then(x => x.json())
     setUploading(false)
     if (r.message) {
-      setUploadMsg({ ok: true, text: r.message })
+      const warnText = r.warnings?.length ? `（供應商驗證提示：${r.warnings.join('、')}）` : ''
+      setUploadMsg({ ok: true, warn: !!warnText, text: `${r.message}${warnText}` })
       load()
     } else {
       const detail = r.details?.join('、') ?? ''
       setUploadMsg({ ok: false, text: `${r.error}${detail ? `：${detail}` : ''}` })
     }
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  // 從目前商品列表取最近一次同步時間，決定是否需要節流提示
+  const latestSyncMs = (): number | null => {
+    let max: number | null = null
+    for (const p of products) {
+      const t = p.supplierProduct?.lastSyncAt
+      if (!t) continue
+      const ms = new Date(t).getTime()
+      if (max == null || ms > max) max = ms
+    }
+    return max
+  }
+
+  const handleValidate = async () => {
+    // 節流：5 分鐘內已查過就跳確認
+    const lastMs = latestSyncMs()
+    if (lastMs != null && Date.now() - lastMs < THROTTLE_MS) {
+      const rel = formatRelativeTime(new Date(lastMs).toISOString())
+      const ok = window.confirm(
+        `上次同步在 ${rel}。\n世界移動建議每週查詢一次，過於頻繁可能會被鎖 IP。\n\n仍要再次驗證嗎？`,
+      )
+      if (!ok) return
+    }
+
+    setValidating(true)
+    setValidateResult(null)
+    setApplyResult(null)
+    const r = await fetch('/api/admin/products/validate').then(x => x.json())
+    setValidating(false)
+    setValidateResult(r)
+
+    // 紀錄受影響的 product id，給表格顯示徽章
+    if (r?.issues) {
+      const next = new Map<string, 'notfound' | 'mismatch'>()
+      for (const it of r.issues.notFound      as IssueBase[]) next.set(it.id, 'notfound')
+      for (const it of r.issues.priceMismatch as PriceMismatchIssue[]) next.set(it.id, 'mismatch')
+      setAffectedIds(next)
+    }
+  }
+
+  const handleApply = async () => {
+    if (!validateResult) return
+    const disable = validateResult.issues.notFound.length
+    const reprice = validateResult.issues.priceMismatch.length
+    const confirmMsg = `將執行：\n• 自動下架 ${disable} 筆查無方案\n• 更新 ${reprice} 筆成本價（不動售價）\n\n確定要套用嗎？`
+    if (!window.confirm(confirmMsg)) return
+
+    setApplying(true)
+    const r = await fetch('/api/admin/products/validate/apply', { method: 'POST' }).then(x => x.json())
+    setApplying(false)
+    if (r.error) {
+      window.alert(`套用失敗：${r.error}`)
+      return
+    }
+    setApplyResult(r)
+    setValidateResult(null)
+    setAffectedIds(new Map())   // 套用後清除徽章
+    load()
   }
 
   const openEdit = (p: Product) => {
@@ -166,12 +264,25 @@ export default function PlatformProductsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">商品管理</h1>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap justify-end">
           {uploadMsg && (
-            <span className={`text-sm px-3 py-1 rounded-lg ${uploadMsg.ok ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+            <span className={`text-sm px-3 py-1 rounded-lg max-w-sm truncate ${
+              uploadMsg.ok
+                ? uploadMsg.warn
+                  ? 'text-amber-700 bg-amber-50'
+                  : 'text-green-600 bg-green-50'
+                : 'text-red-600 bg-red-50'
+            }`} title={uploadMsg.text}>
               {uploadMsg.text}
             </span>
           )}
+          <button
+            onClick={handleValidate}
+            disabled={validating}
+            className={`bg-white border px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition flex items-center gap-1.5 ${validating ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <span>🔍</span> {validating ? '驗證中…' : '驗證方案'}
+          </button>
           <label className={`bg-white border px-4 py-2 rounded-lg text-sm cursor-pointer hover:bg-gray-50 transition flex items-center gap-1.5 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <span>📂</span>
             {uploading ? '匯入中…' : 'CSV 匯入'}
@@ -204,10 +315,19 @@ export default function PlatformProductsPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {products.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50">
+              {products.map(p => {
+                const flag = affectedIds.get(p.id)
+                const lossy = p.sellPrice <= p.costPrice
+                return (
+                <tr key={p.id} className={`hover:bg-gray-50 ${flag ? 'bg-amber-50/30' : ''}`}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
+                      {flag === 'notfound' && (
+                        <span title="供應商查無此方案，建議下架" className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                      )}
+                      {flag === 'mismatch' && (
+                        <span title="成本價與供應商不符" className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                      )}
                       <span>{p.countryFlag ?? ''}</span>
                       <div>
                         <p className="font-medium">{p.countryNameZh}</p>
@@ -217,7 +337,12 @@ export default function PlatformProductsPage() {
                   </td>
                   <td className="px-4 py-3">{p.displayDays} 天</td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{p.dataCapacity ?? '—'}</td>
-                  <td className="px-4 py-3 font-semibold">NT${p.sellPrice}</td>
+                  <td className={`px-4 py-3 font-semibold ${lossy ? 'text-red-600' : ''}`}>
+                    NT${p.sellPrice}
+                    {lossy && (
+                      <span className="ml-1 text-xs font-normal" title="售價未高於成本，將虧損">⚠</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-400">NT${p.costPrice}</td>
                   <td className="px-4 py-3 text-xs text-gray-400 font-mono">{p.supplierProduct?.wmProductId ?? '—'}</td>
                   <td className="px-4 py-3">
@@ -246,12 +371,141 @@ export default function PlatformProductsPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
           {products.length === 0 && (
             <p className="text-center text-gray-400 py-8 text-sm">尚無商品，請透過 CSV 匯入</p>
           )}
+        </div>
+      )}
+
+      {/* Validate Result Modal */}
+      {validateResult && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+              <div>
+                <h2 className="font-semibold text-lg">供應商方案驗證結果</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  共 {validateResult.total} 筆方案 · 正常 {validateResult.clean} 筆
+                  {(validateResult.issues.notFound.length + validateResult.issues.inactive.length + validateResult.issues.priceMismatch.length) > 0 && (
+                    <span className="text-amber-600 ml-1">
+                      · 異常 {validateResult.issues.notFound.length + validateResult.issues.inactive.length + validateResult.issues.priceMismatch.length} 筆
+                    </span>
+                  )}
+                  <span className="text-gray-400 ml-1">· 上次同步 {formatRelativeTime(validateResult.lastSyncAt)}</span>
+                </p>
+              </div>
+              <button onClick={() => setValidateResult(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+
+            <div className="overflow-y-auto p-5 space-y-5">
+              {/* All clean */}
+              {validateResult.issues.notFound.length === 0 &&
+               validateResult.issues.inactive.length === 0 &&
+               validateResult.issues.priceMismatch.length === 0 && (
+                <div className="text-center py-8 text-green-600">
+                  <div className="text-3xl mb-2">✅</div>
+                  <p className="font-medium">所有方案均正常</p>
+                  <p className="text-sm text-gray-400 mt-1">全部 {validateResult.total} 筆方案皆存在且上架中，成本價無異動</p>
+                </div>
+              )}
+
+              {/* Not found */}
+              {validateResult.issues.notFound.length > 0 && (
+                <section>
+                  <h3 className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-1.5">
+                    <span className="bg-red-100 text-red-600 rounded-full px-2 py-0.5 text-xs">{validateResult.issues.notFound.length}</span>
+                    查無方案（供應商 API 找不到此 SKU）
+                  </h3>
+                  <div className="space-y-1">
+                    {validateResult.issues.notFound.map(item => (
+                      <div key={item.id} className="flex items-center justify-between bg-red-50 rounded-lg px-3 py-2 text-sm">
+                        <span>{item.countryFlag} {item.name}</span>
+                        <span className="font-mono text-xs text-gray-400">{item.skuId || '無 SKU'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Inactive */}
+              {validateResult.issues.inactive.length > 0 && (
+                <section>
+                  <h3 className="text-sm font-semibold text-gray-500 mb-2 flex items-center gap-1.5">
+                    <span className="bg-gray-100 text-gray-600 rounded-full px-2 py-0.5 text-xs">{validateResult.issues.inactive.length}</span>
+                    已下架（供應商已停售）
+                  </h3>
+                  <div className="space-y-1">
+                    {validateResult.issues.inactive.map(item => (
+                      <div key={item.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm">
+                        <span>{item.countryFlag} {item.name}</span>
+                        <span className="font-mono text-xs text-gray-400">{item.skuId}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Price mismatch */}
+              {validateResult.issues.priceMismatch.length > 0 && (
+                <section>
+                  <h3 className="text-sm font-semibold text-amber-600 mb-2 flex items-center gap-1.5">
+                    <span className="bg-amber-100 text-amber-600 rounded-full px-2 py-0.5 text-xs">{validateResult.issues.priceMismatch.length}</span>
+                    成本價異動
+                  </h3>
+                  <div className="space-y-1">
+                    {validateResult.issues.priceMismatch.map(item => (
+                      <div key={item.id} className="flex items-center justify-between bg-amber-50 rounded-lg px-3 py-2 text-sm">
+                        <span>{item.countryFlag} {item.name}</span>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-gray-400 line-through">NT${item.currentCost}</span>
+                          <span className="text-amber-700 font-semibold">NT${item.supplierCost}</span>
+                          <span className="font-mono text-gray-400">{item.skuId}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t shrink-0 flex gap-2">
+              {(validateResult.issues.notFound.length > 0 || validateResult.issues.priceMismatch.length > 0) && (
+                <button
+                  onClick={handleApply}
+                  disabled={applying}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50"
+                  title="自動下架查無方案、同步成本價（售價不動）"
+                >
+                  {applying ? '套用中…' : `套用變更（${validateResult.issues.notFound.length} 下架 / ${validateResult.issues.priceMismatch.length} 改價）`}
+                </button>
+              )}
+              <button
+                onClick={() => setValidateResult(null)}
+                className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-200 transition"
+              >
+                關閉
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Apply Success Toast */}
+      {applyResult && (
+        <div className="fixed bottom-6 right-6 bg-white border border-green-200 shadow-lg rounded-xl px-5 py-3.5 z-50 flex items-center gap-3 max-w-sm">
+          <div className="text-green-600 text-xl">✅</div>
+          <div className="flex-1">
+            <p className="font-medium text-sm">已套用變更</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              自動下架 {applyResult.disabled} 筆 · 成本價更新 {applyResult.repriced} 筆
+            </p>
+          </div>
+          <button onClick={() => setApplyResult(null)} className="text-gray-400 hover:text-gray-600 text-lg shrink-0">✕</button>
         </div>
       )}
 
@@ -341,35 +595,47 @@ export default function PlatformProductsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">售價（NT$）</label>
-                  <input
-                    type="number" min={1} required
-                    value={editForm.sellPrice}
-                    onChange={e => setEditForm(f => f ? { ...f, sellPrice: e.target.value } : f)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">成本（NT$）</label>
-                  <input
-                    type="number" min={0} required
-                    value={editForm.costPrice}
-                    onChange={e => setEditForm(f => f ? { ...f, costPrice: e.target.value } : f)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">排序</label>
-                  <input
-                    type="number" min={0}
-                    value={editForm.sortOrder}
-                    onChange={e => setEditForm(f => f ? { ...f, sortOrder: e.target.value } : f)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
+              {(() => {
+                const sellNum = parseInt(editForm.sellPrice)
+                const costNum = parseInt(editForm.costPrice)
+                const lossy = !isNaN(sellNum) && !isNaN(costNum) && sellNum <= costNum
+                return (
+                  <>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">售價（NT$）</label>
+                        <input
+                          type="number" min={1} required
+                          value={editForm.sellPrice}
+                          onChange={e => setEditForm(f => f ? { ...f, sellPrice: e.target.value } : f)}
+                          className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${lossy ? 'border-red-300 focus:ring-red-500' : 'focus:ring-blue-500'}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">成本（NT$）</label>
+                        <input
+                          type="number" min={0} required
+                          value={editForm.costPrice}
+                          onChange={e => setEditForm(f => f ? { ...f, costPrice: e.target.value } : f)}
+                          className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${lossy ? 'border-red-300 focus:ring-red-500' : 'focus:ring-blue-500'}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">排序</label>
+                        <input
+                          type="number" min={0}
+                          value={editForm.sortOrder}
+                          onChange={e => setEditForm(f => f ? { ...f, sortOrder: e.target.value } : f)}
+                          className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    {lossy && (
+                      <p className="text-xs text-red-600 -mt-1">⚠ 售價未高於成本，這筆商品上架後每賣一筆都會虧損</p>
+                    )}
+                  </>
+                )
+              })()}
 
               <div>
                 <label className="text-xs text-gray-500 block mb-1">商品描述</label>
