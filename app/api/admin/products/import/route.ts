@@ -134,8 +134,13 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
       displayDays = parseDaysFromName(productName) ?? NaN
     }
 
-    // dataCapacity: explicit field → parse from productName
-    const dataCapacity = get('dataCapacity') || (productName ? parseCapacityFromName(productName) : null) || undefined
+    // dataCapacity: explicit field → parse from productName → planCode → supplierSkuId
+    // SKU 常常含流量資訊（例如 WM-e-JP-SB-5GB-1D），最後 fallback 從 SKU 挖
+    const dataCapacity = get('dataCapacity')
+      || (productName    ? parseCapacityFromName(productName)    : null)
+      || (planCode       ? parseCapacityFromName(planCode)       : null)
+      || (supplierSkuId  ? parseCapacityFromName(supplierSkuId)  : null)
+      || undefined
 
     const sellPrice = parseInt(get('sellPrice'))
     const costPrice = parseInt(get('costPrice'))
