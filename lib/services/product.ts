@@ -171,6 +171,15 @@ export async function batchCreateProducts(
         },
       })
 
+      // 防禦：upsert 理應永遠回傳含 id 的 record；若 client/schema/DB drift 此處會直接拋出讓問題現形
+      if (!supplierProduct?.id) {
+        throw new Error(
+          `SupplierProduct.upsert 回傳無效記錄（wmProductId=${row.supplierSkuId}）。` +
+          `請到 Supabase 確認 supplier_products 表存在且 id 欄位正常。` +
+          `Got: ${JSON.stringify(supplierProduct)}`,
+        )
+      }
+
       await tx.product.create({
         data: {
           ...row,
