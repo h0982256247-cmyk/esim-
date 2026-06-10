@@ -137,6 +137,9 @@ const WM_PRODUCT_TYPE_MAP: Record<number, SupplierProductType> = {
 
 // All-or-nothing: any DB error rolls back the entire batch
 // 若有提供 supplierMap（由 myQueryAll 取回），SupplierProduct 會以供應商真實資料為準寫入/覆蓋
+//
+// 每列要做 findUnique + create/update + product.create 共 2-3 個 query，
+// 50 列以上很容易超過 Prisma 預設的 5 秒交易超時。設成 60 秒讓較大 CSV 也能跑完。
 export async function batchCreateProducts(
   rows: CsvProductRow[],
   tenantAdminId?: string | null,
@@ -201,5 +204,8 @@ export async function batchCreateProducts(
       count++
     }
     return { count }
+  }, {
+    maxWait: 10_000,   // 等待交易 slot 最多 10 秒
+    timeout: 60_000,   // 交易內每個 query 累計時間最多 60 秒
   })
 }
