@@ -135,77 +135,80 @@ const WM_PRODUCT_TYPE_MAP: Record<number, SupplierProductType> = {
   2: SupplierProductType.SIM_TOPUP,
 }
 
-// All-or-nothing: any DB error rolls back the entire batch
-// 若有提供 supplierMap（由 myQueryAll 取回），SupplierProduct 會以供應商真實資料為準寫入/覆蓋
+// 批次匯入：用 4 個 batched query 取代 N×3 query loop
 //
-// 每列要做 findUnique + create/update + product.create 共 2-3 個 query，
-// 50 列以上很容易超過 Prisma 預設的 5 秒交易超時。設成 60 秒讓較大 CSV 也能跑完。
+// DATABASE_URL 走 PgBouncer connection_limit=1，loop 內每個 await 都要排隊，
+// 50 列以上 transaction 必爆。改用 createMany 批次寫入：
+//   1. findMany 取出 CSV 中已存在的 SupplierProduct
+//   2. createMany 一次寫入所有新的 SupplierProduct（skipDuplicates 防競態）
+//   3. 再 findMany 拿到所有 SupplierProduct.id 對照表
+//   4. createMany 批次寫入 Product
+//
+// 不用 $transaction：失敗會留 orphan SupplierProduct，但這些是合法資料、可被
+// 之後的匯入引用，不傷害一致性。寧可放棄 strict atomicity 換取速度。
 export async function batchCreateProducts(
   rows: CsvProductRow[],
   tenantAdminId?: string | null,
   supplierMap?: SupplierProductMap,
 ): Promise<{ count: number }> {
-  return prisma.$transaction(async tx => {
-    let count = 0
-    const now = new Date()
+  if (rows.length === 0) return { count: 0 }
 
-    for (const row of rows) {
-      const wmInfo = supplierMap?.get(row.supplierSkuId)
+  // 唯一化 wmProductId（CSV 同 SKU 多列）
+  const wmIds = Array.from(new Set(rows.map(r => r.supplierSkuId)))
 
-      // 只動「必填 + 一定存在於 DB」的核心欄位，避免 schema/DB drift 時 crash。
-      // 其餘可選欄位 (productId / productRegion / isEsim / status / lastSyncAt) 走 schema 預設值。
-      // 之後若想同步 WM 更多 metadata，建議建立獨立的 sync job 避免影響匯入流程。
+  // 1. 先抓已存在的 SupplierProduct
+  const existing = await prisma.supplierProduct.findMany({
+    where: { wmProductId: { in: wmIds } },
+    select: { id: true, wmProductId: true },
+  })
+  const existingSet = new Set(existing.map(s => s.wmProductId))
+
+  // 2. 組裝新 SupplierProduct 的資料
+  const newSupplierData = wmIds
+    .filter(id => !existingSet.has(id))
+    .map(id => {
+      const row = rows.find(r => r.supplierSkuId === id)!
+      const wmInfo = supplierMap?.get(id)
+
       const productName = wmInfo?.productName ?? (row.countryNameZh || row.supplierSkuId)
       const productType = wmInfo
         ? (WM_PRODUCT_TYPE_MAP[wmInfo.productType] ?? SupplierProductType.ESIM)
         : SupplierProductType.ESIM
       const costPrice = wmInfo?.productPrice ?? row.costPrice
+      return { wmProductId: id, productName, productType, costPrice }
+    })
 
-      // 注意：原本用 upsert，但 @prisma/adapter-pg 在某些情境會回傳 raw rows array `[]` 而非物件，
-      //       拆成明確的 findUnique → create / update 規避此 adapter bug。
-      let supplierProduct = await tx.supplierProduct.findUnique({
-        where: { wmProductId: row.supplierSkuId },
-      })
+  // 3. createMany 寫入新 SupplierProduct
+  if (newSupplierData.length > 0) {
+    await prisma.supplierProduct.createMany({
+      data: newSupplierData,
+      skipDuplicates: true,
+    })
+  }
 
-      if (supplierProduct) {
-        if (wmInfo) {
-          // 從 WM 拿到新資料 → 更新
-          supplierProduct = await tx.supplierProduct.update({
-            where: { id: supplierProduct.id },
-            data: { productName, productType, costPrice },
-          })
-        }
-        // 沒 wmInfo → 沿用既有，不動
-      } else {
-        supplierProduct = await tx.supplierProduct.create({
-          data: {
-            wmProductId: row.supplierSkuId,
-            productName,
-            productType,
-            costPrice,
-          },
-        })
-      }
-
-      if (!supplierProduct?.id) {
-        throw new Error(
-          `SupplierProduct findUnique/create/update 回傳無效記錄（wmProductId=${row.supplierSkuId}）。` +
-          `Got: ${JSON.stringify(supplierProduct)}`,
-        )
-      }
-
-      await tx.product.create({
-        data: {
-          ...row,
-          supplierSkuId: supplierProduct.id,
-          tenantAdminId: tenantAdminId ?? null,
-        },
-      })
-      count++
-    }
-    return { count }
-  }, {
-    maxWait: 10_000,   // 等待交易 slot 最多 10 秒
-    timeout: 60_000,   // 交易內每個 query 累計時間最多 60 秒
+  // 4. 再查一次拿全部 id（含剛 createMany 的）
+  const allSuppliers = await prisma.supplierProduct.findMany({
+    where: { wmProductId: { in: wmIds } },
+    select: { id: true, wmProductId: true },
   })
+  const supplierIdMap = new Map(allSuppliers.map(s => [s.wmProductId, s.id]))
+
+  // 5. 組裝並 createMany Product
+  const productData = rows.map(row => {
+    const supplierId = supplierIdMap.get(row.supplierSkuId)
+    if (!supplierId) {
+      throw new Error(`找不到 SupplierProduct.id for wmProductId=${row.supplierSkuId}`)
+    }
+    return {
+      ...row,
+      supplierSkuId: supplierId,
+      tenantAdminId: tenantAdminId ?? null,
+    }
+  })
+
+  const result = await prisma.product.createMany({
+    data: productData,
+  })
+
+  return { count: result.count }
 }
