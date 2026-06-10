@@ -48,6 +48,80 @@ function parseDaysFromName(name: string): number | null {
   return m ? parseInt(m[1]) : null
 }
 
+// 商品名稱拆成 [國家, 天數段, 流量段]
+// 範例：「美國, 10天, 3GB/天」→ { country: "美國", days: 10, capacity: "3GB/天" }
+//       「菲律賓, 1天, 吃到飽」→ { country: "菲律賓", days: 1, capacity: "吃到飽" }
+function parseProductNameSegments(name: string): { country?: string; days?: number; capacity?: string } {
+  if (!name) return {}
+  const parts = name.split(/[,，、]/).map(s => s.trim()).filter(Boolean)
+  if (parts.length === 0) return {}
+
+  const country = parts[0] || undefined
+
+  // 天數段：找 "X天" 或 "X日"
+  let days: number | undefined
+  for (const seg of parts.slice(1)) {
+    const m = seg.match(/(\d+)\s*[天日]/)
+    if (m) { days = parseInt(m[1]); break }
+  }
+
+  // 流量段：吃到飽 token + GB/MB 數字
+  let capacity: string | undefined
+  for (const seg of parts.slice(1)) {
+    const fromSeg = parseCapacityFromName(seg)
+    if (fromSeg) { capacity = fromSeg; break }
+  }
+
+  return { country, days, capacity }
+}
+
+// 常見中文國家／地區名稱對應 ISO 3166-1 alpha-2 代碼
+// 多國方案用自訂 3 字母代碼（ANZ / SEA / HKM 等）
+const COUNTRY_NAME_TO_CODE: Record<string, string> = {
+  // 亞洲
+  '日本': 'JP', '韓國': 'KR', '南韓': 'KR', '北韓': 'KP',
+  '台灣': 'TW', '中國': 'CN', '中國大陸': 'CN',
+  '香港': 'HK', '澳門': 'MO', '澳门': 'MO',
+  '新加坡': 'SG', '馬來西亞': 'MY', '马来西亚': 'MY',
+  '泰國': 'TH', '越南': 'VN', '印尼': 'ID', '菲律賓': 'PH', '菲律宾': 'PH',
+  '柬埔寨': 'KH', '寮國': 'LA', '寮国': 'LA', '緬甸': 'MM', '缅甸': 'MM',
+  '印度': 'IN', '巴基斯坦': 'PK', '孟加拉': 'BD', '斯里蘭卡': 'LK', '斯里兰卡': 'LK',
+  '尼泊爾': 'NP', '尼泊尔': 'NP', '不丹': 'BT', '馬爾地夫': 'MV',
+  '蒙古': 'MN', '哈薩克': 'KZ', '哈萨克': 'KZ', '烏茲別克': 'UZ', '吉爾吉斯': 'KG',
+  '土耳其': 'TR', '以色列': 'IL', '阿聯': 'AE', '阿联酋': 'AE', '沙烏地阿拉伯': 'SA',
+  '伊朗': 'IR', '伊拉克': 'IQ', '約旦': 'JO', '黎巴嫩': 'LB', '卡達': 'QA', '卡塔尔': 'QA',
+  // 歐洲
+  '英國': 'GB', '英国': 'GB', '法國': 'FR', '德國': 'DE', '德国': 'DE',
+  '義大利': 'IT', '意大利': 'IT', '西班牙': 'ES', '葡萄牙': 'PT',
+  '荷蘭': 'NL', '荷兰': 'NL', '比利時': 'BE', '盧森堡': 'LU', '瑞士': 'CH', '奧地利': 'AT',
+  '瑞典': 'SE', '挪威': 'NO', '丹麥': 'DK', '芬蘭': 'FI', '冰島': 'IS',
+  '愛爾蘭': 'IE', '波蘭': 'PL', '捷克': 'CZ', '匈牙利': 'HU', '希臘': 'GR',
+  '俄羅斯': 'RU', '俄罗斯': 'RU', '烏克蘭': 'UA',
+  '羅馬尼亞': 'RO', '保加利亞': 'BG', '克羅埃西亞': 'HR', '塞爾維亞': 'RS',
+  // 美洲
+  '美國': 'US', '美国': 'US', '加拿大': 'CA', '墨西哥': 'MX',
+  '巴西': 'BR', '阿根廷': 'AR', '智利': 'CL', '哥倫比亞': 'CO', '秘魯': 'PE',
+  // 非洲
+  '南非': 'ZA', '埃及': 'EG', '摩洛哥': 'MA', '肯亞': 'KE', '奈及利亞': 'NG',
+  // 大洋洲
+  '澳洲': 'AU', '澳大利亞': 'AU', '紐西蘭': 'NZ', '新西兰': 'NZ',
+  '斐濟': 'FJ', '關島': 'GU',
+  // 多國／區域方案（自訂 code）
+  '紐澳': 'ANZ', '澳紐': 'ANZ',
+  '東南亞': 'SEA', '东南亚': 'SEA',
+  '港澳': 'HKM',
+  '兩岸三地': 'CNT', '中港台': 'CNT', '中港澳': 'CNT',
+  '歐洲': 'EU', '欧洲': 'EU',
+  '中東': 'MEA', '中东': 'MEA',
+  '全球': 'WW', '世界': 'WW',
+}
+
+function countryNameToCode(name: string): string | null {
+  if (!name) return null
+  const trimmed = name.trim()
+  return COUNTRY_NAME_TO_CODE[trimmed] ?? null
+}
+
 // 從商品名稱／SKU 自動解析流量
 // 1. 吃到飽 token：MAX / TI / HSD（先檢查，避免被一般數字 regex 誤匹配）
 //    例如 WM-e-AN-MAX-1D → 吃到飽
@@ -124,29 +198,44 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
     const supplierSkuId = get('supplierSkuId')
     const productName   = get('productName')
     const planCode      = get('planCode')
-    const countryNameZh = get('countryNameZh') || get('countryCode') // fallback
     const networkType   = get('networkType') || undefined
     const isNativeRaw   = get('isNativeSim').toLowerCase()
     const isNativeSim   = isNativeRaw === '是' || isNativeRaw === 'true' || isNativeRaw === '1'
 
-    // countryCode: explicit → parse from planCode → fallback ''
+    // 商品名稱通常為「美國, 10天, 3GB/天」格式：先拆三段
+    const nameSegs = parseProductNameSegments(productName)
+
+    // countryNameZh: 優先用商品名稱第 1 段，再 fallback 到 CSV 的「適用地區」
+    const countryNameZh = nameSegs.country || get('countryNameZh') || get('countryCode') // fallback
+
+    // countryCode:
+    //   1) CSV 明確指定
+    //   2) 從 planCode 推測（前 2 碼）
+    //   3) 從 countryNameZh 查中文表（含多國方案 ANZ / SEA / HKM 等自訂代碼）
     let countryCode = get('countryCode').toUpperCase()
     if (!countryCode && planCode) countryCode = parseCountryFromPlanCode(planCode) ?? ''
+    if (!countryCode && countryNameZh) countryCode = countryNameToCode(countryNameZh) ?? ''
 
     const countryNameEn = get('countryNameEn') || ''
-    // countryFlag: explicit → auto-derive from countryCode
+    // countryFlag: explicit → auto-derive from countryCode（自訂 code 如 SEA/ANZ 抓不到，留空）
     const countryFlag   = get('countryFlag') || countryCodeToFlag(countryCode) || ''
 
-    // displayDays: explicit field → parse from productName
+    // displayDays:
+    //   1) CSV displayDays 欄位
+    //   2) 商品名稱第 2 段（已被 parseProductNameSegments 解出）
+    //   3) 整段 productName regex 抓「X天」
     const explicitDays = get('displayDays')
     let displayDays = explicitDays ? parseInt(explicitDays) : NaN
-    if (isNaN(displayDays) && productName) {
-      displayDays = parseDaysFromName(productName) ?? NaN
-    }
+    if (isNaN(displayDays) && nameSegs.days) displayDays = nameSegs.days
+    if (isNaN(displayDays) && productName) displayDays = parseDaysFromName(productName) ?? NaN
 
-    // dataCapacity: explicit field → parse from productName → planCode → supplierSkuId
-    // SKU 常常含流量資訊（例如 WM-e-JP-SB-5GB-1D），最後 fallback 從 SKU 挖
+    // dataCapacity:
+    //   1) CSV 流量欄
+    //   2) 商品名稱第 3 段（吃到飽 / GB/MB）
+    //   3) 整段 productName regex
+    //   4) planCode / supplierSkuId 抓
     const dataCapacity = get('dataCapacity')
+      || nameSegs.capacity
       || (productName    ? parseCapacityFromName(productName)    : null)
       || (planCode       ? parseCapacityFromName(planCode)       : null)
       || (supplierSkuId  ? parseCapacityFromName(supplierSkuId)  : null)
