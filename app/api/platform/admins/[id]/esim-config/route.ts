@@ -57,11 +57,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   try {
-    await prisma.tenantEsimConfig.upsert({
-      where: { adminId: id },
-      create: { adminId: id, provider, apiUrl, merchantId, deptId, token: finalToken },
-      update: { provider, apiUrl, merchantId, deptId, token: finalToken, isActive: true },
-    })
+    // 拆 upsert：適配 @prisma/adapter-pg
+    const existingRow = await prisma.tenantEsimConfig.findUnique({ where: { adminId: id } })
+    if (existingRow) {
+      await prisma.tenantEsimConfig.update({
+        where: { adminId: id },
+        data: { provider, apiUrl, merchantId, deptId, token: finalToken, isActive: true },
+      })
+    } else {
+      await prisma.tenantEsimConfig.create({
+        data: { adminId: id, provider, apiUrl, merchantId, deptId, token: finalToken },
+      })
+    }
     return NextResponse.json({ ok: true })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 })

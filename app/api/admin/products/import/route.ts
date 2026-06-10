@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import * as XLSX from 'xlsx'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { batchCreateProducts, type CsvProductRow } from '@/lib/services/product'
 import { fetchSupplierProductMap } from '@/lib/services/esim'
@@ -170,7 +171,19 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
   return { rows, errors }
 }
 
+// 將 Excel 檔（xlsx/xls）的第一張 sheet 轉成 CSV 文字，重用 parseCsv 的欄位映射邏輯
+async function xlsxToCsvText(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const workbook = XLSX.read(buf, { type: 'array' })
+  const sheetName = workbook.SheetNames[0]
+  if (!sheetName) throw new Error('Excel 檔案沒有任何 sheet')
+  const sheet = workbook.Sheets[sheetName]
+  // FS='&'（field separator）保留 default 逗號；忽略 raw 數值，全部轉字串
+  return XLSX.utils.sheet_to_csv(sheet, { strip: false })
+}
+
 // POST /api/admin/products/import  (multipart/form-data, field: "file")
+// 支援 CSV 與 Excel（.xlsx / .xls）。Excel 自動轉成 CSV 後走同一條解析。
 export async function POST(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
@@ -179,10 +192,20 @@ export async function POST(req: NextRequest) {
   const file = formData.get('file')
 
   if (!file || typeof file === 'string') {
-    return NextResponse.json({ error: '請上傳 CSV 檔案' }, { status: 400 })
+    return NextResponse.json({ error: '請上傳 CSV 或 Excel 檔案' }, { status: 400 })
   }
 
-  const text = await (file as File).text()
+  const f = file as File
+  const isExcel = /\.(xlsx|xls)$/i.test(f.name)
+
+  let text: string
+  try {
+    text = isExcel ? await xlsxToCsvText(f) : await f.text()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '檔案解析失敗'
+    return NextResponse.json({ error: `無法解析檔案：${msg}` }, { status: 400 })
+  }
+
   const { rows, errors } = parseCsv(text)
 
   if (errors.length > 0) {

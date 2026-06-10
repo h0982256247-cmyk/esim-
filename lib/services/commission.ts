@@ -59,21 +59,23 @@ export async function calculateAndSaveCommission(orderId: string): Promise<void>
   const commissionAmount = Math.round(order.subtotal * ownerRate)
   if (commissionAmount <= 0) return
 
-  // upsert 保證冪等（orderId unique constraint）
+  // 冪等：用 findUnique + create 取代 upsert，規避 adapter-pg 的 upsert 異常回傳
   // rebateRate 欄位儲存「實際用於計算的值」（從 coupon snapshot 推導），而非 group.rebateRate 當下值
-  await prisma.commission.upsert({
-    where: { orderId },
-    create: {
-      orderId,
-      groupId: group.id,
-      groupOwnerId: group.ownerId,
-      paidAmount: order.totalPaid,
-      rebateRate: effectiveRebateRate,
-      ownerRate,
-      commissionAmount,
-    },
-    update: {},
-  })
+  const existing = await prisma.commission.findUnique({ where: { orderId } })
+  if (!existing) {
+    await prisma.commission.create({
+      data: {
+        orderId,
+        groupId: group.id,
+        groupOwnerId: group.ownerId,
+        paidAmount: order.totalPaid,
+        rebateRate: effectiveRebateRate,
+        ownerRate,
+        commissionAmount,
+      },
+    })
+  }
+  // 已存在 → 無需更新（原 upsert 的 update: {} 即此意）
 }
 
 // ─── 月結：產生結算單 ─────────────────────────────────────────────
@@ -99,11 +101,18 @@ export async function settleCommissions(groupId: string, period: string): Promis
   const ids = commissions.map(c => c.id)
 
   await prisma.$transaction(async tx => {
-    const settlement = await tx.commissionSettlement.upsert({
+    // 拆 upsert：@prisma/adapter-pg 與某些 upsert 模式不相容（會回傳空陣列）
+    const existing = await tx.commissionSettlement.findUnique({
       where: { groupId_period: { groupId, period } },
-      create: { groupId, period, totalAmount },
-      update: { totalAmount: { increment: totalAmount } },
     })
+    const settlement = existing
+      ? await tx.commissionSettlement.update({
+          where: { groupId_period: { groupId, period } },
+          data: { totalAmount: { increment: totalAmount } },
+        })
+      : await tx.commissionSettlement.create({
+          data: { groupId, period, totalAmount },
+        })
 
     await tx.commission.updateMany({
       where: { id: { in: ids } },

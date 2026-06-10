@@ -21,23 +21,29 @@ export async function upsertEsimConfig(
   },
 ) {
   const encryptedToken = encrypt(input.token)
-  return prisma.tenantEsimConfig.upsert({
-    where: { adminId },
-    create: {
+  // 拆 upsert：適配 @prisma/adapter-pg 回傳異常
+  const existing = await prisma.tenantEsimConfig.findUnique({ where: { adminId } })
+  if (existing) {
+    return prisma.tenantEsimConfig.update({
+      where: { adminId },
+      data: {
+        provider: input.provider,
+        apiUrl: input.apiUrl,
+        merchantId: input.merchantId,
+        deptId: input.deptId,
+        token: encryptedToken,
+        isActive: true,
+      },
+    })
+  }
+  return prisma.tenantEsimConfig.create({
+    data: {
       adminId,
       provider: input.provider ?? 'worldmove',
       apiUrl: input.apiUrl,
       merchantId: input.merchantId,
       deptId: input.deptId,
       token: encryptedToken,
-    },
-    update: {
-      provider: input.provider,
-      apiUrl: input.apiUrl,
-      merchantId: input.merchantId,
-      deptId: input.deptId,
-      token: encryptedToken,
-      isActive: true,
     },
   })
 }
@@ -79,9 +85,25 @@ export async function upsertPaymentConfig(
   const encryptedPartnerKey = encrypt(input.partnerKey)
   const encryptedAppKey = input.appKey ? encrypt(input.appKey) : undefined
 
-  return prisma.tenantPaymentConfig.upsert({
+  // 拆 upsert：適配 @prisma/adapter-pg
+  const existing = await prisma.tenantPaymentConfig.findUnique({
     where: { adminId_gateway: { adminId, gateway: input.gateway } },
-    create: {
+  })
+  if (existing) {
+    return prisma.tenantPaymentConfig.update({
+      where: { adminId_gateway: { adminId, gateway: input.gateway } },
+      data: {
+        partnerKey: encryptedPartnerKey,
+        merchantId: input.merchantId,
+        env: input.env,
+        appId: input.appId,
+        appKey: encryptedAppKey,
+        isActive: true,
+      },
+    })
+  }
+  return prisma.tenantPaymentConfig.create({
+    data: {
       adminId,
       gateway: input.gateway,
       partnerKey: encryptedPartnerKey,
@@ -89,14 +111,6 @@ export async function upsertPaymentConfig(
       env: input.env,
       appId: input.appId,
       appKey: encryptedAppKey,
-    },
-    update: {
-      partnerKey: encryptedPartnerKey,
-      merchantId: input.merchantId,
-      env: input.env,
-      appId: input.appId,
-      appKey: encryptedAppKey,
-      isActive: true,
     },
   })
 }

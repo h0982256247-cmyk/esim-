@@ -84,26 +84,21 @@ export async function POST(req: NextRequest) {
   const card = body.card as { last_four?: string; type?: number; funding?: number; expiry_date?: string } | undefined
 
   if (cardSecret?.card_key && cardSecret?.card_token && card?.last_four) {
-    await prisma.savedCard.upsert({
-      where: { userId: order.userId },
-      create: {
-        userId: order.userId,
-        cardKeyEnc: encrypt(cardSecret.card_key),
-        cardTokenEnc: encrypt(cardSecret.card_token),
-        lastFour: card.last_four,
-        cardType: card.type ?? 1,
-        funding: card.funding ?? 0,
-        cardExpiresAt: card.expiry_date ?? null,
-      },
-      update: {
-        cardKeyEnc: encrypt(cardSecret.card_key),
-        cardTokenEnc: encrypt(cardSecret.card_token),
-        lastFour: card.last_four,
-        cardType: card.type ?? 1,
-        funding: card.funding ?? 0,
-        cardExpiresAt: card.expiry_date ?? null,
-      },
-    })
+    // 拆 upsert：適配 @prisma/adapter-pg
+    const cardData = {
+      cardKeyEnc: encrypt(cardSecret.card_key),
+      cardTokenEnc: encrypt(cardSecret.card_token),
+      lastFour: card.last_four,
+      cardType: card.type ?? 1,
+      funding: card.funding ?? 0,
+      cardExpiresAt: card.expiry_date ?? null,
+    }
+    const existing = await prisma.savedCard.findUnique({ where: { userId: order.userId } })
+    if (existing) {
+      await prisma.savedCard.update({ where: { userId: order.userId }, data: cardData })
+    } else {
+      await prisma.savedCard.create({ data: { userId: order.userId, ...cardData } })
+    }
   }
 
   const productName = order.orderItems[0]?.productName ?? 'eSIM'

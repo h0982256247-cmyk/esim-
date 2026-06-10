@@ -321,8 +321,8 @@ export default function PlatformProductsPage() {
           </button>
           <label className={`bg-white border px-4 py-2 rounded-lg text-sm cursor-pointer hover:bg-gray-50 transition flex items-center gap-1.5 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <span>📂</span>
-            {uploading ? '匯入中…' : 'CSV 匯入'}
-            <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleUpload} disabled={uploading} />
+            {uploading ? '匯入中…' : '匯入 CSV / Excel'}
+            <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleUpload} disabled={uploading} />
           </label>
           <button
             onClick={() => {

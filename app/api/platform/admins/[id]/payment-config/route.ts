@@ -63,11 +63,20 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   try {
-    await prisma.tenantPaymentConfig.upsert({
+    // 拆 upsert：適配 @prisma/adapter-pg
+    const existingRow = await prisma.tenantPaymentConfig.findUnique({
       where: { adminId_gateway: { adminId: id, gateway } },
-      create: { adminId: id, gateway, partnerKey: finalKey, merchantId, env, appId: appId || undefined, appKey: finalAppKey },
-      update: { partnerKey: finalKey, merchantId, env, appId: appId || undefined, appKey: finalAppKey, isActive: true },
     })
+    if (existingRow) {
+      await prisma.tenantPaymentConfig.update({
+        where: { adminId_gateway: { adminId: id, gateway } },
+        data: { partnerKey: finalKey, merchantId, env, appId: appId || undefined, appKey: finalAppKey, isActive: true },
+      })
+    } else {
+      await prisma.tenantPaymentConfig.create({
+        data: { adminId: id, gateway, partnerKey: finalKey, merchantId, env, appId: appId || undefined, appKey: finalAppKey },
+      })
+    }
     return NextResponse.json({ ok: true })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 })
