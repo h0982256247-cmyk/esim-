@@ -7,6 +7,7 @@ interface IssueBase {
   id: string
   skuId: string
   name: string
+  countryCode: string
   countryFlag: string
 }
 
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
     select: {
       id: true,
       costPrice: true,
+      countryCode: true,
       countryNameZh: true,
       countryFlag: true,
       displayDays: true,
@@ -48,21 +50,23 @@ export async function GET(req: NextRequest) {
     const skuId = product.supplierProduct?.wmProductId ?? ''
     const name = `${product.countryNameZh ?? ''} ${product.displayDays}天`
     const countryFlag = product.countryFlag ?? ''
+    const countryCode = product.countryCode ?? ''
 
     if (!skuId) {
-      notFound.push({ id: product.id, skuId: '', name, countryFlag })
+      notFound.push({ id: product.id, skuId: '', name, countryCode, countryFlag })
       continue
     }
 
     const info = supplierMap.get(skuId)
     if (!info) {
       // 方案不在清單中 → 供應商已移除或未授權
-      notFound.push({ id: product.id, skuId, name, countryFlag })
+      notFound.push({ id: product.id, skuId, name, countryCode, countryFlag })
     } else if (info.productPrice !== product.costPrice) {
       priceMismatch.push({
         id: product.id,
         skuId,
         name,
+        countryCode,
         countryFlag,
         currentCost: product.costPrice,
         supplierCost: info.productPrice,

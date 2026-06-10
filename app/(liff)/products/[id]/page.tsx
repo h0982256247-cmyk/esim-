@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { SignalIllustration } from '@/components/liff/LiffIllustrations'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
+import { CountryFlag } from '@/components/common/CountryFlag'
 
 type Product = {
   id: string
@@ -117,7 +118,7 @@ export default function ProductDetailPage() {
         }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              {product.countryFlag && <span style={{ fontSize: 26 }}>{product.countryFlag}</span>}
+              <CountryFlag code={product.countryCode} fallbackEmoji={product.countryFlag} size={36} />
               <div>
                 <p style={{ fontSize: 17, fontWeight: 700, color: S.ink, margin: 0 }}>{product.countryNameZh}</p>
                 <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{product.countryNameEn}</p>

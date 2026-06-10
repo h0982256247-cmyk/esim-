@@ -1,6 +1,7 @@
 'use client'
 
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
+import { CountryFlag } from '@/components/common/CountryFlag'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
@@ -59,10 +60,9 @@ export default function CompactShop({
                 padding: '13px 16px', cursor: 'pointer', textAlign: 'left',
               }}
             >
-              {c.countryFlag
-                ? <span style={{ fontSize: 24, width: 32, textAlign: 'center', flexShrink: 0 }}>{c.countryFlag}</span>
-                : <div style={{ width: 32, height: 24, background: S.bg, borderRadius: 4, flexShrink: 0 }} />
-              }
+              <span style={{ width: 32, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}>
+                <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={28} />
+              </span>
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: 15, fontWeight: 600, color: S.ink, margin: 0 }}>{c.countryNameZh}</p>
                 <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{c.countryNameEn}</p>
@@ -91,7 +91,7 @@ export default function CompactShop({
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: S.muted, padding: 4, display: 'flex', alignItems: 'center' }}>
           <BackArrow />
         </button>
-        {country?.countryFlag && <span style={{ fontSize: 20 }}>{country.countryFlag}</span>}
+        {country && <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={26} />}
         <div style={{ flex: 1 }}>
           <p style={{ fontSize: 16, fontWeight: 700, color: S.ink, margin: 0 }}>{country?.countryNameZh}</p>
           <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{products.length} 個方案</p>

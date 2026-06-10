@@ -4,9 +4,11 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { findBestCouponCombo as _findBestCouponCombo } from '@/lib/utils/coupon-combo'
+import { CountryFlag } from '@/components/common/CountryFlag'
 
 type Product = {
   id: string
+  countryCode: string
   countryNameZh: string
   countryFlag: string | null
   displayDays: number
@@ -211,9 +213,8 @@ function CheckoutContent() {
             width: 56, height: 56, borderRadius: 14, flexShrink: 0,
             background: C.light,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 28,
           }}>
-            {product.countryFlag ?? '🌏'}
+            <CountryFlag code={product.countryCode} fallbackEmoji={product.countryFlag} size={40} />
           </div>
 
           <div style={{ flex: 1 }}>

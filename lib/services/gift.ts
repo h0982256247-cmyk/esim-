@@ -115,7 +115,7 @@ export async function getGiftByToken(token: string) {
         select: {
           id: true, status: true,
           orderItems: {
-            select: { productName: true, product: { select: { countryFlag: true, dataCapacity: true, displayDays: true } } },
+            select: { productName: true, product: { select: { countryCode: true, countryFlag: true, dataCapacity: true, displayDays: true } } },
           },
         },
       },

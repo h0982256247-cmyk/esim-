@@ -26,6 +26,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     fromName:    gift.fromUser.displayName,
     product: item ? {
       name:        item.productName,
+      countryCode: item.product?.countryCode ?? null,
       countryFlag: item.product?.countryFlag ?? null,
       dataCapacity: item.product?.dataCapacity ?? null,
       displayDays: item.product?.displayDays ?? null,

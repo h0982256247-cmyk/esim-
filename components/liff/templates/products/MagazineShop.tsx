@@ -1,6 +1,7 @@
 'use client'
 
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
+import { CountryFlag } from '@/components/common/CountryFlag'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
@@ -68,16 +69,13 @@ export default function MagazineShop({
                 position: 'relative', overflow: 'hidden',
               }}
             >
-              {/* 國旗大字 */}
-              {c.countryFlag && (
-                <span style={{
-                  position: 'absolute', top: 16, right: 16,
-                  fontSize: 42, lineHeight: 1,
-                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))',
-                }}>
-                  {c.countryFlag}
-                </span>
-              )}
+              {/* 國旗 SVG */}
+              <div style={{
+                position: 'absolute', top: 16, right: 16,
+                filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))',
+              }}>
+                <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={48} />
+              </div>
               <div style={{ position: 'relative', zIndex: 1 }}>
                 <p style={{ fontSize: 18, fontWeight: 800, color: '#fff', margin: '0 0 2px', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
                   {c.countryNameZh}
@@ -107,7 +105,9 @@ export default function MagazineShop({
                     textAlign: 'left',
                   }}
                 >
-                  {c.countryFlag && <span style={{ fontSize: 22, width: 28, textAlign: 'center' }}>{c.countryFlag}</span>}
+                  <span style={{ width: 32, display: 'inline-flex', justifyContent: 'center' }}>
+                    <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={28} />
+                  </span>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 15, fontWeight: 600, color: S.ink, margin: 0 }}>{c.countryNameZh}</p>
                     <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{c.countryNameEn}</p>
@@ -150,8 +150,10 @@ export default function MagazineShop({
           <span>返回</span>
         </button>
 
-        {country?.countryFlag && (
-          <div style={{ fontSize: 64, lineHeight: 1, marginBottom: 12 }}>{country.countryFlag}</div>
+        {country && (
+          <div style={{ marginBottom: 14, filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.3))' }}>
+            <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={80} />
+          </div>
         )}
         <h1 style={{ fontSize: 32, fontWeight: 900, color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em', textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
           {country?.countryNameZh}

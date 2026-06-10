@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { IconMyEsim, IconGuide, IconDataPlan, IconDevices } from './HomeIcons'
 import FilterDropdown from './FilterDropdown'
+import { CountryFlag } from '@/components/common/CountryFlag'
 import type { HomePageProps } from './types'
 
 const QUICK_ACTIONS = [
@@ -143,7 +144,7 @@ export default function ClassicHome({
                         padding: '12px 16px', cursor: 'pointer', textAlign: 'left',
                         display: 'flex', alignItems: 'center', gap: 12,
                       }}>
-                      <span style={{ fontSize: 22 }}>{c.countryFlag ?? '🌍'}</span>
+                      <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={28} />
                       <div style={{ flex: 1 }}>
                         <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>{c.countryNameZh}</p>
                         <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>{c.countryNameEn}</p>
@@ -291,9 +292,9 @@ export default function ClassicHome({
                   )}
 
                   {/* 國旗 */}
-                  <span style={{ fontSize: 42, lineHeight: 1, filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.12))' }}>
-                    {c.countryFlag ?? '🌍'}
-                  </span>
+                  <div style={{ filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.12))' }}>
+                    <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={52} />
+                  </div>
 
                   {/* 國名 + 價格 */}
                   <div style={{ marginTop: 10 }}>

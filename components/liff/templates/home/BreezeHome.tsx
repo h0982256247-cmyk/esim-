@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { IconMyEsim, IconGuide, IconDataPlan, IconDevices } from './HomeIcons'
 import FilterDropdown from './FilterDropdown'
+import { CountryFlag } from '@/components/common/CountryFlag'
 import type { HomePageProps } from './types'
 
 const QUICK_ACTIONS = [
@@ -109,7 +110,7 @@ export default function BreezeHome({
                       padding: '12px 16px', cursor: 'pointer', textAlign: 'left',
                       display: 'flex', alignItems: 'center', gap: 12,
                     }}>
-                    <span style={{ fontSize: 22 }}>{c.countryFlag ?? '🌍'}</span>
+                    <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={28} />
                     <div style={{ flex: 1 }}>
                       <p style={{ fontSize: 14, fontWeight: 600, color: '#111', margin: 0 }}>{c.countryNameZh}</p>
                       <p style={{ fontSize: 11, color: '#9ca3af', margin: 0 }}>{c.countryNameEn}</p>
@@ -180,8 +181,8 @@ export default function BreezeHome({
                 display: 'flex', alignItems: 'center', gap: 14,
                 animation: `slideIn 0.4s ${0.05 + i * 0.04}s ease both`,
               }}>
-              <div style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0, background: getBreezeGrad(c.countryCode), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
-                {c.countryFlag ?? '🌍'}
+              <div style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0, background: getBreezeGrad(c.countryCode), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={32} />
               </div>
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: 15, fontWeight: 700, color: '#111', margin: 0 }}>{c.countryNameZh}</p>

@@ -6,6 +6,7 @@ import { useLiff } from '@/components/liff/LiffProvider'
 import { GlobeIllustration, BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
 import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
+import { CountryFlag } from '@/components/common/CountryFlag'
 
 type Country = {
   countryCode: string
@@ -246,9 +247,9 @@ function ProductsContent() {
                     transition: 'box-shadow 0.15s, transform 0.15s',
                   }}
                 >
-                  {c.countryFlag && (
-                    <span style={{ fontSize: 30, display: 'block', marginBottom: 10, lineHeight: 1 }}>{c.countryFlag}</span>
-                  )}
+                  <div style={{ marginBottom: 10 }}>
+                    <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={44} />
+                  </div>
                   <p style={{ fontSize: 15, fontWeight: 700, color: S.ink, margin: 0 }}>{c.countryNameZh}</p>
                   <p style={{ fontSize: 12, color: S.faint, marginTop: 3 }}>{c.countryNameEn}</p>
                 </button>
@@ -287,7 +288,7 @@ function ProductsContent() {
           </button>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {country?.countryFlag && <span style={{ fontSize: 18 }}>{country.countryFlag}</span>}
+              {country && <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={22} />}
               <h1 style={{ fontSize: 17, fontWeight: 700, color: S.ink, margin: 0 }}>{country?.countryNameZh ?? '方案'}</h1>
             </div>
             <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{products.length} 個方案</p>

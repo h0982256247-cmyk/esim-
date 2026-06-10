@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { CountryFlag } from '@/components/common/CountryFlag'
 
 type Product = {
   id: string
@@ -25,7 +26,7 @@ type Product = {
 
 const THROTTLE_MS = 5 * 60 * 1000  // 5 分鐘內再次驗證會跳確認
 
-type IssueBase = { id: string; skuId: string; name: string; countryFlag: string }
+type IssueBase = { id: string; skuId: string; name: string; countryCode: string; countryFlag: string }
 type PriceMismatchIssue = IssueBase & { currentCost: number; supplierCost: number }
 type ValidateResult = {
   total: number
@@ -385,7 +386,7 @@ export default function PlatformProductsPage() {
                       {flag === 'mismatch' && (
                         <span title="成本價與供應商不符" className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
                       )}
-                      <span>{p.countryFlag ?? ''}</span>
+                      <CountryFlag code={p.countryCode} fallbackEmoji={p.countryFlag} size={22} />
                       <div>
                         <p className="font-medium">{p.countryNameZh}</p>
                         <p className="text-xs text-gray-400">{p.countryNameEn}</p>
@@ -532,7 +533,10 @@ export default function PlatformProductsPage() {
                   <div className="space-y-1">
                     {validateResult.issues.notFound.map(item => (
                       <div key={item.id} className="flex items-center justify-between bg-red-50 rounded-lg px-3 py-2 text-sm">
-                        <span>{item.countryFlag} {item.name}</span>
+                        <span className="flex items-center gap-2">
+                          <CountryFlag code={item.countryCode} fallbackEmoji={item.countryFlag} size={20} />
+                          <span>{item.name}</span>
+                        </span>
                         <span className="font-mono text-xs text-gray-400">{item.skuId || '無 SKU'}</span>
                       </div>
                     ))}
@@ -550,7 +554,10 @@ export default function PlatformProductsPage() {
                   <div className="space-y-1">
                     {validateResult.issues.inactive.map(item => (
                       <div key={item.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm">
-                        <span>{item.countryFlag} {item.name}</span>
+                        <span className="flex items-center gap-2">
+                          <CountryFlag code={item.countryCode} fallbackEmoji={item.countryFlag} size={20} />
+                          <span>{item.name}</span>
+                        </span>
                         <span className="font-mono text-xs text-gray-400">{item.skuId}</span>
                       </div>
                     ))}
@@ -568,7 +575,10 @@ export default function PlatformProductsPage() {
                   <div className="space-y-1">
                     {validateResult.issues.priceMismatch.map(item => (
                       <div key={item.id} className="flex items-center justify-between bg-amber-50 rounded-lg px-3 py-2 text-sm">
-                        <span>{item.countryFlag} {item.name}</span>
+                        <span className="flex items-center gap-2">
+                          <CountryFlag code={item.countryCode} fallbackEmoji={item.countryFlag} size={20} />
+                          <span>{item.name}</span>
+                        </span>
                         <div className="flex items-center gap-2 text-xs">
                           <span className="text-gray-400 line-through">NT${item.currentCost}</span>
                           <span className="text-amber-700 font-semibold">NT${item.supplierCost}</span>
@@ -650,12 +660,15 @@ export default function PlatformProductsPage() {
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">旗幟 Emoji</label>
+                  <label className="text-xs text-gray-500 block mb-1 flex items-center gap-2">
+                    <span>旗幟（自動）</span>
+                    <CountryFlag code={editingProduct?.countryCode} fallbackEmoji={editForm.countryFlag} size={20} />
+                  </label>
                   <input
                     type="text"
                     value={editForm.countryFlag}
                     onChange={e => setEditForm(f => f ? { ...f, countryFlag: e.target.value } : f)}
-                    placeholder="🇯🇵"
+                    placeholder="留空自動依代碼產生"
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

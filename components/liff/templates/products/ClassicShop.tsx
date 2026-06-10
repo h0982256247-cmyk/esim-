@@ -2,6 +2,7 @@
 
 import { GlobeIllustration } from '@/components/liff/LiffIllustrations'
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
+import { CountryFlag } from '@/components/common/CountryFlag'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
@@ -47,7 +48,9 @@ export default function ClassicShop({
                   boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                 }}
               >
-                {c.countryFlag && <span style={{ fontSize: 30, display: 'block', marginBottom: 10, lineHeight: 1 }}>{c.countryFlag}</span>}
+                <div style={{ marginBottom: 10 }}>
+                  <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={44} />
+                </div>
                 <p style={{ fontSize: 15, fontWeight: 700, color: S.ink, margin: 0 }}>{c.countryNameZh}</p>
                 <p style={{ fontSize: 12, color: S.faint, marginTop: 3 }}>{c.countryNameEn}</p>
               </button>
@@ -74,7 +77,7 @@ export default function ClassicShop({
         </button>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {country?.countryFlag && <span style={{ fontSize: 18 }}>{country.countryFlag}</span>}
+            {country && <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={22} />}
             <h1 style={{ fontSize: 17, fontWeight: 700, color: S.ink, margin: 0 }}>{country?.countryNameZh ?? '方案'}</h1>
           </div>
           <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{products.length} 個方案</p>

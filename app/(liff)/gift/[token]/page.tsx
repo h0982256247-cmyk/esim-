@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { useTenantColors } from '@/components/liff/TenantContext'
+import { CountryFlag } from '@/components/common/CountryFlag'
 
 type GiftPreview = {
   status: 'PENDING' | 'CLAIMED' | 'CANCELLED' | 'EXPIRED'
@@ -15,6 +16,7 @@ type GiftPreview = {
   fromName: string
   product: {
     name: string
+    countryCode: string | null
     countryFlag: string | null
     dataCapacity: string | null
     displayDays: number | null
@@ -116,8 +118,10 @@ export default function GiftClaimPage() {
 
       {/* eSIM 卡片預覽（不揭露 QR） */}
       <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px', marginBottom: 16 }}>
-        {gift.product?.countryFlag && (
-          <div style={{ textAlign: 'center', fontSize: 48, lineHeight: 1, marginBottom: 8 }}>{gift.product.countryFlag}</div>
+        {(gift.product?.countryCode || gift.product?.countryFlag) && (
+          <div style={{ textAlign: 'center', marginBottom: 10 }}>
+            <CountryFlag code={gift.product?.countryCode} fallbackEmoji={gift.product?.countryFlag} size={64} />
+          </div>
         )}
         <p style={{ fontSize: 17, fontWeight: 800, color: S.ink, textAlign: 'center', margin: '0 0 8px', letterSpacing: '-0.01em' }}>
           {gift.product?.name ?? 'eSIM'}
