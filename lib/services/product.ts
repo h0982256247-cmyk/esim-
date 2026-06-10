@@ -158,24 +158,35 @@ export async function batchCreateProducts(
         : SupplierProductType.ESIM
       const costPrice = wmInfo?.productPrice ?? row.costPrice
 
-      const supplierProduct = await tx.supplierProduct.upsert({
+      // 注意：原本用 upsert，但 @prisma/adapter-pg 在某些情境會回傳 raw rows array `[]` 而非物件，
+      //       拆成明確的 findUnique → create / update 規避此 adapter bug。
+      let supplierProduct = await tx.supplierProduct.findUnique({
         where: { wmProductId: row.supplierSkuId },
-        update: wmInfo
-          ? { productName, productType, costPrice }
-          : {},
-        create: {
-          wmProductId: row.supplierSkuId,
-          productName,
-          productType,
-          costPrice,
-        },
       })
 
-      // 防禦：upsert 理應永遠回傳含 id 的 record；若 client/schema/DB drift 此處會直接拋出讓問題現形
+      if (supplierProduct) {
+        if (wmInfo) {
+          // 從 WM 拿到新資料 → 更新
+          supplierProduct = await tx.supplierProduct.update({
+            where: { id: supplierProduct.id },
+            data: { productName, productType, costPrice },
+          })
+        }
+        // 沒 wmInfo → 沿用既有，不動
+      } else {
+        supplierProduct = await tx.supplierProduct.create({
+          data: {
+            wmProductId: row.supplierSkuId,
+            productName,
+            productType,
+            costPrice,
+          },
+        })
+      }
+
       if (!supplierProduct?.id) {
         throw new Error(
-          `SupplierProduct.upsert 回傳無效記錄（wmProductId=${row.supplierSkuId}）。` +
-          `請到 Supabase 確認 supplier_products 表存在且 id 欄位正常。` +
+          `SupplierProduct findUnique/create/update 回傳無效記錄（wmProductId=${row.supplierSkuId}）。` +
           `Got: ${JSON.stringify(supplierProduct)}`,
         )
       }
