@@ -346,8 +346,13 @@ export async function POST(req: NextRequest) {
     if (notFound      > 0) warns.push(`供應商查無 ${notFound} 筆`)
     if (priceMismatch > 0) warns.push(`成本價不符 ${priceMismatch} 筆`)
 
+    const parts: string[] = []
+    if (result.created > 0) parts.push(`新增 ${result.created} 筆`)
+    if (result.updated > 0) parts.push(`更新 ${result.updated} 筆`)
+    const summary = parts.length > 0 ? parts.join('、') : `處理 ${result.count} 筆`
+
     return NextResponse.json({
-      message:  `成功匯入 ${result.count} 筆商品`,
+      message:  `匯入完成（${summary}）`,
       warnings: warns.length > 0 ? warns : undefined,
     })
   } catch (err: unknown) {

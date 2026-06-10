@@ -170,41 +170,48 @@ const WM_PRODUCT_TYPE_MAP: Record<number, SupplierProductType> = {
   2: SupplierProductType.SIM_TOPUP,
 }
 
-// 批次匯入：用 4 個 batched query 取代 N×3 query loop
+// 批次匯入：idempotent，重新匯入同樣的 CSV 不會造成 duplicate。
 //
 // DATABASE_URL 走 PgBouncer connection_limit=1，loop 內每個 await 都要排隊，
-// 50 列以上 transaction 必爆。改用 createMany 批次寫入：
-//   1. findMany 取出 CSV 中已存在的 SupplierProduct
-//   2. createMany 一次寫入所有新的 SupplierProduct（skipDuplicates 防競態）
-//   3. 再 findMany 拿到所有 SupplierProduct.id 對照表
-//   4. createMany 批次寫入 Product
+// 50 列以上 transaction 必爆。改用 batch query 寫入：
 //
-// 不用 $transaction：失敗會留 orphan SupplierProduct，但這些是合法資料、可被
-// 之後的匯入引用，不傷害一致性。寧可放棄 strict atomicity 換取速度。
+//   1. findMany 取出 CSV 中已存在的 SupplierProduct
+//   2. createMany 寫入新的 SupplierProduct（skipDuplicates 防競態）
+//   3. updateMany-style 逐筆 update 既有的 SupplierProduct.product_name + costPrice
+//      （PgBouncer 限制：仍是逐筆，但只對「需要 update」的列；通常很少）
+//   4. 再 findMany 拿到所有 SupplierProduct.id 對照表
+//   5. findMany 取出 (tenantAdminId, supplierSkuId) 已存在的 Product
+//   6. 對既有 Product → update（保留 id，OrderItem.productId 仍指向同一列）
+//      對新 Product   → createMany
+//
+// 不用 $transaction：失敗會留 orphan，但這些是合法資料、可被之後的匯入引用，
+// 不傷害一致性。寧可放棄 strict atomicity 換取速度。
+//
+// 為什麼 update 既有 Product 而非 delete+create：OrderItem.productId 是 FK，
+// 砍掉重練會破壞訂單關聯。保留 id 是唯一安全做法。
 export async function batchCreateProducts(
   rows: CsvProductRow[],
   tenantAdminId?: string | null,
   supplierMap?: SupplierProductMap,
-): Promise<{ count: number }> {
-  if (rows.length === 0) return { count: 0 }
+): Promise<{ count: number; created: number; updated: number }> {
+  if (rows.length === 0) return { count: 0, created: 0, updated: 0 }
 
   // 唯一化 wmProductId（CSV 同 SKU 多列）
   const wmIds = Array.from(new Set(rows.map(r => r.supplierSkuId)))
 
-  // 1. 先抓已存在的 SupplierProduct
+  // ─── Step 1: 抓已存在的 SupplierProduct ──────────────────────────
   const existing = await prisma.supplierProduct.findMany({
     where: { wmProductId: { in: wmIds } },
-    select: { id: true, wmProductId: true },
+    select: { id: true, wmProductId: true, productName: true, costPrice: true },
   })
-  const existingSet = new Set(existing.map(s => s.wmProductId))
+  const existingByWmId = new Map(existing.map(s => [s.wmProductId, s]))
 
-  // 2. 組裝新 SupplierProduct 的資料
+  // ─── Step 2: 寫入新的 SupplierProduct ─────────────────────────────
   const newSupplierData = wmIds
-    .filter(id => !existingSet.has(id))
+    .filter(id => !existingByWmId.has(id))
     .map(id => {
       const row = rows.find(r => r.supplierSkuId === id)!
       const wmInfo = supplierMap?.get(id)
-
       const productName = wmInfo?.productName ?? (row.countryNameZh || row.supplierSkuId)
       const productType = wmInfo
         ? (WM_PRODUCT_TYPE_MAP[wmInfo.productType] ?? SupplierProductType.ESIM)
@@ -212,38 +219,78 @@ export async function batchCreateProducts(
       const costPrice = wmInfo?.productPrice ?? row.costPrice
       return { wmProductId: id, productName, productType, costPrice }
     })
-
-  // 3. createMany 寫入新 SupplierProduct
   if (newSupplierData.length > 0) {
-    await prisma.supplierProduct.createMany({
-      data: newSupplierData,
-      skipDuplicates: true,
+    await prisma.supplierProduct.createMany({ data: newSupplierData, skipDuplicates: true })
+  }
+
+  // ─── Step 3: 對既有 SupplierProduct 更新 product_name + costPrice ─
+  // 重新匯入時，wmInfo 提供新名稱 → 覆寫舊資料（解決「東南亞」之類錯誤）
+  for (const wmId of wmIds) {
+    const existingRow = existingByWmId.get(wmId)
+    if (!existingRow) continue
+    const row = rows.find(r => r.supplierSkuId === wmId)!
+    const wmInfo = supplierMap?.get(wmId)
+    const desiredName = wmInfo?.productName ?? (row.countryNameZh || row.supplierSkuId)
+    const desiredCost = wmInfo?.productPrice ?? row.costPrice
+    if (existingRow.productName === desiredName && existingRow.costPrice === desiredCost) continue
+    await prisma.supplierProduct.update({
+      where: { id: existingRow.id },
+      data: { productName: desiredName, costPrice: desiredCost },
     })
   }
 
-  // 4. 再查一次拿全部 id（含剛 createMany 的）
+  // ─── Step 4: 拿到全部 SupplierProduct.id 對照表 ──────────────────
   const allSuppliers = await prisma.supplierProduct.findMany({
     where: { wmProductId: { in: wmIds } },
     select: { id: true, wmProductId: true },
   })
   const supplierIdMap = new Map(allSuppliers.map(s => [s.wmProductId, s.id]))
 
-  // 5. 組裝並 createMany Product
-  const productData = rows.map(row => {
-    const supplierId = supplierIdMap.get(row.supplierSkuId)
-    if (!supplierId) {
-      throw new Error(`找不到 SupplierProduct.id for wmProductId=${row.supplierSkuId}`)
-    }
-    return {
-      ...row,
-      supplierSkuId: supplierId,
+  // ─── Step 5: 抓 (tenantAdminId, supplierSkuId) 已存在的 Product ───
+  // 同 tenant + 同 SKU = 視為「同一個方案」，重新匯入更新而非新建
+  const supplierIdsForRows = Array.from(new Set(rows.map(r => supplierIdMap.get(r.supplierSkuId)!).filter(Boolean)))
+  const existingProducts = await prisma.product.findMany({
+    where: {
       tenantAdminId: tenantAdminId ?? null,
+      supplierSkuId: { in: supplierIdsForRows },
+    },
+    select: { id: true, supplierSkuId: true },
+  })
+  const existingProductMap = new Map(existingProducts.map(p => [p.supplierSkuId, p.id]))
+
+  // ─── Step 6: 分流：既有 → update；新的 → createMany ─────────────
+  let updated = 0
+  const newProductData: ReturnType<typeof buildProductData>[] = []
+  for (const row of rows) {
+    const supplierId = supplierIdMap.get(row.supplierSkuId)
+    if (!supplierId) throw new Error(`找不到 SupplierProduct.id for wmProductId=${row.supplierSkuId}`)
+    const data = buildProductData(row, supplierId, tenantAdminId ?? null)
+    const existingId = existingProductMap.get(supplierId)
+    if (existingId) {
+      await prisma.product.update({ where: { id: existingId }, data })
+      updated++
+    } else {
+      newProductData.push(data)
     }
-  })
+  }
 
-  const result = await prisma.product.createMany({
-    data: productData,
-  })
+  let created = 0
+  if (newProductData.length > 0) {
+    const result = await prisma.product.createMany({ data: newProductData })
+    created = result.count
+  }
 
-  return { count: result.count }
+  return { count: created + updated, created, updated }
+}
+
+function buildProductData(
+  row: CsvProductRow,
+  supplierId: string,
+  tenantAdminId: string | null,
+) {
+  return {
+    ...row,
+    supplierSkuId: supplierId,
+    tenantAdminId,
+  }
 }
