@@ -68,16 +68,51 @@ export async function getAvailableCountries(tenantAdminId?: string | null) {
 
 // ─── Admin operations ────────────────────────────────────────────
 
-export async function getAllProductsAdmin(tenantAdminId?: string | null) {
-  return prisma.product.findMany({
-    where: tenantAdminId ? { tenantAdminId } : undefined,
-    orderBy: [{ countryCode: 'asc' }, { displayDays: 'asc' }],
-    include: {
-      supplierProduct: {
-        select: { wmProductId: true, productName: true, status: true, lastSyncAt: true },
+export interface GetAllProductsAdminOptions {
+  tenantAdminId?: string | null
+  page?: number      // 1-based
+  pageSize?: number  // default 100
+  q?: string         // 跨欄位搜尋（國家名/代碼/供應商 SKU/流量）
+}
+
+export async function getAllProductsAdmin(opts: GetAllProductsAdminOptions = {}) {
+  const page = Math.max(1, opts.page ?? 1)
+  const pageSize = Math.min(500, Math.max(1, opts.pageSize ?? 100))
+  const q = opts.q?.trim()
+
+  // Prisma where 條件組合
+  const where: import('@prisma/client').Prisma.ProductWhereInput = {
+    ...(opts.tenantAdminId ? { tenantAdminId: opts.tenantAdminId } : {}),
+    ...(q
+      ? {
+          OR: [
+            { countryNameZh: { contains: q, mode: 'insensitive' } },
+            { countryNameEn: { contains: q, mode: 'insensitive' } },
+            { countryCode:   { contains: q, mode: 'insensitive' } },
+            { dataCapacity:  { contains: q, mode: 'insensitive' } },
+            { planCode:      { contains: q, mode: 'insensitive' } },
+            { supplierProduct: { wmProductId: { contains: q, mode: 'insensitive' } } },
+          ],
+        }
+      : {}),
+  }
+
+  const [products, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      orderBy: [{ countryCode: 'asc' }, { displayDays: 'asc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        supplierProduct: {
+          select: { wmProductId: true, productName: true, status: true, lastSyncAt: true },
+        },
       },
-    },
-  })
+    }),
+    prisma.product.count({ where }),
+  ])
+
+  return { products, total, page, pageSize }
 }
 
 export type ProductUpsertInput = {

@@ -78,13 +78,28 @@ const STATUS_LABEL: Record<string, string> = {
   AUTO_INACTIVE: '自動下架',
 }
 
+const PAGE_SIZE = 100
+
 export default function PlatformProductsPage() {
   const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [searchInput, setSearchInput] = useState('')   // 立即回應的 input value
+  const [q, setQ] = useState('')                       // 實際發送 API 的 query（debounce）
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<{ ok: boolean; warn?: boolean; text: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // 搜尋 debounce：input 改變後 300ms 才真正送 query，避免每打一個字 reload
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setQ(searchInput)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   // Validate modal state
   const [validating, setValidating] = useState(false)
@@ -103,13 +118,24 @@ export default function PlatformProductsPage() {
 
   const load = () => {
     setLoading(true)
-    fetch('/api/admin/products')
+    const params = new URLSearchParams({
+      page:     String(page),
+      pageSize: String(PAGE_SIZE),
+      ...(q ? { q } : {}),
+    })
+    fetch(`/api/admin/products?${params.toString()}`)
       .then(r => r.status === 401 ? (router.replace('/platform/login'), null) : r.json())
-      .then(d => { if (d) setProducts(d.products) })
+      .then(d => {
+        if (d) {
+          setProducts(d.products ?? [])
+          setTotal(d.total ?? 0)
+        }
+      })
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [router])
+  // page 或 q 改變時重新抓資料
+  useEffect(load, [router, page, q])
 
   const handleStatusToggle = async (id: string, currentStatus: string) => {
     const next = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
@@ -259,11 +285,21 @@ export default function PlatformProductsPage() {
     }
   }
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">商品管理</h1>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold">商品管理</h1>
+          {total > 0 && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              共 {total.toLocaleString()} 筆
+              {q && ` · 搜尋「${q}」`}
+            </p>
+          )}
+        </div>
         <div className="flex gap-2 items-center flex-wrap justify-end">
           {uploadMsg && (
             <div className={`text-sm px-3 py-1.5 rounded-lg max-w-2xl ${
@@ -301,6 +337,27 @@ export default function PlatformProductsPage() {
             <span>⬇️</span> CSV 範本
           </button>
         </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="mb-4 relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
+        <input
+          type="text"
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
+          placeholder="搜尋國家名稱 / 代碼 / 供應商 SKU / 流量 / Plan code..."
+          className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-white"
+        />
+        {searchInput && (
+          <button
+            onClick={() => setSearchInput('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+            title="清除搜尋"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -376,8 +433,59 @@ export default function PlatformProductsPage() {
             </tbody>
           </table>
           {products.length === 0 && (
-            <p className="text-center text-gray-400 py-8 text-sm">尚無商品，請透過 CSV 匯入</p>
+            <p className="text-center text-gray-400 py-8 text-sm">
+              {q ? `找不到符合「${q}」的商品` : '尚無商品，請透過 CSV 匯入'}
+            </p>
           )}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between flex-wrap gap-3">
+          <span className="text-xs text-gray-500">
+            第 {((page - 1) * PAGE_SIZE + 1).toLocaleString()} – {Math.min(page * PAGE_SIZE, total).toLocaleString()} 筆
+            (共 {total.toLocaleString()} 筆，第 {page}/{totalPages} 頁)
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(1)}
+              disabled={page === 1}
+              className="px-2.5 py-1.5 rounded-lg text-xs border bg-white disabled:opacity-30 hover:bg-gray-50 transition"
+            >« 第一頁</button>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-2.5 py-1.5 rounded-lg text-xs border bg-white disabled:opacity-30 hover:bg-gray-50 transition"
+            >‹ 上一頁</button>
+
+            {/* 跳頁輸入 */}
+            <div className="flex items-center gap-1 mx-1">
+              <input
+                type="number"
+                value={page}
+                onChange={e => {
+                  const n = parseInt(e.target.value)
+                  if (!isNaN(n) && n >= 1 && n <= totalPages) setPage(n)
+                }}
+                min={1}
+                max={totalPages}
+                className="w-14 px-2 py-1 border rounded-md text-xs text-center"
+              />
+              <span className="text-xs text-gray-400">/ {totalPages}</span>
+            </div>
+
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-2.5 py-1.5 rounded-lg text-xs border bg-white disabled:opacity-30 hover:bg-gray-50 transition"
+            >下一頁 ›</button>
+            <button
+              onClick={() => setPage(totalPages)}
+              disabled={page === totalPages}
+              className="px-2.5 py-1.5 rounded-lg text-xs border bg-white disabled:opacity-30 hover:bg-gray-50 transition"
+            >最後 »</button>
+          </div>
         </div>
       )}
 
