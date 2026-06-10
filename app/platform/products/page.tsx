@@ -266,15 +266,15 @@ export default function PlatformProductsPage() {
         <h1 className="text-2xl font-bold">商品管理</h1>
         <div className="flex gap-2 items-center flex-wrap justify-end">
           {uploadMsg && (
-            <span className={`text-sm px-3 py-1 rounded-lg max-w-sm truncate ${
+            <div className={`text-sm px-3 py-1.5 rounded-lg max-w-2xl ${
               uploadMsg.ok
                 ? uploadMsg.warn
                   ? 'text-amber-700 bg-amber-50'
                   : 'text-green-600 bg-green-50'
-                : 'text-red-600 bg-red-50'
-            }`} title={uploadMsg.text}>
+                : 'text-red-600 bg-red-50 whitespace-pre-wrap break-words'
+            }`}>
               {uploadMsg.text}
-            </span>
+            </div>
           )}
           <button
             onClick={handleValidate}

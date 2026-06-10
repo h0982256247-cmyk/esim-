@@ -149,33 +149,25 @@ export async function batchCreateProducts(
     for (const row of rows) {
       const wmInfo = supplierMap?.get(row.supplierSkuId)
 
-      // SupplierProduct = WM 真實鏡像；Product = CSV 那次匯入的快照
+      // 只動「必填 + 一定存在於 DB」的核心欄位，避免 schema/DB drift 時 crash。
+      // 其餘可選欄位 (productId / productRegion / isEsim / status / lastSyncAt) 走 schema 預設值。
+      // 之後若想同步 WM 更多 metadata，建議建立獨立的 sync job 避免影響匯入流程。
+      const productName = wmInfo?.productName ?? (row.countryNameZh || row.supplierSkuId)
+      const productType = wmInfo
+        ? (WM_PRODUCT_TYPE_MAP[wmInfo.productType] ?? SupplierProductType.ESIM)
+        : SupplierProductType.ESIM
+      const costPrice = wmInfo?.productPrice ?? row.costPrice
+
       const supplierProduct = await tx.supplierProduct.upsert({
         where: { wmProductId: row.supplierSkuId },
         update: wmInfo
-          ? {
-              productName: wmInfo.productName ?? undefined,
-              productId:   wmInfo.productId   ?? undefined,
-              productRegion: wmInfo.productRegion ?? undefined,
-              productType: WM_PRODUCT_TYPE_MAP[wmInfo.productType] ?? SupplierProductType.ESIM,
-              costPrice:   wmInfo.productPrice,
-              isEsim:      wmInfo.leSIM,
-              status:      SupplierProductStatus.ACTIVE,
-              lastSyncAt:  now,
-            }
+          ? { productName, productType, costPrice }
           : {},
         create: {
-          wmProductId:   row.supplierSkuId,
-          productId:     wmInfo?.productId ?? null,
-          productName:   wmInfo?.productName ?? (row.countryNameZh || row.supplierSkuId),
-          productRegion: wmInfo?.productRegion ?? null,
-          productType:   wmInfo
-            ? (WM_PRODUCT_TYPE_MAP[wmInfo.productType] ?? SupplierProductType.ESIM)
-            : SupplierProductType.ESIM,
-          costPrice:     wmInfo?.productPrice ?? row.costPrice,
-          isEsim:        wmInfo?.leSIM ?? true,
-          status:        SupplierProductStatus.ACTIVE,
-          lastSyncAt:    wmInfo ? now : null,
+          wmProductId: row.supplierSkuId,
+          productName,
+          productType,
+          costPrice,
         },
       })
 
