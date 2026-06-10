@@ -48,8 +48,18 @@ function parseDaysFromName(name: string): number | null {
   return m ? parseInt(m[1]) : null
 }
 
-// 從商品名稱自動解析流量，例如「500MB」「1GB」「1GB/天」
+// 從商品名稱／SKU 自動解析流量
+// 1. 吃到飽 token：MAX / TI / HSD（先檢查，避免被一般數字 regex 誤匹配）
+//    例如 WM-e-AN-MAX-1D → 吃到飽
+//         WM-e-AN-TI-1D  → 鈦金吃到飽
+//         WM-e-AN-HSD-1D → 高速吃到飽
+// 2. 數字流量：500MB / 1GB / 1GB/天
 function parseCapacityFromName(name: string): string | null {
+  // SKU 結構通常用 `-` 分隔，token 用 `-XX-` 或字串邊界包夾
+  if (/(?:^|[-_\s])TI(?:[-_\s]|$)/i.test(name))  return '鈦金吃到飽'
+  if (/(?:^|[-_\s])HSD(?:[-_\s]|$)/i.test(name)) return '高速吃到飽'
+  if (/(?:^|[-_\s])MAX(?:[-_\s]|$)/i.test(name)) return '吃到飽'
+
   const m = name.match(/(\d+(?:\.\d+)?)\s*(MB|GB)(\/天|\/day)?/i)
   if (!m) return null
   return m[3] ? `${m[1]}${m[2].toUpperCase()}${m[3]}` : `${m[1]}${m[2].toUpperCase()}`
