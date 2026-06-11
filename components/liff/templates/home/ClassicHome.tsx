@@ -17,17 +17,19 @@ const QUICK_ACTIONS = [
 const DAY_OPTIONS  = ['3天','5天','7天','10天','15天']
 const DATA_OPTIONS = ['1GB','3GB','5GB','不限流量']
 
-const CARD_PALETTE = [
-  { bg: '#FBBF24', text: '#78350F' },
-  { bg: '#93C5FD', text: '#1E3A8A' },
-  { bg: '#C4B5FD', text: '#4C1D95' },
-  { bg: '#86EFAC', text: '#14532D' },
-  { bg: '#F9A8D4', text: '#831843' },
-  { bg: '#FCA5A5', text: '#7F1D1D' },
+// 旅遊風統一色卡：每個國家擁有自己的「目的地色」作為頂部色條，但卡片本體
+// 維持米白底以避免畫面太雜。色相控制在低飽和、柔和的旅遊感色系。
+const DEST_PALETTE = [
+  { accent: '#7C3AED', soft: '#F3EEFF' }, // 紫（品牌色）
+  { accent: '#0EA5E9', soft: '#E6F4FB' }, // 海洋藍
+  { accent: '#F59E0B', soft: '#FFF5E0' }, // 旅遊黃
+  { accent: '#10B981', soft: '#E4F6EE' }, // 自然綠
+  { accent: '#EF4444', soft: '#FCE9E9' }, // 經典紅
+  { accent: '#EC4899', soft: '#FCE7F0' }, // 玫瑰粉
 ]
-function getCard(code: string) {
+function getAccent(code: string) {
   let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) & 0xffffffff
-  return CARD_PALETTE[Math.abs(h) % CARD_PALETTE.length]
+  return DEST_PALETTE[Math.abs(h) % DEST_PALETTE.length]
 }
 
 export default function ClassicHome({
@@ -247,17 +249,25 @@ export default function ClassicHome({
         </div>
       </div>
 
-      {/* ── 熱門目的地 ── */}
-      <div style={{ padding: '24px 20px 0' }}>
+      {/* ── 熱門目的地（票券式精緻卡片） ── */}
+      <div style={{ padding: '28px 20px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <p style={{ fontSize: 19, fontWeight: 900, color: '#1a1a1a', margin: 0, letterSpacing: '-0.025em' }}>熱門目的地</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 4, height: 18, borderRadius: 3,
+              background: 'linear-gradient(180deg, #7C3AED, #C4B5FD)',
+            }} />
+            <p style={{ fontSize: 19, fontWeight: 900, color: '#1a1a1a', margin: 0, letterSpacing: '-0.025em' }}>熱門目的地</p>
+          </div>
           <button onClick={() => onNavigate('products')} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 13, color: '#7C3AED', fontWeight: 700,
-            display: 'flex', alignItems: 'center', gap: 2,
+            background: 'rgba(124,58,237,0.08)', border: 'none', cursor: 'pointer',
+            fontSize: 12, color: '#7C3AED', fontWeight: 700,
+            display: 'flex', alignItems: 'center', gap: 3,
+            padding: '6px 12px', borderRadius: 100,
           }}>
             查看全部
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </button>
@@ -268,46 +278,70 @@ export default function ClassicHome({
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {hot.map((c, i) => {
-              const { bg, text } = getCard(c.countryCode)
+              const { accent, soft } = getAccent(c.countryCode)
+              const isHot = i < 2
               return (
                 <button key={c.countryCode} onClick={() => onSelectCountry(c.countryCode)}
+                  className="ch-dest-card"
                   style={{
-                    background: bg, borderRadius: 26,
-                    border: '2px solid rgba(0,0,0,0.07)',
+                    background: '#fff', borderRadius: 20,
+                    border: '1px solid rgba(15,23,42,0.06)',
                     cursor: 'pointer',
-                    padding: '18px 16px', textAlign: 'left', minHeight: 150,
-                    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                    padding: 0, textAlign: 'left', minHeight: 168,
+                    display: 'flex', flexDirection: 'column',
                     position: 'relative', overflow: 'hidden',
-                    animation: `fadeUp 0.4s ${0.1 + i * 0.06}s ease both`,
-                    boxShadow: '5px 6px 0 rgba(0,0,0,0.10)',
+                    animation: `fadeUp 0.4s ${0.1 + i * 0.04}s ease both`,
+                    boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 10px 24px rgba(15,23,42,0.05)',
+                    WebkitTapHighlightColor: 'transparent',
+                    touchAction: 'manipulation',
+                    transition: 'transform 0.12s ease, box-shadow 0.18s ease',
                   }}>
-                  {/* HOT badge */}
-                  {i < 2 && (
+                  {/* 頂部色條：類似機票/登機證的色帶，作為目的地識別 */}
+                  <div style={{
+                    height: 5, width: '100%',
+                    background: `linear-gradient(90deg, ${accent}, ${accent}80)`,
+                  }} />
+
+                  {/* HOT badge：精緻紫色細徽章，避免色塊太搶 */}
+                  {isHot && (
                     <div style={{
-                      position: 'absolute', top: 12, right: 12,
-                      background: 'rgba(0,0,0,0.12)', borderRadius: 8,
-                      fontSize: 9, fontWeight: 900, letterSpacing: '0.08em',
-                      color: text, padding: '3px 7px',
-                    }}>HOT</div>
+                      position: 'absolute', top: 14, right: 12,
+                      background: '#fff', borderRadius: 100,
+                      fontSize: 9, fontWeight: 800, letterSpacing: '0.12em',
+                      color: accent, padding: '3px 8px',
+                      border: `1px solid ${accent}33`,
+                      display: 'flex', alignItems: 'center', gap: 3,
+                    }}>
+                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: accent, display: 'inline-block' }} />
+                      HOT
+                    </div>
                   )}
 
-                  {/* 國旗 */}
-                  <div style={{ filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.12))' }}>
-                    <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={52} />
-                  </div>
+                  <div style={{ padding: '16px 16px 14px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    {/* 國旗：放入柔色圓圈，像護照戳章 */}
+                    <div style={{
+                      width: 56, height: 56, borderRadius: '50%',
+                      background: soft,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: `inset 0 0 0 1.5px ${accent}1a`,
+                    }}>
+                      <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={36} />
+                    </div>
 
-                  {/* 國名 + 價格 */}
-                  <div style={{ marginTop: 10 }}>
-                    <p style={{ fontSize: 18, fontWeight: 900, color: text, margin: '0 0 2px', letterSpacing: '-0.02em' }}>{c.countryNameZh}</p>
-                    <p style={{ fontSize: 11, color: `${text}99`, margin: '0 0 8px', fontWeight: 500 }}>{c.countryNameEn}</p>
-                    {c.minPrice && (
-                      <div style={{
-                        background: 'rgba(255,255,255,0.45)', borderRadius: 10,
-                        padding: '4px 10px', display: 'inline-flex', alignItems: 'center',
-                      }}>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: text }}>NT${c.minPrice} 起</span>
-                      </div>
-                    )}
+                    {/* 國名 + 價格 */}
+                    <div style={{ marginTop: 14 }}>
+                      <p style={{ fontSize: 16, fontWeight: 900, color: '#1a1a1a', margin: '0 0 1px', letterSpacing: '-0.02em' }}>{c.countryNameZh}</p>
+                      <p style={{ fontSize: 10.5, color: '#9ca3af', margin: '0 0 10px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{c.countryNameEn}</p>
+                      {c.minPrice ? (
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                          <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>NT$</span>
+                          <span style={{ fontSize: 17, fontWeight: 900, color: accent, letterSpacing: '-0.02em' }}>{c.minPrice}</span>
+                          <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>起</span>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>立即選購 →</span>
+                      )}
+                    </div>
                   </div>
                 </button>
               )
@@ -319,6 +353,7 @@ export default function ClassicHome({
       <style>{`
         @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
         @keyframes dropIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+        .ch-dest-card:active { transform: scale(0.97); box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
       `}</style>
     </div>
   )

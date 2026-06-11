@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo } from 'react'
-import { GlobeIllustration } from '@/components/liff/LiffIllustrations'
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
@@ -10,9 +9,24 @@ import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
-  bg: '#f7f8fa', white: '#ffffff', ink: '#0f172a',
-  muted: '#475569', faint: '#94a3b8', line: 'rgba(15,23,42,0.08)',
+  bg: '#EEEEF8', white: '#ffffff', ink: '#0f172a',
+  muted: '#475569', faint: '#94a3b8', line: 'rgba(15,23,42,0.06)',
+  softCard: 'rgba(255,255,255,0.65)',
 } as const
+
+// 旅遊風統一色系：與主頁 ClassicHome 共用配色邏輯
+const DEST_PALETTE = [
+  { accent: '#7C3AED', soft: '#F3EEFF' },
+  { accent: '#0EA5E9', soft: '#E6F4FB' },
+  { accent: '#F59E0B', soft: '#FFF5E0' },
+  { accent: '#10B981', soft: '#E4F6EE' },
+  { accent: '#EF4444', soft: '#FCE9E9' },
+  { accent: '#EC4899', soft: '#FCE7F0' },
+]
+function getAccent(code: string) {
+  let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) & 0xffffffff
+  return DEST_PALETTE[Math.abs(h) % DEST_PALETTE.length]
+}
 
 function BackArrow() {
   return (
@@ -55,89 +69,198 @@ export default function ClassicShop({
   colors: C, onSelectCountry, onSelectProduct, onBack,
   filter, cart,
 }: ProductsTemplateProps) {
-  // Country selection screen
+  // Country selection screen — 機票/登機證主視覺
   if (!selectedCountry) {
     return (
       <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96, background: S.bg, minHeight: '100vh' }}>
-        <div style={{ padding: '40px 24px 28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-          <GlobeIllustration size={110} />
-          <div style={{ textAlign: 'center' }}>
-            <h1 style={{ fontSize: 26, fontWeight: 900, color: S.ink, letterSpacing: '-0.03em', margin: 0 }}>選擇目的地</h1>
-            <p style={{ fontSize: 13, color: S.faint, marginTop: 6 }}>購買出國 eSIM · 即插即用</p>
+        {/* Hero：登機證式紫色漸層 banner，呼應主頁 hero 風格 */}
+        <div style={{ padding: '20px 16px 0' }}>
+          <div style={{
+            position: 'relative', overflow: 'hidden',
+            borderRadius: 24, padding: '24px 22px 26px',
+            background: 'linear-gradient(135deg, #6D28D9 0%, #7C3AED 55%, #A78BFA 100%)',
+            boxShadow: '0 12px 28px rgba(109,40,217,0.25)',
+            border: '1px solid rgba(109,40,217,0.2)',
+          }}>
+            {/* 裝飾性世界地圖點點 */}
+            <svg width="220" height="160" viewBox="0 0 220 160" style={{ position: 'absolute', right: -28, top: -10, opacity: 0.18 }}>
+              <g fill="#fff">
+                {Array.from({ length: 70 }).map((_, idx) => {
+                  const cx = (idx * 37) % 220
+                  const cy = (idx * 53) % 160
+                  const r = ((idx * 7) % 3) + 1
+                  return <circle key={idx} cx={cx} cy={cy} r={r} />
+                })}
+              </g>
+            </svg>
+
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.28)',
+                borderRadius: 100, padding: '4px 12px', marginBottom: 12,
+              }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="#fff">
+                  <path d="M2.5 19l19-8L2.5 3v6l13 2-13 2v6z" />
+                </svg>
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', letterSpacing: '0.14em', textTransform: 'uppercase' }}>準備出發</span>
+              </div>
+              <h1 style={{ fontSize: 24, fontWeight: 900, color: '#fff', margin: 0, letterSpacing: '-0.025em', lineHeight: 1.15, textShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>
+                選擇你的目的地
+              </h1>
+              <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.86)', margin: '6px 0 0', letterSpacing: '0.02em' }}>
+                {countries.length > 0 ? `${countries.length} 個熱門國家 · 即買即用 eSIM` : '購買出國 eSIM · 即插即用'}
+              </p>
+            </div>
           </div>
+        </div>
+
+        {/* 區段標題 */}
+        <div style={{ padding: '24px 20px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            display: 'inline-flex', width: 4, height: 18, borderRadius: 3,
+            background: 'linear-gradient(180deg, #7C3AED, #C4B5FD)',
+          }} />
+          <p style={{ fontSize: 16, fontWeight: 900, color: S.ink, margin: 0, letterSpacing: '-0.02em' }}>所有目的地</p>
+          {countries.length > 0 && (
+            <span style={{ fontSize: 11, color: S.faint, fontWeight: 600, marginLeft: 'auto' }}>
+              共 {countries.length} 國
+            </span>
+          )}
         </div>
 
         {countries.length === 0 ? (
           <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>目前沒有可購買的商品</p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 16px' }}>
-            {countries.map(c => (
-              <button
-                key={c.countryCode}
-                onClick={() => onSelectCountry(c.countryCode)}
-                style={{
-                  background: S.white, border: `1px solid ${S.line}`,
-                  borderRadius: 18, padding: '20px 16px',
-                  textAlign: 'left', cursor: 'pointer',
-                  boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.03)',
-                  WebkitTapHighlightColor: 'transparent',
-                  transition: 'transform 0.15s, box-shadow 0.15s',
-                }}
-              >
-                <div style={{ marginBottom: 12 }}>
-                  <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={44} />
-                </div>
-                <p style={{ fontSize: 15, fontWeight: 700, color: S.ink, margin: 0, letterSpacing: '-0.01em' }}>{c.countryNameZh}</p>
-                <p style={{ fontSize: 11, color: S.faint, marginTop: 4, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{c.countryNameEn}</p>
-              </button>
-            ))}
+            {countries.map((c, i) => {
+              const { accent, soft } = getAccent(c.countryCode)
+              return (
+                <button
+                  key={c.countryCode}
+                  onClick={() => onSelectCountry(c.countryCode)}
+                  className="cs-country-card"
+                  style={{
+                    position: 'relative', overflow: 'hidden',
+                    background: S.white, border: '1px solid rgba(15,23,42,0.06)',
+                    borderRadius: 20, padding: 0,
+                    textAlign: 'left', cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 10px 24px rgba(15,23,42,0.05)',
+                    WebkitTapHighlightColor: 'transparent',
+                    touchAction: 'manipulation',
+                    transition: 'transform 0.12s ease, box-shadow 0.18s ease',
+                    minHeight: 154,
+                    display: 'flex', flexDirection: 'column',
+                  }}
+                >
+                  {/* 頂部色條：機票登機證感 */}
+                  <div style={{
+                    height: 5, width: '100%',
+                    background: `linear-gradient(90deg, ${accent}, ${accent}80)`,
+                  }} />
+
+                  <div style={{ padding: '16px 16px 14px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    {/* 國旗放在護照戳章圓圈內 */}
+                    <div style={{
+                      width: 54, height: 54, borderRadius: '50%',
+                      background: soft,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: `inset 0 0 0 1.5px ${accent}1f`,
+                    }}>
+                      <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={36} />
+                    </div>
+
+                    <div style={{ marginTop: 12 }}>
+                      <p style={{ fontSize: 15.5, fontWeight: 900, color: S.ink, margin: 0, letterSpacing: '-0.02em' }}>{c.countryNameZh}</p>
+                      <p style={{ fontSize: 10.5, color: '#9ca3af', marginTop: 3, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{c.countryNameEn}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, color: accent }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.02em' }}>查看方案</span>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
+
+        <style>{`
+          .cs-country-card:active { transform: scale(0.97); box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
+        `}</style>
       </div>
     )
   }
 
   const country = countries.find(c => c.countryCode === selectedCountry)
   const showNoMatch = filter.dayFilter > 0 && filter.filteredCount === 0
+  const countryAccent = country ? getAccent(country.countryCode) : DEST_PALETTE[0]
 
   // Annotate + sort by per-day value
   const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96, background: S.bg, minHeight: '100vh' }}>
-      {/* Sticky header */}
+      {/* Sticky header（更精緻的 glass header + 國家色條） */}
       <div style={{
         position: 'sticky', top: 0,
-        background: 'rgba(247,248,250,0.92)', backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        zIndex: 10, padding: '14px 16px 12px',
+        background: 'rgba(238,238,248,0.92)', backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+        zIndex: 10,
         borderBottom: `1px solid ${S.line}`,
-        display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', color: S.muted, display: 'flex', alignItems: 'center' }}>
-          <BackArrow />
-        </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {country && <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={22} />}
-            <h1 style={{ fontSize: 17, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.01em' }}>{country?.countryNameZh ?? '方案'}</h1>
-          </div>
-          <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0', letterSpacing: '0.04em' }}>
-            {filter.dayFilter ? `已篩選 ${filter.filteredCount} / ${filter.totalCount}` : `${filter.totalCount} 個方案`}
-          </p>
-        </div>
-        {filter.dayFilter > 0 && (
-          <button
-            type="button"
-            onClick={filter.onClear}
+        {/* 國家識別色條 */}
+        <div style={{
+          height: 3, width: '100%',
+          background: `linear-gradient(90deg, ${countryAccent.accent}, ${countryAccent.accent}66)`,
+        }} />
+        <div style={{ padding: '12px 16px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={onBack} aria-label="返回"
             style={{
-              background: 'transparent', border: `1px solid ${S.line}`, color: S.muted,
-              fontSize: 12, fontWeight: 600, padding: '6px 11px',
-              borderRadius: 100, cursor: 'pointer',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-          >全部</button>
-        )}
+              width: 36, height: 36, borderRadius: '50%',
+              background: '#fff', border: '1px solid rgba(15,23,42,0.06)',
+              padding: 0, cursor: 'pointer', color: S.muted,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
+            }}>
+            <BackArrow />
+          </button>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+            {country && (
+              <div style={{
+                width: 36, height: 36, borderRadius: '50%',
+                background: countryAccent.soft,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: `inset 0 0 0 1.5px ${countryAccent.accent}26`,
+                flexShrink: 0,
+              }}>
+                <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={24} />
+              </div>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ fontSize: 16, fontWeight: 900, color: S.ink, margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                {country?.countryNameZh ?? '方案'}
+              </h1>
+              <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0', letterSpacing: '0.04em', fontWeight: 600 }}>
+                {filter.dayFilter ? `已篩選 ${filter.filteredCount} / ${filter.totalCount}` : `${filter.totalCount} 個方案 · eSIM`}
+              </p>
+            </div>
+          </div>
+          {filter.dayFilter > 0 && (
+            <button
+              type="button"
+              onClick={filter.onClear}
+              style={{
+                background: '#fff', border: `1px solid ${countryAccent.accent}33`, color: countryAccent.accent,
+                fontSize: 12, fontWeight: 700, padding: '6px 12px',
+                borderRadius: 100, cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >全部</button>
+          )}
+        </div>
       </div>
 
       {/* Day picker */}
@@ -192,13 +315,13 @@ export default function ClassicShop({
               key={p.id}
               style={{
                 position: 'relative',
-                width: '100%', background: S.white, borderRadius: 18,
-                border: `1px solid ${inCart ? C.border : S.line}`,
+                width: '100%', background: S.white, borderRadius: 20,
+                border: `1px solid ${inCart ? `${C.primary}40` : 'rgba(15,23,42,0.06)'}`,
                 boxShadow: inCart
-                  ? `0 2px 6px rgba(15,23,42,0.04), 0 0 0 1.5px ${C.primary}33`
-                  : '0 1px 2px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.03)',
+                  ? `0 2px 6px rgba(15,23,42,0.04), 0 0 0 2px ${C.primary}25, 0 12px 28px ${C.primary}1a`
+                  : '0 1px 2px rgba(15,23,42,0.04), 0 10px 24px rgba(15,23,42,0.05)',
                 overflow: 'hidden',
-                transition: 'box-shadow 0.18s',
+                transition: 'box-shadow 0.2s, border 0.2s',
               }}
             >
               {/* Best value ribbon */}
@@ -208,48 +331,55 @@ export default function ClassicShop({
                   background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                   color: '#fff',
                   fontSize: 10, fontWeight: 800,
-                  padding: '4px 10px 4px 10px',
-                  borderTopLeftRadius: 18, borderBottomRightRadius: 10,
-                  display: 'flex', alignItems: 'center', gap: 3,
-                  letterSpacing: '0.08em',
+                  padding: '4px 12px 4px 12px',
+                  borderTopLeftRadius: 20, borderBottomRightRadius: 12,
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  letterSpacing: '0.1em',
                   zIndex: 1,
+                  boxShadow: '0 4px 10px rgba(217,119,6,0.3)',
                 }}>
                   <CrownIcon size={11} /> 最划算
                 </div>
               )}
 
-              <div style={{ display: 'flex', alignItems: 'stretch' }}>
+              <div style={{ display: 'flex', alignItems: 'stretch', position: 'relative' }}>
                 <button
                   type="button"
                   onClick={() => onSelectProduct(p.id)}
+                  className="cs-plan-tap"
                   style={{
                     flex: 1, background: 'transparent', border: 'none',
-                    padding: d.recommended ? '26px 18px 18px' : '18px',
+                    padding: d.recommended ? '28px 18px 18px' : '18px',
                     cursor: 'pointer', textAlign: 'left',
                     WebkitTapHighlightColor: 'transparent',
+                    touchAction: 'manipulation',
                     display: 'flex', alignItems: 'center', gap: 14,
+                    minWidth: 0,
+                    transition: 'background 0.15s',
                   }}
                 >
-                  {/* Day badge with tier accent */}
+                  {/* Day badge：護照戳章式圓徽，搭配 tier 配色 + 光暈 */}
                   <div style={{
-                    width: 64, height: 64, borderRadius: 16, flexShrink: 0,
+                    position: 'relative',
+                    width: 66, height: 66, borderRadius: 18, flexShrink: 0,
                     background: tier.bg, color: tier.fg,
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: `inset 0 0 0 1.5px ${tier.accent}1a, 0 4px 10px ${tier.accent}1a`,
                   }}>
                     <span style={{ fontSize: 24, fontWeight: 900, lineHeight: 1, letterSpacing: '-0.03em' }}>{p.displayDays}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, marginTop: 2, letterSpacing: '0.1em' }}>天</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, marginTop: 2, letterSpacing: '0.14em' }}>DAYS</span>
                   </div>
 
                   {/* Mid info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
                       <span style={{
-                        fontSize: 11, fontWeight: 700, color: tier.accent,
-                        background: tier.bg, borderRadius: 6, padding: '3px 8px',
-                        letterSpacing: '0.04em',
+                        fontSize: 10.5, fontWeight: 800, color: tier.accent,
+                        background: tier.bg, borderRadius: 100, padding: '3px 9px',
+                        letterSpacing: '0.06em',
                       }}>{TIER_LABEL[d.tier]}</span>
                       {p.dataCapacity && (
-                        <span style={{ fontSize: 13, fontWeight: 700, color: S.ink, letterSpacing: '-0.01em' }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: S.ink, letterSpacing: '-0.01em' }}>
                           {p.dataCapacity}
                         </span>
                       )}
@@ -259,7 +389,7 @@ export default function ClassicShop({
                       <NativeSimBadge isNative={p.isNativeSim} />
                     </div>
                     {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
-                      <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>
+                      <p style={{ fontSize: 11, color: S.faint, margin: 0, fontWeight: 600 }}>
                         共 {Math.round(d.totalGB)} GB
                       </p>
                     )}
@@ -272,40 +402,72 @@ export default function ClassicShop({
                         NT${p.sellPrice.toLocaleString()}
                       </p>
                     )}
-                    <p style={{ fontSize: 20, fontWeight: 900, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                    <p style={{ fontSize: 21, fontWeight: 900, color: C.primary, margin: 0, letterSpacing: '-0.035em', lineHeight: 1.1 }}>
                       NT${bestPrice.toLocaleString()}
                     </p>
                     {hasDiscount && (
-                      <p style={{ fontSize: 10, color: '#16a34a', margin: '2px 0 0', fontWeight: 700 }}>
-                        省 NT${savedAmount.toLocaleString()}
+                      <p style={{
+                        fontSize: 10, color: '#16a34a', margin: '3px 0 0', fontWeight: 800,
+                        background: '#dcfce7', display: 'inline-block', padding: '2px 6px', borderRadius: 100,
+                      }}>
+                        省 ${savedAmount.toLocaleString()}
                       </p>
                     )}
                   </div>
                 </button>
 
-                {/* Add to cart */}
+                {/* 票根撕邊：兩個半圓凹槽 + 虛線 */}
+                <span aria-hidden style={{
+                  position: 'absolute', top: -7, right: 51,
+                  width: 14, height: 14, borderRadius: '50%',
+                  background: S.bg,
+                  border: '1px solid rgba(15,23,42,0.06)',
+                  borderBottom: 'none', borderRight: 'none',
+                }} />
+                <span aria-hidden style={{
+                  position: 'absolute', bottom: -7, right: 51,
+                  width: 14, height: 14, borderRadius: '50%',
+                  background: S.bg,
+                  border: '1px solid rgba(15,23,42,0.06)',
+                  borderTop: 'none', borderLeft: 'none',
+                }} />
+
+                {/* Add to cart（票根區） */}
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); cart.toggle(p) }}
                   aria-label={inCart ? '從購物車移除' : '加入購物車'}
+                  className="cs-cart-tap"
                   style={{
                     width: 52, flexShrink: 0,
-                    background: inCart ? C.primary : 'transparent',
+                    background: inCart ? C.primary : `${C.primary}0c`,
                     color: inCart ? C.onPrimary : C.primary,
-                    border: 'none', borderLeft: `1px solid ${inCart ? 'transparent' : S.line}`,
+                    border: 'none',
+                    borderLeft: inCart ? `1px dashed ${C.primary}` : `1px dashed ${C.primary}55`,
                     cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'background 0.15s, color 0.15s',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    gap: 3,
+                    transition: 'background 0.18s, color 0.18s',
                     WebkitTapHighlightColor: 'transparent',
+                    touchAction: 'manipulation',
                   }}
                 >
                   {inCart ? <CartCheckIcon /> : <CartPlusIcon />}
+                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.08em' }}>
+                    {inCart ? '已加入' : '加入'}
+                  </span>
                 </button>
               </div>
             </div>
           )
         })}
       </div>
+
+      <style>{`
+        .cs-plan-tap:active { background: rgba(15,23,42,0.04); }
+        .cs-cart-tap:active { filter: brightness(0.92); }
+      `}</style>
     </div>
   )
 }

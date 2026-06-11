@@ -43,7 +43,8 @@ function ProductsContent() {
   const cart = useCart()
 
   const [countries, setCountries] = useState<Country[]>([])
-  const [products, setProducts] = useState<Product[]>([])
+  // allProducts = 後端抓回的「所有方案」；selectedCountry/dayFilter 在前端篩選，避免切國家時重打 API
+  const [allProducts, setAllProducts] = useState<Product[]>([])
   const [coupons, setCoupons] = useState<CouponItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -64,20 +65,18 @@ function ProductsContent() {
     router.replace(qs ? `?${qs}` : `/liff/${slug}/products`)
   }
 
+  // 只在初次 ready 時 fetch 一次，後續切國家純前端 filter
   useEffect(() => {
     if (!isReady) return
+    let cancelled = false
     async function load() {
-      let lineUid: string | undefined
-      try { if (liff) lineUid = (await liff.getProfile()).userId } catch {}
-      const qs = new URLSearchParams()
-      if (selectedCountry) qs.set('country', selectedCountry)
-      if (lineUid) qs.set('lineUid', lineUid)
       const [prodData, couponData] = await Promise.all([
-        fetch(`/api/products${qs.toString() ? `?${qs}` : ''}`).then(r => r.json()),
+        fetch('/api/products').then(r => r.json()),
         fetch('/api/coupons').then(r => r.json()).catch(() => ({ coupons: [] })),
       ])
+      if (cancelled) return
       setCountries(prodData.countries ?? [])
-      setProducts(prodData.products ?? [])
+      setAllProducts(prodData.products ?? [])
       const now = new Date()
       setCoupons(
         (couponData.coupons ?? [])
@@ -89,7 +88,14 @@ function ProductsContent() {
       setLoading(false)
     }
     load()
-  }, [selectedCountry, isReady, liff])
+    return () => { cancelled = true }
+  }, [isReady])
+
+  // 依 selectedCountry 在前端 filter — 切國家瞬間完成、不需 API roundtrip
+  const products = useMemo(
+    () => selectedCountry ? allProducts.filter(p => p.countryCode === selectedCountry) : allProducts,
+    [allProducts, selectedCountry],
+  )
 
   const availableDays = useMemo(() => {
     const set = new Set<number>()
