@@ -5,6 +5,7 @@ import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
 import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR, type DataTier } from '@/lib/utils/product-display'
+import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
@@ -292,6 +293,8 @@ export default function CompactShop({
                         {p.dataCapacity}
                       </span>
                     )}
+                    <NetworkBadge networkType={p.networkType} />
+                    <NativeSimBadge isNative={p.isNativeSim} />
                     {d.recommended && (
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 3,

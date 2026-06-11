@@ -5,6 +5,7 @@ import { usePathname, useRouter, useParams } from 'next/navigation'
 import { useCart } from '@/components/liff/CartProvider'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { CountryFlag } from '@/components/common/CountryFlag'
+import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 
 // Pages where the floating cart should NOT appear
 const HIDE_ON = ['/checkout', '/profile/setup', '/login', '/gift/']
@@ -222,6 +223,12 @@ export default function FloatingCart() {
                         <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
                           {item.displayDays} 天{item.dataCapacity ? ` · ${item.dataCapacity}` : ''}
                         </p>
+                        {(item.networkType || item.isNativeSim) && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                            <NetworkBadge networkType={item.networkType} />
+                            <NativeSimBadge isNative={item.isNativeSim} />
+                          </div>
+                        )}
                         <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: '4px 0 0', letterSpacing: '-0.01em' }}>
                           NT${item.sellPrice.toLocaleString()}
                         </p>

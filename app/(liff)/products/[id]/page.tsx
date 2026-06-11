@@ -7,6 +7,7 @@ import { useTenantColors } from '@/components/liff/TenantContext'
 import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import { useCart } from '@/components/liff/CartProvider'
+import { NetworkBadge, NativeSimBadge, parseNetworkType } from '@/components/liff/ProductBadges'
 
 type Product = {
   id: string
@@ -16,6 +17,8 @@ type Product = {
   countryFlag: string | null
   displayDays: number
   dataCapacity: string | null
+  networkType: string | null
+  isNativeSim: boolean
   description: string | null
   sellPrice: number
 }
@@ -91,9 +94,12 @@ export default function ProductDetailPage() {
   )
 
   const descLines = product.description?.split('\n').filter(Boolean) ?? []
+  const net = parseNetworkType(product.networkType)
 
-  const features = [
+  const features: string[] = [
     product.dataCapacity ? product.dataCapacity : null,
+    net.label ? `支援 ${net.label} 高速網路` : null,
+    product.isNativeSim ? '原生 SIM · 非漫遊，穩定連線' : null,
     'eSIM 即插即用，無需實體 SIM',
     '購買後即可收到安裝教學',
   ].filter(Boolean) as string[]
@@ -131,6 +137,12 @@ export default function ProductDetailPage() {
               <span style={{ fontSize: 40, fontWeight: 800, color: S.ink, letterSpacing: '-0.04em', lineHeight: 1 }}>{product.displayDays}</span>
               <span style={{ fontSize: 16, color: S.muted, fontWeight: 500 }}>天方案</span>
             </div>
+            {(net.label || product.isNativeSim) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+                <NetworkBadge networkType={product.networkType} size="md" />
+                <NativeSimBadge isNative={product.isNativeSim} size="md" />
+              </div>
+            )}
           </div>
           <SignalIllustration size={54} />
         </div>
@@ -216,6 +228,8 @@ export default function ProductDetailPage() {
                       countryFlag: product.countryFlag,
                       displayDays: product.displayDays,
                       dataCapacity: product.dataCapacity,
+                      networkType: product.networkType,
+                      isNativeSim: product.isNativeSim,
                       sellPrice: product.sellPrice,
                     })
                     setJustAdded(true)

@@ -6,6 +6,7 @@ import { useTenantColors } from '@/components/liff/TenantContext'
 import { findBestCouponCombo as _findBestCouponCombo } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import { useCart } from '@/components/liff/CartProvider'
+import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 
 type Product = {
   id: string
@@ -15,6 +16,8 @@ type Product = {
   displayDays: number
   sellPrice: number
   dataCapacity: string | null
+  networkType: string | null
+  isNativeSim: boolean
 }
 
 type Coupon = {
@@ -221,9 +224,9 @@ function CheckoutContent() {
             <CountryFlag code={product.countryCode} fallbackEmoji={product.countryFlag} size={40} />
           </div>
 
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a', margin: '0 0 4px' }}>{product.countryNameZh}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
               <span style={{
                 fontSize: 12, fontWeight: 600, color: '#4b5563',
                 background: '#f3f4f6', borderRadius: 6, padding: '2px 8px',
@@ -238,6 +241,8 @@ function CheckoutContent() {
                   {product.dataCapacity}
                 </span>
               )}
+              <NetworkBadge networkType={product.networkType} />
+              <NativeSimBadge isNative={product.isNativeSim} />
             </div>
             <p style={{ fontSize: 20, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
               NT${product.sellPrice.toLocaleString()}

@@ -9,6 +9,8 @@ export type CartItem = {
   countryFlag: string | null
   displayDays: number
   dataCapacity: string | null
+  networkType?: string | null
+  isNativeSim?: boolean
   sellPrice: number
   addedAt: number
 }

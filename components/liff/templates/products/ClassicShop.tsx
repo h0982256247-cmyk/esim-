@@ -6,6 +6,7 @@ import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
 import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR } from '@/lib/utils/product-display'
+import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
@@ -241,7 +242,7 @@ export default function ClassicShop({
 
                   {/* Mid info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
                       <span style={{
                         fontSize: 11, fontWeight: 700, color: tier.accent,
                         background: tier.bg, borderRadius: 6, padding: '3px 8px',
@@ -252,6 +253,10 @@ export default function ClassicShop({
                           {p.dataCapacity}
                         </span>
                       )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5, flexWrap: 'wrap' }}>
+                      <NetworkBadge networkType={p.networkType} />
+                      <NativeSimBadge isNative={p.isNativeSim} />
                     </div>
                     {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
                       <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>

@@ -15,6 +15,8 @@ export interface Product {
   countryNameEn: string
   displayDays: number
   dataCapacity: string | null
+  networkType: string | null
+  isNativeSim: boolean
   description: string | null
   sellPrice: number
 }

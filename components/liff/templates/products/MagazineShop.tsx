@@ -5,6 +5,7 @@ import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
 import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR } from '@/lib/utils/product-display'
+import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
@@ -337,7 +338,13 @@ export default function MagazineShop({
                     {p.dataCapacity}
                   </p>
                 )}
-                <p style={{ fontSize: 11, color: S.muted, margin: '4px 0 0', fontVariantNumeric: 'tabular-nums' }}>
+                {(p.networkType || p.isNativeSim) && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                    <NetworkBadge networkType={p.networkType} />
+                    <NativeSimBadge isNative={p.isNativeSim} />
+                  </div>
+                )}
+                <p style={{ fontSize: 11, color: S.muted, margin: '6px 0 0', fontVariantNumeric: 'tabular-nums' }}>
                   NT${d.perDayCost} / 天
                   {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
                     <> · 共 {Math.round(d.totalGB)} GB</>
@@ -459,9 +466,15 @@ function FeaturedCard({ display: d, coupons, colors: C, inCart, onToggleCart, on
           </div>
 
           {p.dataCapacity && (
-            <p style={{ fontSize: 15, fontWeight: 800, color: S.ink, margin: '0 0 4px', letterSpacing: '-0.01em' }}>
+            <p style={{ fontSize: 15, fontWeight: 800, color: S.ink, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
               {p.dataCapacity}
             </p>
+          )}
+          {(p.networkType || p.isNativeSim) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+              <NetworkBadge networkType={p.networkType} size="md" />
+              <NativeSimBadge isNative={p.isNativeSim} size="md" />
+            </div>
           )}
           <p style={{ fontSize: 12, color: S.muted, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
             <span style={{ fontWeight: 700, color: tier.fg }}>NT${d.perDayCost}</span> / 天

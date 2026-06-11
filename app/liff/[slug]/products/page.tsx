@@ -150,6 +150,8 @@ function ProductsContent() {
         countryFlag: country?.countryFlag ?? null,
         displayDays: product.displayDays,
         dataCapacity: product.dataCapacity,
+        networkType: product.networkType,
+        isNativeSim: product.isNativeSim,
         sellPrice: product.sellPrice,
       })
     },

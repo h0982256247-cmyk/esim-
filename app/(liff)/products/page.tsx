@@ -10,6 +10,7 @@ import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
 import { useCart } from '@/components/liff/CartProvider'
 import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR } from '@/lib/utils/product-display'
+import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 
 type Country = {
   countryCode: string
@@ -25,6 +26,8 @@ type Product = {
   countryNameEn: string
   displayDays: number
   dataCapacity: string | null
+  networkType: string | null
+  isNativeSim: boolean
   description: string | null
   sellPrice: number
 }
@@ -523,7 +526,7 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
                         <span style={{
                           fontSize: 11, fontWeight: 700, color: tier.accent,
                           background: tier.bg, borderRadius: 6, padding: '3px 8px',
@@ -534,6 +537,10 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
                             {p.dataCapacity}
                           </span>
                         )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5, flexWrap: 'wrap' }}>
+                        <NetworkBadge networkType={p.networkType} />
+                        <NativeSimBadge isNative={p.isNativeSim} />
                       </div>
                       {d.totalGB > 0 && !d.isUnlimited && d.isPerDay ? (
                         <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>
@@ -577,6 +584,8 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
                           countryFlag: country?.countryFlag ?? null,
                           displayDays: p.displayDays,
                           dataCapacity: p.dataCapacity,
+                          networkType: p.networkType,
+                          isNativeSim: p.isNativeSim,
                           sellPrice: p.sellPrice,
                         })
                       }

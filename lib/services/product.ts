@@ -20,6 +20,8 @@ export async function getActiveProducts(countryCode?: string, tenantAdminId?: st
       countryFlag: true,
       displayDays: true,
       dataCapacity: true,
+      networkType: true,
+      isNativeSim: true,
       description: true,
       sellPrice: true,
       sortOrder: true,
@@ -38,6 +40,8 @@ export async function getProductById(id: string) {
       countryFlag: true,
       displayDays: true,
       dataCapacity: true,
+      networkType: true,
+      isNativeSim: true,
       description: true,
       sellPrice: true,
       costPrice: true,    // 下單時寫入 OrderItem.unitCost 作為成本快照
