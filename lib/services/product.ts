@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma, ProductStatus, SupplierProductStatus, SupplierProductType } from '@prisma/client'
 import type { SupplierProductMap } from './esim'
-import { resolveCountry } from '@/lib/utils/country'
+import { resolveCountry, resolveCountryByPlanCode } from '@/lib/utils/country'
 import { parseCapacityFromName } from '@/lib/utils/capacity'
 
 export async function getActiveProducts(countryCode?: string, tenantAdminId?: string | null) {
@@ -420,11 +420,20 @@ export async function recomputeMetaFromSupplier(
   for (const p of products) {
     const name = p.supplierProduct?.productName?.trim() ?? ''
 
-    // 1. 重算 country：用 supplier name。沒命中則保留原值。
+    // 1. 重算 country：
+    //    優先用 Product 自己的 planCode 前綴（每 row 獨立、不會跨 SKU 共享）
+    //    後備才用 SupplierProduct.productName（多 row 共用同一個 supplier 時
+    //    這個值會被覆蓋成其中一筆 row 的名稱，無法區分拆出來的不同國家）。
     let nextCountryCode    = p.countryCode
     let nextCountryNameZh  = p.countryNameZh
     let nextCountryFlag    = p.countryFlag ?? ''
-    if (name) {
+
+    const planCodeMatch = p.planCode ? resolveCountryByPlanCode(p.planCode) : null
+    if (planCodeMatch) {
+      nextCountryCode   = planCodeMatch.code
+      nextCountryNameZh = planCodeMatch.zh
+      nextCountryFlag   = planCodeMatch.flag
+    } else if (name) {
       const r = resolveCountry(name, '', '', '', p.countryFlag ?? '')
       if (r.matchedByName) {
         nextCountryCode   = r.countryCode
