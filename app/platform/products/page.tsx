@@ -787,6 +787,9 @@ export default function PlatformProductsPage() {
                 {editingProduct.planCode && (
                   <span className="col-span-2">Plan Code：<span className="font-mono font-medium text-gray-700">{editingProduct.planCode}</span></span>
                 )}
+                {editingProduct.supplierProduct?.productName && (
+                  <span className="col-span-2">供應商商品名稱：<span className="font-medium text-gray-700">{editingProduct.supplierProduct.productName}</span></span>
+                )}
               </div>
 
               {saveMsg && (
