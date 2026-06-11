@@ -326,11 +326,23 @@ export async function fetchSupplierProductMap(tenantAdminId?: string | null): Pr
   // 此端點簽章只用 merchantId + token，不帶 deptId 也不帶 body
   const encStr = crypto.createHash('sha1').update(merchantId + token).digest('hex')
 
-  const res = await fetch(`${apiUrl}/Api/QuoteMg/myQueryAll`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ merchantId, encStr }),
-  })
+  // 8 秒 timeout：上游掛掉時不要拖死整個匯入流程，呼叫端（如 CSV import）會 fallback
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 8000)
+  let res: Response
+  try {
+    res = await fetch(`${apiUrl}/Api/QuoteMg/myQueryAll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ merchantId, encStr }),
+      signal: ac.signal,
+    })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw new Error('World Move QuoteQuery 逾時（8s）')
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
   if (!res.ok) throw new Error(`World Move QuoteQuery HTTP ${res.status}`)
 
   const data = await res.json() as Record<string, unknown>

@@ -155,17 +155,28 @@ export default function PlatformProductsPage() {
     setUploadMsg(null)
     const formData = new FormData()
     formData.append('file', file)
-    const r = await fetch('/api/admin/products/import', { method: 'POST', body: formData }).then(x => x.json())
-    setUploading(false)
-    if (r.message) {
-      const warnText = r.warnings?.length ? `（供應商驗證提示：${r.warnings.join('、')}）` : ''
-      setUploadMsg({ ok: true, warn: !!warnText, text: `${r.message}${warnText}` })
-      load()
-    } else {
-      const detail = r.details?.join('、') ?? ''
-      setUploadMsg({ ok: false, text: `${r.error}${detail ? `：${detail}` : ''}` })
+    try {
+      const res = await fetch('/api/admin/products/import', { method: 'POST', body: formData })
+      // 若 server timeout / 500，response body 可能不是 JSON — 用 text 後嘗試 parse
+      const raw = await res.text()
+      let r: { message?: string; warnings?: string[]; error?: string; details?: string[] }
+      try { r = JSON.parse(raw) } catch { r = { error: raw || `HTTP ${res.status}` } }
+
+      if (res.ok && r.message) {
+        const warnText = r.warnings?.length ? `（供應商驗證提示：${r.warnings.join('、')}）` : ''
+        setUploadMsg({ ok: true, warn: !!warnText, text: `${r.message}${warnText}` })
+        load()
+      } else {
+        const detail = r.details?.join('、') ?? ''
+        setUploadMsg({ ok: false, text: `${r.error ?? '匯入失敗'}${detail ? `：${detail}` : ''}` })
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '網路錯誤'
+      setUploadMsg({ ok: false, text: `匯入失敗：${msg}（檔案太大或處理逾時時請改用較小批次）` })
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
     }
-    if (fileRef.current) fileRef.current.value = ''
   }
 
   // 從目前商品列表取最近一次同步時間，決定是否需要節流提示

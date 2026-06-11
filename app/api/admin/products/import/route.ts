@@ -4,6 +4,11 @@ import { requirePlatformAuth } from '@/lib/auth/platform'
 import { batchCreateProducts, type CsvProductRow } from '@/lib/services/product'
 import { fetchSupplierProductMap } from '@/lib/services/esim'
 
+// Vercel 預設 serverless function timeout 為 10 秒，CSV 匯入需呼叫供應商 API +
+// 走 PgBouncer connection_limit=1 的逐筆寫入，列數一多 10 秒不夠。拉到 60 秒
+// （Hobby 上限）。
+export const maxDuration = 60
+
 // ── 欄位別名對應表（中文欄位名 → 內部英文名）──────────────────────
 const HEADER_ALIAS: Record<string, string> = {
   // 中文欄位名（使用者試算表）
