@@ -2,6 +2,7 @@
 
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
+import DayPicker from '@/components/liff/DayPicker'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
@@ -31,9 +32,27 @@ function BackArrow() {
   )
 }
 
+function PlusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
 export default function MagazineShop({
   countries, products, coupons, selectedCountry,
   colors: C, onSelectCountry, onSelectProduct, onBack,
+  filter, cart,
 }: ProductsTemplateProps) {
   if (!selectedCountry) {
     return (
@@ -69,7 +88,6 @@ export default function MagazineShop({
                 position: 'relative', overflow: 'hidden',
               }}
             >
-              {/* 國旗 SVG */}
               <div style={{
                 position: 'absolute', top: 16, right: 16,
                 filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))',
@@ -126,6 +144,7 @@ export default function MagazineShop({
 
   const country = countries.find(c => c.countryCode === selectedCountry)
   const gradient = getGradient(selectedCountry)
+  const showNoMatch = filter.dayFilter > 0 && filter.filteredCount === 0
 
   return (
     <div style={{ paddingBottom: 96 }}>
@@ -158,32 +177,94 @@ export default function MagazineShop({
         <h1 style={{ fontSize: 32, fontWeight: 900, color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em', textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
           {country?.countryNameZh}
         </h1>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-          {products.length} 個方案可選
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', margin: 0 }}>
+          {filter.dayFilter
+            ? `${filter.filteredCount} / ${filter.totalCount} 個方案`
+            : `${filter.totalCount} 個方案可選`}
         </p>
       </div>
 
+      {/* Day picker (overlapping the hero) */}
+      {filter.availableDays.length > 0 && (
+        <div style={{ padding: '0 16px', marginTop: -18 }}>
+          <DayPicker
+            value={filter.pickerDays}
+            onChange={filter.onChange}
+            min={filter.minDay}
+            max={filter.maxDay}
+            presets={filter.presets}
+            label="想用幾天？"
+            caption={filter.dayFilter
+              ? (filter.filteredCount > 0 ? `找到 ${filter.filteredCount} 個 ${filter.dayFilter} 天方案` : `沒有 ${filter.dayFilter} 天的方案`)
+              : '選擇天數即可篩選方案'}
+          />
+          {filter.dayFilter > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={filter.onClear}
+                style={{
+                  background: 'transparent', border: `1px solid ${S.line}`, color: S.muted,
+                  fontSize: 12, fontWeight: 600, padding: '5px 14px',
+                  borderRadius: 100, cursor: 'pointer',
+                }}
+              >顯示全部</button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 方案卡片 */}
       <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {products.length === 0 && (
+        {filter.totalCount === 0 && (
           <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>此目的地暫無可購買方案</p>
         )}
+
+        {showNoMatch && filter.nearestDays.length > 0 && (
+          <div style={{ padding: '8px 4px' }}>
+            <p style={{ fontSize: 13, color: S.muted, margin: '0 0 8px' }}>您也可以選擇相近天數：</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {filter.nearestDays.map(n => (
+                <button
+                  key={n}
+                  onClick={() => filter.onChange(n)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 100,
+                    border: `1px solid ${C.border}`, background: C.light, color: C.primary,
+                    fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  }}
+                >{n} 天</button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {products.map(p => {
           const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
+          const inCart = cart.has(p.id)
           return (
-            <button
+            <div
               key={p.id}
-              onClick={() => onSelectProduct(p.id)}
               style={{
-                width: '100%', textAlign: 'left',
+                width: '100%',
                 background: S.white, borderRadius: 18,
-                border: 'none', padding: '20px',
-                cursor: 'pointer',
-                boxShadow: '0 2px 16px rgba(0,0,0,0.08)',
-                display: 'grid', gridTemplateColumns: '1fr auto', gap: 12,
+                boxShadow: inCart
+                  ? `0 4px 20px ${C.primary}33, 0 0 0 1.5px ${C.primary}`
+                  : '0 2px 16px rgba(0,0,0,0.08)',
+                display: 'grid', gridTemplateColumns: '1fr auto',
+                padding: '20px', gap: 12,
+                position: 'relative',
+                transition: 'box-shadow 0.18s',
               }}
             >
-              <div>
+              <button
+                onClick={() => onSelectProduct(p.id)}
+                style={{
+                  background: 'transparent', border: 'none', textAlign: 'left',
+                  cursor: 'pointer', padding: 0,
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
                   <span style={{ fontSize: 36, fontWeight: 900, color: S.ink, letterSpacing: '-0.04em', lineHeight: 1 }}>{p.displayDays}</span>
                   <span style={{ fontSize: 14, color: S.muted }}>天</span>
@@ -203,8 +284,9 @@ export default function MagazineShop({
                     {p.description}
                   </p>
                 )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+              </button>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ textAlign: 'right' }}>
                   {hasDiscount && (
                     <p style={{ fontSize: 11, color: S.faint, margin: '0 0 2px', textDecoration: 'line-through' }}>
@@ -220,15 +302,41 @@ export default function MagazineShop({
                     </p>
                   )}
                 </div>
-                <div style={{
-                  background: C.primary, borderRadius: 10,
-                  padding: '8px 14px', fontSize: 13, fontWeight: 700, color: '#fff',
-                  whiteSpace: 'nowrap',
-                }}>
-                  購買
+
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); cart.toggle(p) }}
+                    aria-label={inCart ? '從購物車移除' : '加入購物車'}
+                    style={{
+                      width: 36, height: 36, borderRadius: 10,
+                      background: inCart ? C.primary : C.light,
+                      color: inCart ? C.onPrimary : C.primary,
+                      border: 'none',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s, color 0.15s',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >
+                    {inCart ? <CheckIcon /> : <PlusIcon />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectProduct(p.id)}
+                    style={{
+                      background: C.primary, borderRadius: 10, border: 'none',
+                      padding: '8px 14px', fontSize: 13, fontWeight: 700,
+                      color: C.onPrimary, cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >
+                    購買
+                  </button>
                 </div>
               </div>
-            </button>
+            </div>
           )
         })}
       </div>

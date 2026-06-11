@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { findBestCouponCombo as _findBestCouponCombo } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
+import { useCart } from '@/components/liff/CartProvider'
 
 type Product = {
   id: string
@@ -79,6 +80,7 @@ function CheckoutContent() {
   const searchParams = useSearchParams()
   const productId = searchParams.get('productId')
   const C = useTenantColors()
+  const cart = useCart()
 
   const [product, setProduct] = useState<Product | null>(null)
   const [coupons, setCoupons] = useState<Coupon[]>([])
@@ -157,6 +159,8 @@ function CheckoutContent() {
     }
 
     const orderId = orderRes.orderId
+    // Order placed → remove from cart so the user doesn't see it lingering after returning
+    cart.remove(productId)
     if (paymentMethod === 'CREDIT_CARD') {
       router.push(`/checkout/pay?orderId=${orderId}&amount=${finalPrice ?? product.sellPrice}`)
     } else {
