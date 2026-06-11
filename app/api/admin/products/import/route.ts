@@ -4,6 +4,7 @@ import { requirePlatformAuth } from '@/lib/auth/platform'
 import { batchCreateProducts, type CsvProductRow } from '@/lib/services/product'
 import { fetchSupplierProductMap } from '@/lib/services/esim'
 import { resolveCountry, parseProductNameSegments } from '@/lib/utils/country'
+import { parseCapacityFromName } from '@/lib/utils/capacity'
 
 // Vercel 預設 serverless function timeout 為 10 秒，CSV 匯入需呼叫供應商 API +
 // 走 PgBouncer connection_limit=1 的逐筆寫入，列數一多 10 秒不夠。拉到 60 秒
@@ -52,23 +53,6 @@ const REQUIRED = ['supplierSkuId', 'sellPrice', 'costPrice']
 function parseDaysFromName(name: string): number | null {
   const m = name.match(/(\d+)\s*天/)
   return m ? parseInt(m[1]) : null
-}
-
-// 從商品名稱／SKU 自動解析流量
-// 1. 吃到飽 token：MAX / TI / HSD（先檢查，避免被一般數字 regex 誤匹配）
-//    例如 WM-e-AN-MAX-1D → 吃到飽
-//         WM-e-AN-TI-1D  → 鈦金吃到飽
-//         WM-e-AN-HSD-1D → 高速吃到飽
-// 2. 數字流量：500MB / 1GB / 1GB/天
-function parseCapacityFromName(name: string): string | null {
-  // SKU 結構通常用 `-` 分隔，token 用 `-XX-` 或字串邊界包夾
-  if (/(?:^|[-_\s])TI(?:[-_\s]|$)/i.test(name))  return '鈦金吃到飽'
-  if (/(?:^|[-_\s])HSD(?:[-_\s]|$)/i.test(name)) return '高速吃到飽'
-  if (/(?:^|[-_\s])MAX(?:[-_\s]|$)/i.test(name)) return '吃到飽'
-
-  const m = name.match(/(\d+(?:\.\d+)?)\s*(MB|GB)(\/天|\/day)?/i)
-  if (!m) return null
-  return m[3] ? `${m[1]}${m[2].toUpperCase()}${m[3]}` : `${m[1]}${m[2].toUpperCase()}`
 }
 
 // 正規化 header（去空白、小寫、去括號）

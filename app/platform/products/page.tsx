@@ -151,9 +151,9 @@ export default function PlatformProductsPage() {
     load()
   }
 
-  const handleRecomputeCountry = async () => {
+  const handleRecomputeMeta = async () => {
     if (recomputing) return
-    if (!confirm('將用供應商商品名稱（例如「新馬」「日本Softbank」）重新解析所有商品的「國家」欄位，確定要繼續嗎？')) return
+    if (!confirm('將用供應商商品名稱／plan code 重新解析所有商品的「國家」與「流量」欄位，確定要繼續嗎？')) return
     setRecomputing(true)
     setUploadMsg(null)
     try {
@@ -359,12 +359,12 @@ export default function PlatformProductsPage() {
             <span>🔍</span> {validating ? '驗證中…' : '驗證方案'}
           </button>
           <button
-            onClick={handleRecomputeCountry}
+            onClick={handleRecomputeMeta}
             disabled={recomputing}
             className={`bg-white border px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition flex items-center gap-1.5 ${recomputing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title="用供應商商品名稱重新解析所有商品的國家欄位"
+            title="用供應商商品名稱／plan code 重新解析所有商品的國家與流量欄位"
           >
-            <span>🌏</span> {recomputing ? '重算中…' : '重算國家'}
+            <span>🌏</span> {recomputing ? '重算中…' : '重算國家／流量'}
           </button>
           <label className={`bg-white border px-4 py-2 rounded-lg text-sm cursor-pointer hover:bg-gray-50 transition flex items-center gap-1.5 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <span>📂</span>

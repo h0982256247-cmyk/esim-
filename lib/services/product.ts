@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db/prisma'
 import { Prisma, ProductStatus, SupplierProductStatus, SupplierProductType } from '@prisma/client'
 import type { SupplierProductMap } from './esim'
 import { resolveCountry } from '@/lib/utils/country'
+import { parseCapacityFromName } from '@/lib/utils/capacity'
 
 export async function getActiveProducts(countryCode?: string, tenantAdminId?: string | null) {
   return prisma.product.findMany({
@@ -381,17 +382,17 @@ function buildProductData(
   }
 }
 
-// ─── 一鍵重算所有商品國家（用 SupplierProduct.productName 為依據）──────
+// ─── 一鍵重算所有商品 country + dataCapacity（依供應商資料）──────────
 //
-// 場景：CSV 第 3 欄商品名稱為空但 SupplierProduct.productName 來自世界移動 API
-// 有正確國名（例如「新馬」「日本Softbank」）；或字典加了新組合（NMY 等）後，
-// 想把既有資料按新規則重新分類，又不想要求使用者重傳 11k 列 CSV。
+// 場景：CSV 第 3 欄為空但 SupplierProduct.productName 來自世界移動 API 有正
+// 確的方案名稱（如「新馬」「日本Softbank」）；或 parser 規則更新（例如放
+// 寬 MAX 前綴）後，希望把既有資料按新規則重算，又不想要求使用者重傳 CSV。
 //
-// 流程：select 全部 Product join SupplierProduct.productName → 跑 resolveCountry
-//      → bulk UPDATE FROM VALUES。只更新「實際有變化」的 row。
-export async function recomputeCountriesFromSupplier(
+// 流程：select Product join SupplierProduct → 跑 resolveCountry 與
+// parseCapacityFromName → bulk UPDATE FROM VALUES。只更新真的有變化的 row。
+export async function recomputeMetaFromSupplier(
   tenantAdminId?: string | null,
-): Promise<{ total: number; updated: number; skipped: number }> {
+): Promise<{ total: number; countryUpdated: number; capacityUpdated: number; updated: number }> {
   const products = await prisma.product.findMany({
     where: tenantAdminId != null ? { tenantAdminId } : {},
     select: {
@@ -399,51 +400,98 @@ export async function recomputeCountriesFromSupplier(
       countryCode: true,
       countryNameZh: true,
       countryFlag: true,
-      supplierProduct: { select: { productName: true } },
+      dataCapacity: true,
+      planCode: true,
+      supplierProduct: { select: { productName: true, wmProductId: true } },
     },
   })
 
-  type Update = { id: string; countryCode: string; countryNameZh: string; countryFlag: string }
+  type Update = {
+    id: string
+    countryCode: string
+    countryNameZh: string
+    countryFlag: string
+    dataCapacity: string | null
+  }
   const updates: Update[] = []
-  let skipped = 0
+  let countryChanged = 0
+  let capacityChanged = 0
 
   for (const p of products) {
-    const name = p.supplierProduct?.productName?.trim()
-    if (!name) { skipped++; continue }
-    const r = resolveCountry(name, '', '', '', p.countryFlag ?? '')
-    if (!r.matchedByName) { skipped++; continue }
-    if (
-      r.countryCode === p.countryCode &&
-      r.countryNameZh === p.countryNameZh &&
-      r.countryFlag === (p.countryFlag ?? '')
-    ) { skipped++; continue }
+    const name = p.supplierProduct?.productName?.trim() ?? ''
+
+    // 1. 重算 country：用 supplier name。沒命中則保留原值。
+    let nextCountryCode    = p.countryCode
+    let nextCountryNameZh  = p.countryNameZh
+    let nextCountryFlag    = p.countryFlag ?? ''
+    if (name) {
+      const r = resolveCountry(name, '', '', '', p.countryFlag ?? '')
+      if (r.matchedByName) {
+        nextCountryCode   = r.countryCode
+        nextCountryNameZh = r.countryNameZh
+        nextCountryFlag   = r.countryFlag
+      }
+    }
+
+    // 2. 重算 dataCapacity：依序試 supplier name → planCode → wmProductId。
+    //    第一個有結果的勝出；都沒有就保留原值。
+    let nextCapacity: string | null = p.dataCapacity
+    const sources: (string | null | undefined)[] = [
+      name,
+      p.planCode,
+      p.supplierProduct?.wmProductId,
+    ]
+    for (const src of sources) {
+      if (!src) continue
+      const c = parseCapacityFromName(src)
+      if (c) { nextCapacity = c; break }
+    }
+
+    const countryDelta =
+      nextCountryCode    !== p.countryCode
+      || nextCountryNameZh !== p.countryNameZh
+      || nextCountryFlag   !== (p.countryFlag ?? '')
+    const capacityDelta = nextCapacity !== p.dataCapacity
+
+    if (!countryDelta && !capacityDelta) continue
+    if (countryDelta)  countryChanged++
+    if (capacityDelta) capacityChanged++
+
     updates.push({
       id: p.id,
-      countryCode: r.countryCode,
-      countryNameZh: r.countryNameZh,
-      countryFlag: r.countryFlag,
+      countryCode:   nextCountryCode,
+      countryNameZh: nextCountryNameZh,
+      countryFlag:   nextCountryFlag,
+      dataCapacity:  nextCapacity,
     })
   }
 
-  // Bulk update 1000 列為一批，與 batchCreateProducts 同策略
+  // Bulk update 1000 列為一批
   for (let i = 0; i < updates.length; i += BULK_CHUNK) {
     const chunk = updates.slice(i, i + BULK_CHUNK)
     const values = chunk.map(u => Prisma.sql`(
       ${u.id}::text,
       ${u.countryCode}::text,
       ${u.countryNameZh}::text,
-      ${u.countryFlag}::text
+      ${u.countryFlag}::text,
+      ${u.dataCapacity}::text
     )`)
     await prisma.$executeRaw`
       UPDATE products AS p SET
         country_code    = v.country_code,
         country_name_zh = v.country_name_zh,
         country_flag    = v.country_flag,
+        data_capacity   = v.data_capacity,
         updated_at      = NOW()
-      FROM (VALUES ${Prisma.join(values)}) AS v(id, country_code, country_name_zh, country_flag)
+      FROM (VALUES ${Prisma.join(values)}) AS v(id, country_code, country_name_zh, country_flag, data_capacity)
       WHERE p.id = v.id
     `
   }
 
-  return { total: products.length, updated: updates.length, skipped }
+  return {
+    total: products.length,
+    countryUpdated:  countryChanged,
+    capacityUpdated: capacityChanged,
+    updated:         updates.length,
+  }
 }
