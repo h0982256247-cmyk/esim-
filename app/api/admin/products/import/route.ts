@@ -139,6 +139,16 @@ function countryNameToCode(name: string): string | null {
 // 先匹配。模組載入時計算一次。
 const COUNTRY_NAME_KEYS = Object.keys(COUNTRY_NAME_TO_CODE).sort((a, b) => b.length - a.length)
 
+// code → 標準中文名（取每個 code 第一個出現的 zh key），用於 explicitCode 提供
+// 但 CSV 適用地區欄為「東南亞」這類錯誤值時，把 zh 對回正確的國名。
+const CODE_TO_NAME_ZH: Record<string, string> = (() => {
+  const out: Record<string, string> = {}
+  for (const [zh, code] of Object.entries(COUNTRY_NAME_TO_CODE)) {
+    if (!out[code]) out[code] = zh
+  }
+  return out
+})()
+
 // 在任意字串中找出最先出現的國家／區域名稱。例如：
 //   「日本Softbank」 → { code: 'JP', zh: '日本' }
 //   「東南亞7國方案」 → { code: 'SEA', zh: '東南亞' }
@@ -226,25 +236,31 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
     const isNativeRaw   = get('isNativeSim').toLowerCase()
     const isNativeSim   = isNativeRaw === '是' || isNativeRaw === 'true' || isNativeRaw === '1'
 
-    // 商品名稱通常為「美國, 10天, 3GB/天」格式：先拆三段
+    // 商品名稱通常為「菲律賓, 1天, 2GB/天」「日本Softbank, 3天, 5GB」格式：先拆段
     const nameSegs = parseProductNameSegments(productName)
 
-    // 國家解析優先順序（依使用者要求，以商品名稱為準，不再從 SKU/planCode 推斷）：
-    //   1) CSV 「國家代碼」欄明確指定
-    //   2) 商品名稱第 1 段做「包含」匹配（「日本Softbank」→ JP；「東南亞」→ SEA）
-    //   3) 整段商品名稱做包含匹配（第 1 段沒抓到時的兜底）
-    //   4) CSV 「適用地區」欄做完全匹配
+    // ── 國家解析：以 C 欄商品名稱為唯一依據 ─────────────────────────
+    // 使用者明確要求「不要從 SKU / planCode 推斷」，只看商品名稱。
+    // 順序：(1) 名稱第 1 段做包含匹配 → (2) 整段名稱兜底 → (3) 顯式 countryCode 欄
+    //       → (4) CSV 「適用地區」欄當最後 fallback。
+    // 「適用地區」常被供應商填成「東南亞」這種錯誤的區域名，因此放在最低優先。
+    const nameMatch =
+      matchCountryInText(nameSegs.country ?? '')
+      ?? matchCountryInText(productName)
+
     const explicitCode = get('countryCode').toUpperCase()
-    const nameMatch = explicitCode
-      ? null
-      : (matchCountryInText(nameSegs.country ?? '') ?? matchCountryInText(productName))
-    const countryCode  = explicitCode
-      || nameMatch?.code
-      || countryNameToCode(get('countryNameZh'))
+    const rawRegion    = get('countryNameZh')  // CSV 「適用地區」欄
+
+    const countryCode = nameMatch?.code
+      || explicitCode
+      || countryNameToCode(rawRegion)
       || ''
+    // countryNameZh 也以名稱為主；只有商品名稱完全沒命中時才接受 CSV 適用地區，
+    // 否則 D 欄寫「東南亞」會覆蓋掉名稱抓到的「菲律賓」。
     const countryNameZh = nameMatch?.zh
+      || (explicitCode ? (CODE_TO_NAME_ZH[explicitCode] ?? '') : '')
       || nameSegs.country
-      || get('countryNameZh')
+      || rawRegion
       || ''
 
     const countryNameEn = get('countryNameEn') || ''
