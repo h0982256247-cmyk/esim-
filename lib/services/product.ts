@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma, ProductStatus, SupplierProductStatus, SupplierProductType } from '@prisma/client'
 import type { SupplierProductMap } from './esim'
+import { resolveCountry } from '@/lib/utils/country'
 
 export async function getActiveProducts(countryCode?: string, tenantAdminId?: string | null) {
   return prisma.product.findMany({
@@ -378,4 +379,71 @@ function buildProductData(
     supplierSkuId: supplierId,
     tenantAdminId,
   }
+}
+
+// ─── 一鍵重算所有商品國家（用 SupplierProduct.productName 為依據）──────
+//
+// 場景：CSV 第 3 欄商品名稱為空但 SupplierProduct.productName 來自世界移動 API
+// 有正確國名（例如「新馬」「日本Softbank」）；或字典加了新組合（NMY 等）後，
+// 想把既有資料按新規則重新分類，又不想要求使用者重傳 11k 列 CSV。
+//
+// 流程：select 全部 Product join SupplierProduct.productName → 跑 resolveCountry
+//      → bulk UPDATE FROM VALUES。只更新「實際有變化」的 row。
+export async function recomputeCountriesFromSupplier(
+  tenantAdminId?: string | null,
+): Promise<{ total: number; updated: number; skipped: number }> {
+  const products = await prisma.product.findMany({
+    where: tenantAdminId != null ? { tenantAdminId } : {},
+    select: {
+      id: true,
+      countryCode: true,
+      countryNameZh: true,
+      countryFlag: true,
+      supplierProduct: { select: { productName: true } },
+    },
+  })
+
+  type Update = { id: string; countryCode: string; countryNameZh: string; countryFlag: string }
+  const updates: Update[] = []
+  let skipped = 0
+
+  for (const p of products) {
+    const name = p.supplierProduct?.productName?.trim()
+    if (!name) { skipped++; continue }
+    const r = resolveCountry(name, '', '', '', p.countryFlag ?? '')
+    if (!r.matchedByName) { skipped++; continue }
+    if (
+      r.countryCode === p.countryCode &&
+      r.countryNameZh === p.countryNameZh &&
+      r.countryFlag === (p.countryFlag ?? '')
+    ) { skipped++; continue }
+    updates.push({
+      id: p.id,
+      countryCode: r.countryCode,
+      countryNameZh: r.countryNameZh,
+      countryFlag: r.countryFlag,
+    })
+  }
+
+  // Bulk update 1000 列為一批，與 batchCreateProducts 同策略
+  for (let i = 0; i < updates.length; i += BULK_CHUNK) {
+    const chunk = updates.slice(i, i + BULK_CHUNK)
+    const values = chunk.map(u => Prisma.sql`(
+      ${u.id}::text,
+      ${u.countryCode}::text,
+      ${u.countryNameZh}::text,
+      ${u.countryFlag}::text
+    )`)
+    await prisma.$executeRaw`
+      UPDATE products AS p SET
+        country_code    = v.country_code,
+        country_name_zh = v.country_name_zh,
+        country_flag    = v.country_flag,
+        updated_at      = NOW()
+      FROM (VALUES ${Prisma.join(values)}) AS v(id, country_code, country_name_zh, country_flag)
+      WHERE p.id = v.id
+    `
+  }
+
+  return { total: products.length, updated: updates.length, skipped }
 }

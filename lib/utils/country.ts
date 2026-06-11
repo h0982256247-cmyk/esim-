@@ -1,0 +1,150 @@
+// Country / region name resolution shared by CSV import and the admin
+// "recompute countries" tool. Two flavours of identifier coexist on purpose:
+//   - ISO 3166-1 alpha-2 (JP, US, TH …) for single countries
+//   - custom 3-letter codes (SEA, ANZ, NMY …) for multi-country bundles
+//     the merchant carves out in the back office.
+
+export const COUNTRY_NAME_TO_CODE: Record<string, string> = {
+  // 亞洲
+  '日本': 'JP', '韓國': 'KR', '南韓': 'KR', '北韓': 'KP',
+  '台灣': 'TW', '中國': 'CN', '中國大陸': 'CN',
+  '香港': 'HK', '澳門': 'MO', '澳门': 'MO',
+  '新加坡': 'SG', '馬來西亞': 'MY', '马来西亚': 'MY',
+  '泰國': 'TH', '越南': 'VN', '印尼': 'ID', '菲律賓': 'PH', '菲律宾': 'PH',
+  '柬埔寨': 'KH', '寮國': 'LA', '寮国': 'LA', '緬甸': 'MM', '缅甸': 'MM',
+  '印度': 'IN', '巴基斯坦': 'PK', '孟加拉': 'BD', '斯里蘭卡': 'LK', '斯里兰卡': 'LK',
+  '尼泊爾': 'NP', '尼泊尔': 'NP', '不丹': 'BT', '馬爾地夫': 'MV',
+  '蒙古': 'MN', '哈薩克': 'KZ', '哈萨克': 'KZ', '烏茲別克': 'UZ', '吉爾吉斯': 'KG',
+  '土耳其': 'TR', '以色列': 'IL', '阿聯': 'AE', '阿联酋': 'AE', '沙烏地阿拉伯': 'SA',
+  '伊朗': 'IR', '伊拉克': 'IQ', '約旦': 'JO', '黎巴嫩': 'LB', '卡達': 'QA', '卡塔尔': 'QA',
+  // 歐洲
+  '英國': 'GB', '英国': 'GB', '法國': 'FR', '德國': 'DE', '德国': 'DE',
+  '義大利': 'IT', '意大利': 'IT', '西班牙': 'ES', '葡萄牙': 'PT',
+  '荷蘭': 'NL', '荷兰': 'NL', '比利時': 'BE', '盧森堡': 'LU', '瑞士': 'CH', '奧地利': 'AT',
+  '瑞典': 'SE', '挪威': 'NO', '丹麥': 'DK', '芬蘭': 'FI', '冰島': 'IS',
+  '愛爾蘭': 'IE', '波蘭': 'PL', '捷克': 'CZ', '匈牙利': 'HU', '希臘': 'GR',
+  '俄羅斯': 'RU', '俄罗斯': 'RU', '烏克蘭': 'UA',
+  '羅馬尼亞': 'RO', '保加利亞': 'BG', '克羅埃西亞': 'HR', '塞爾維亞': 'RS',
+  // 美洲
+  '美國': 'US', '美国': 'US', '加拿大': 'CA', '墨西哥': 'MX',
+  '巴西': 'BR', '阿根廷': 'AR', '智利': 'CL', '哥倫比亞': 'CO', '秘魯': 'PE',
+  // 非洲
+  '南非': 'ZA', '埃及': 'EG', '摩洛哥': 'MA', '肯亞': 'KE', '奈及利亞': 'NG',
+  // 大洋洲
+  '澳洲': 'AU', '澳大利亞': 'AU', '紐西蘭': 'NZ', '新西兰': 'NZ',
+  '斐濟': 'FJ', '關島': 'GU',
+  // 多國／區域方案（自訂 code）
+  '紐澳': 'ANZ', '澳紐': 'ANZ',
+  '東南亞': 'SEA', '东南亚': 'SEA',
+  '港澳': 'HKM',
+  '兩岸三地': 'CNT', '中港台': 'CNT', '中港澳': 'CNT',
+  '歐洲': 'EU', '欧洲': 'EU',
+  '中東': 'MEA', '中东': 'MEA',
+  '全球': 'WW', '世界': 'WW',
+  // 商家常用的雙國組合（自訂 code）
+  '新馬': 'NMY', '马新': 'NMY', '馬新': 'NMY',
+  '日韓': 'JPK', '韓日': 'JPK', '韩日': 'JPK',
+  '中港': 'CNHK',
+  '中台': 'CNTW',
+  '美加': 'USCA', '加美': 'USCA',
+  '台日': 'TWJP', '日台': 'TWJP',
+  '台韓': 'TWKR', '韓台': 'TWKR',
+}
+
+// Keys pre-sorted longest first so 「東南亞」 beats 「亞」 in substring match.
+const COUNTRY_NAME_KEYS = Object.keys(COUNTRY_NAME_TO_CODE).sort((a, b) => b.length - a.length)
+
+// code → 標準中文名（取每個 code 第一個出現的 zh key），用於從 country code
+// 反查顯示用中文名（例如：用 explicit 'TH' 顯示「泰國」而非錯誤的「東南亞」）。
+export const CODE_TO_NAME_ZH: Record<string, string> = (() => {
+  const out: Record<string, string> = {}
+  for (const [zh, code] of Object.entries(COUNTRY_NAME_TO_CODE)) {
+    if (!out[code]) out[code] = zh
+  }
+  return out
+})()
+
+export function countryNameToCode(name: string): string | null {
+  if (!name) return null
+  const trimmed = name.trim()
+  return COUNTRY_NAME_TO_CODE[trimmed] ?? null
+}
+
+// 在任意字串中找出最先出現的國家／區域名稱。例如：
+//   「日本Softbank」 → { code: 'JP', zh: '日本' }
+//   「東南亞7國方案」 → { code: 'SEA', zh: '東南亞' }
+export function matchCountryInText(text: string): { code: string; zh: string } | null {
+  if (!text) return null
+  for (const key of COUNTRY_NAME_KEYS) {
+    if (text.includes(key)) return { code: COUNTRY_NAME_TO_CODE[key], zh: key }
+  }
+  return null
+}
+
+// 商品名稱拆段。範例：「美國, 10天, 3GB/天」→ { country: "美國", days: 10 }
+export function parseProductNameSegments(name: string): { country?: string; days?: number } {
+  if (!name) return {}
+  const parts = name.split(/[,，、]/).map(s => s.trim()).filter(Boolean)
+  if (parts.length === 0) return {}
+  const country = parts[0] || undefined
+  let days: number | undefined
+  for (const seg of parts.slice(1)) {
+    const m = seg.match(/(\d+)\s*[天日]/)
+    if (m) { days = parseInt(m[1]); break }
+  }
+  return { country, days }
+}
+
+// ISO 3166-1 alpha-2 → 國旗 emoji（Regional Indicator）
+// 對自訂 3 字母代碼（SEA / NMY / …）回傳空字串，由 UI 自己 fallback。
+export function countryCodeToFlag(code: string): string {
+  if (!code || code.length !== 2) return ''
+  const [a, b] = code.toUpperCase().split('')
+  const toRI = (c: string) => String.fromCodePoint(c.codePointAt(0)! + 127397)
+  return toRI(a) + toRI(b)
+}
+
+// 從商品名稱 + CSV 各欄位解析出國家。順序：
+//   1) 商品名稱第 1 段做 substring 包含匹配
+//   2) 整段商品名稱兜底（防第 1 段是空或亂碼）
+//   3) CSV 「國家代碼」欄
+//   4) CSV 「適用地區」欄
+export function resolveCountry(
+  productName: string,
+  csvCountryCode: string,
+  csvCountryNameZh: string,
+  csvCountryNameEn: string,
+  csvCountryFlag: string,
+): {
+  countryCode: string
+  countryNameZh: string
+  countryNameEn: string
+  countryFlag: string
+  matchedByName: boolean
+} {
+  const nameSegs = parseProductNameSegments(productName)
+  const nameMatch =
+    matchCountryInText(nameSegs.country ?? '')
+    ?? matchCountryInText(productName)
+
+  const explicitCode = csvCountryCode.toUpperCase()
+
+  const countryCode = nameMatch?.code
+    || explicitCode
+    || countryNameToCode(csvCountryNameZh)
+    || ''
+  const countryNameZh = nameMatch?.zh
+    || (explicitCode ? (CODE_TO_NAME_ZH[explicitCode] ?? '') : '')
+    || nameSegs.country
+    || csvCountryNameZh
+    || ''
+  const countryFlag = csvCountryFlag || countryCodeToFlag(countryCode) || ''
+
+  return {
+    countryCode,
+    countryNameZh,
+    countryNameEn: csvCountryNameEn,
+    countryFlag,
+    matchedByName: !!nameMatch,
+  }
+}
