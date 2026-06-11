@@ -13,6 +13,8 @@ export interface PlanLike {
   displayDays: number
   dataCapacity: string | null
   sellPrice: number
+  networkType?: string | null
+  isNativeSim?: boolean
 }
 
 export interface PlanDisplay<T extends PlanLike> {
