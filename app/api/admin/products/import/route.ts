@@ -127,6 +127,23 @@ function countryNameToCode(name: string): string | null {
   return COUNTRY_NAME_TO_CODE[trimmed] ?? null
 }
 
+// COUNTRY_NAME_TO_CODE 的 key 預先按長度倒序，避免「東南亞」被「亞」這種短 key
+// 先匹配。模組載入時計算一次。
+const COUNTRY_NAME_KEYS = Object.keys(COUNTRY_NAME_TO_CODE).sort((a, b) => b.length - a.length)
+
+// 在任意字串中找出最先出現的國家／區域名稱。例如：
+//   「日本Softbank」 → { code: 'JP', zh: '日本' }
+//   「東南亞7國方案」 → { code: 'SEA', zh: '東南亞' }
+//   「中港澳吃到飽」  → { code: 'CNT', zh: '中港澳' }
+// CSV 商品名稱第 1 段直接用這個比對，比靠 SKU 推斷準確。
+function matchCountryInText(text: string): { code: string; zh: string } | null {
+  if (!text) return null
+  for (const key of COUNTRY_NAME_KEYS) {
+    if (text.includes(key)) return { code: COUNTRY_NAME_TO_CODE[key], zh: key }
+  }
+  return null
+}
+
 // 從商品名稱／SKU 自動解析流量
 // 1. 吃到飽 token：MAX / TI / HSD（先檢查，避免被一般數字 regex 誤匹配）
 //    例如 WM-e-AN-MAX-1D → 吃到飽
@@ -142,12 +159,6 @@ function parseCapacityFromName(name: string): string | null {
   const m = name.match(/(\d+(?:\.\d+)?)\s*(MB|GB)(\/天|\/day)?/i)
   if (!m) return null
   return m[3] ? `${m[1]}${m[2].toUpperCase()}${m[3]}` : `${m[1]}${m[2].toUpperCase()}`
-}
-
-// 從 planCode 推斷國家代碼，例如 JP-SB-1GB-3D → JP
-function parseCountryFromPlanCode(planCode: string): string | null {
-  const m = planCode.match(/^([A-Z]{2})-/i)
-  return m ? m[1].toUpperCase() : null
 }
 
 // ISO 3166-1 alpha-2 → 國旗 emoji（Regional Indicator）
@@ -210,16 +221,23 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
     // 商品名稱通常為「美國, 10天, 3GB/天」格式：先拆三段
     const nameSegs = parseProductNameSegments(productName)
 
-    // countryNameZh: 優先用商品名稱第 1 段，再 fallback 到 CSV 的「適用地區」
-    const countryNameZh = nameSegs.country || get('countryNameZh') || get('countryCode') // fallback
-
-    // countryCode:
-    //   1) CSV 明確指定
-    //   2) 從 planCode 推測（前 2 碼）
-    //   3) 從 countryNameZh 查中文表（含多國方案 ANZ / SEA / HKM 等自訂代碼）
-    let countryCode = get('countryCode').toUpperCase()
-    if (!countryCode && planCode) countryCode = parseCountryFromPlanCode(planCode) ?? ''
-    if (!countryCode && countryNameZh) countryCode = countryNameToCode(countryNameZh) ?? ''
+    // 國家解析優先順序（依使用者要求，以商品名稱為準，不再從 SKU/planCode 推斷）：
+    //   1) CSV 「國家代碼」欄明確指定
+    //   2) 商品名稱第 1 段做「包含」匹配（「日本Softbank」→ JP；「東南亞」→ SEA）
+    //   3) 整段商品名稱做包含匹配（第 1 段沒抓到時的兜底）
+    //   4) CSV 「適用地區」欄做完全匹配
+    const explicitCode = get('countryCode').toUpperCase()
+    const nameMatch = explicitCode
+      ? null
+      : (matchCountryInText(nameSegs.country ?? '') ?? matchCountryInText(productName))
+    const countryCode  = explicitCode
+      || nameMatch?.code
+      || countryNameToCode(get('countryNameZh'))
+      || ''
+    const countryNameZh = nameMatch?.zh
+      || nameSegs.country
+      || get('countryNameZh')
+      || ''
 
     const countryNameEn = get('countryNameEn') || ''
     // countryFlag: explicit → auto-derive from countryCode（自訂 code 如 SEA/ANZ 抓不到，留空）
