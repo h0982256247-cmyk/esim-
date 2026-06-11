@@ -119,6 +119,14 @@ const COUNTRY_NAME_TO_CODE: Record<string, string> = {
   '歐洲': 'EU', '欧洲': 'EU',
   '中東': 'MEA', '中东': 'MEA',
   '全球': 'WW', '世界': 'WW',
+  // 商家常用的雙國組合（自訂 code）
+  '新馬': 'NMY', '马新': 'NMY', '馬新': 'NMY',
+  '日韓': 'JPK', '韓日': 'JPK', '韩日': 'JPK',
+  '中港': 'CNHK',
+  '中台': 'CNTW',
+  '美加': 'USCA', '加美': 'USCA',
+  '台日': 'TWJP', '日台': 'TWJP',
+  '台韓': 'TWKR', '韓台': 'TWKR',
 }
 
 function countryNameToCode(name: string): string | null {
