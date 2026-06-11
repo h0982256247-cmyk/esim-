@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
-import { markOrderPaid, markOrderFailed, markOrderRefunded, markOrderCancelled, isOrderExpired } from '@/lib/services/order'
+import {
+  markOrderPaid,
+  markBundlePaid,
+  markOrderFailed,
+  markBundleFailed,
+  markOrderRefunded,
+  markOrderCancelled,
+  isOrderExpired,
+} from '@/lib/services/order'
 import { triggerEsimActivation } from '@/lib/services/esim'
 import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
@@ -58,13 +66,27 @@ export async function POST(req: NextRequest) {
   const status = body.status as number | undefined
   const recTradeId = (body.rec_trade_id as string | undefined) ?? ''
 
+  // Bundle: TapPay only knows the anchor order_number; we fan out below.
+  const bundleId = order.bundleId
+
   // 訂單已取消 或 建立時間超過 30 分鐘：若 TapPay 扣款成功立即退款
   const expired = isOrderExpired(order.createdAt)
   if (order.status === OrderStatus.CANCELLED || (expired && status === 0)) {
     if (status === 0 && recTradeId) {
-      const refund = await tapPayRefund(recTradeId, order.totalPaid, order.user.tenantAdminId)
+      // For bundles, refund the full charged total (sum across the bundle).
+      const refundAmount = bundleId
+        ? (await prisma.order.aggregate({
+            where: { bundleId },
+            _sum: { totalPaid: true },
+          }))._sum.totalPaid ?? order.totalPaid
+        : order.totalPaid
+      const refund = await tapPayRefund(recTradeId, refundAmount, order.user.tenantAdminId)
       if (refund.ok) {
-        await markOrderRefunded(order.id)
+        if (bundleId) {
+          await prisma.order.updateMany({ where: { bundleId }, data: { status: OrderStatus.REFUNDED } })
+        } else {
+          await markOrderRefunded(order.id)
+        }
         return NextResponse.json({ message: 'Order expired; payment refunded' })
       }
     }
@@ -73,11 +95,20 @@ export async function POST(req: NextRequest) {
   }
 
   if (status !== 0) {
-    await markOrderFailed(order.id)
+    if (bundleId) await markBundleFailed(bundleId)
+    else await markOrderFailed(order.id)
     return NextResponse.json({ message: 'Payment failed' })
   }
 
-  await markOrderPaid(order.id, recTradeId)
+  // Mark paid — fan out across the bundle if applicable.
+  let paidOrderIds: string[]
+  if (bundleId) {
+    const paidOrders = await markBundlePaid(bundleId, recTradeId)
+    paidOrderIds = paidOrders.map(o => o.id)
+  } else {
+    await markOrderPaid(order.id, recTradeId)
+    paidOrderIds = [order.id]
+  }
 
   // Upsert saved card if card_secret returned (requires remember=true in the charge)
   const cardSecret = body.card_secret as { card_key?: string; card_token?: string } | undefined
@@ -102,10 +133,25 @@ export async function POST(req: NextRequest) {
   }
 
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
-  triggerEsimActivation(order.id).catch(() => {})
-  calculateAndSaveCommission(order.id).catch(() => {})
-  issueRepurchaseCouponForOrder(order.id).catch(() => {})
-  notifyOrderPaid(order.userId, productName, order.totalPaid).catch(() => {})
+  for (const oid of paidOrderIds) {
+    triggerEsimActivation(oid).catch(() => {})
+    calculateAndSaveCommission(oid).catch(() => {})
+    issueRepurchaseCouponForOrder(oid).catch(() => {})
+  }
+
+  if (bundleId && paidOrderIds.length > 1) {
+    const totalAggregate = await prisma.order.aggregate({
+      where: { bundleId },
+      _sum: { totalPaid: true },
+    })
+    notifyOrderPaid(
+      order.userId,
+      `eSIM 組合 (${paidOrderIds.length} 張)`,
+      totalAggregate._sum.totalPaid ?? order.totalPaid,
+    ).catch(() => {})
+  } else {
+    notifyOrderPaid(order.userId, productName, order.totalPaid).catch(() => {})
+  }
 
   return NextResponse.json({ message: 'ok' })
 }

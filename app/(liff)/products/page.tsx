@@ -403,7 +403,7 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
               <h1 style={{ fontSize: 17, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.01em' }}>{country?.countryNameZh ?? '方案'}</h1>
             </div>
             <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0', letterSpacing: '0.04em' }}>
-              {dayFilter ? `已篩選 ${filtered.length} / ${products.length}` : `${products.length} 個方案 · 已按 CP 值排序`}
+              {dayFilter ? `已篩選 ${filtered.length} / ${products.length}` : `${products.length} 個方案`}
             </p>
           </div>
           {dayFilter > 0 && (
@@ -542,13 +542,9 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
                         <NetworkBadge networkType={p.networkType} />
                         <NativeSimBadge isNative={p.isNativeSim} />
                       </div>
-                      {d.totalGB > 0 && !d.isUnlimited && d.isPerDay ? (
+                      {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
                         <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>
-                          共 {Math.round(d.totalGB)} GB · 平均 NT${d.perDayCost} / 天
-                        </p>
-                      ) : (
-                        <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>
-                          平均 NT${d.perDayCost} / 天
+                          共 {Math.round(d.totalGB)} GB
                         </p>
                       )}
                     </div>

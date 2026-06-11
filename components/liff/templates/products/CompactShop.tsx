@@ -145,7 +145,7 @@ export default function CompactShop({
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: 15, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.01em' }}>{country?.countryNameZh}</p>
           <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>
-            {filter.dayFilter ? `${filter.filteredCount} / ${filter.totalCount} 個方案` : `${filter.totalCount} 個 · 按 CP 值排序`}
+            {filter.dayFilter ? `${filter.filteredCount} / ${filter.totalCount} 個方案` : `${filter.totalCount} 個方案`}
           </p>
         </div>
         {filter.dayFilter > 0 && (
@@ -306,12 +306,11 @@ export default function CompactShop({
                       </span>
                     )}
                   </div>
-                  <p style={{ fontSize: 11, color: S.muted, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
-                    NT$<span style={{ fontWeight: 700, color: tier.fg }}>{d.perDayCost}</span> / 天
-                    {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
-                      <> · 共 {Math.round(d.totalGB)} GB</>
-                    )}
-                  </p>
+                  {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
+                    <p style={{ fontSize: 11, color: S.muted, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                      共 {Math.round(d.totalGB)} GB
+                    </p>
+                  )}
                 </div>
 
                 {/* Price */}

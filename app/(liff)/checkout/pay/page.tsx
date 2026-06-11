@@ -60,10 +60,13 @@ function CardIcon({ type }: { type: number }) {
 function PayContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const orderId = searchParams.get('orderId')!
-  const amount = searchParams.get('amount')!
+  const orderId = searchParams.get('orderId') ?? ''
+  const bundleId = searchParams.get('bundleId') ?? ''
+  const amount = searchParams.get('amount') ?? ''
   const { liff } = useLiff()
   const C = useTenantColors()
+
+  const isBundle = !!bundleId && !orderId
 
   const [savedCard, setSavedCard] = useState<SavedCard | null | undefined>(undefined)
   const [useNewCard, setUseNewCard] = useState(false)
@@ -140,21 +143,25 @@ function PayContent() {
     setSubmitting(true)
     setErrorMsg(null)
 
-    const returnUrl = `${window.location.origin}/orders/${orderId}`
+    const successHref = isBundle ? `/orders?bundleId=${bundleId}` : `/orders/${orderId}`
+    const returnUrl = `${window.location.origin}${successHref}`
+    const chargePayload: Record<string, unknown> = isBundle
+      ? { bundleId, returnUrl }
+      : { orderId, returnUrl }
 
     if (!useNewCard && savedCard) {
       // Pay using saved card token
       fetch('/api/payment/tappay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, useToken: true, returnUrl }),
+        body: JSON.stringify({ ...chargePayload, useToken: true }),
       })
         .then(r => r.json())
         .then(res => {
           if (res.requiresRedirect && res.paymentUrl) {
             window.location.href = res.paymentUrl
           } else if (res.ok) {
-            router.replace(`/orders/${orderId}`)
+            router.replace(successHref)
           } else {
             setErrorMsg(res.error ?? '付款失敗，請重試')
             setSubmitting(false)
@@ -184,13 +191,13 @@ function PayContent() {
         const res = await fetch('/api/payment/tappay', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, prime: result.card.prime, remember, returnUrl }),
+          body: JSON.stringify({ ...chargePayload, prime: result.card.prime, remember }),
         }).then(r => r.json())
 
         if (res.requiresRedirect && res.paymentUrl) {
           window.location.href = res.paymentUrl
         } else if (res.ok) {
-          router.replace(`/orders/${orderId}`)
+          router.replace(successHref)
         } else {
           setErrorMsg(res.error ?? '付款失敗，請重試')
           setSubmitting(false)
@@ -362,9 +369,11 @@ function PayContent() {
       }}>
         <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 16 }}>
           <div>
-            <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>實付金額</p>
+            <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>
+              {isBundle ? '組合付款' : '實付金額'}
+            </p>
             <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-              NT${amount}
+              NT${Number(amount || 0).toLocaleString()}
             </p>
           </div>
           <button

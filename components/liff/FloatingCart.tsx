@@ -31,11 +31,28 @@ function CloseIcon() {
 
 function TrashIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 6 5 6 21 6" />
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
       <path d="M10 11v6" />
       <path d="M14 11v6" />
+    </svg>
+  )
+}
+
+function MinusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   )
 }
@@ -46,20 +63,22 @@ export default function FloatingCart() {
   const params = useParams<{ slug?: string }>()
   const slug = params?.slug ?? ''
   const C = useTenantColors()
-  const { items, count, subtotal, remove, hydrated } = useCart()
+  const { items, count, totalQty, subtotal, remove, setQty, clear, hydrated } = useCart()
   const [open, setOpen] = useState(false)
   const [bumped, setBumped] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // Bump animation when count increases
-  const [prevCount, setPrevCount] = useState(count)
+  // Bump animation when qty count increases
+  const [prevTotalQty, setPrevTotalQty] = useState(totalQty)
   useEffect(() => {
-    if (count > prevCount) {
+    if (totalQty > prevTotalQty) {
       setBumped(true)
       const t = setTimeout(() => setBumped(false), 380)
       return () => clearTimeout(t)
     }
-    setPrevCount(count)
-  }, [count, prevCount])
+    setPrevTotalQty(totalQty)
+  }, [totalQty, prevTotalQty])
 
   // Lock body scroll when drawer open
   useEffect(() => {
@@ -74,19 +93,52 @@ export default function FloatingCart() {
   if (count === 0 && !open) return null
 
   // Pages with their own sticky bottom CTA: raise the FAB to clear it.
-  // Sticky CTA on product detail sits at bottom calc(64 + safe-area), height ~75px.
   const hasStickyCta = /\/products\/[^/]+$/.test(pathname)
   const fabBottom = hasStickyCta
     ? 'calc(160px + env(safe-area-inset-bottom))'
     : 'calc(72px + env(safe-area-inset-bottom))'
 
-  const checkoutHref = (productId: string) =>
-    slug ? `/liff/${slug}/checkout?productId=${productId}` : `/checkout?productId=${productId}`
+  const payHref = (search: string) =>
+    slug ? `/liff/${slug}/checkout/pay${search}` : `/checkout/pay${search}`
 
-  const goCheckout = (productId: string) => {
+  const goSingleCheckout = (productId: string) => {
     setOpen(false)
-    router.push(checkoutHref(productId))
+    const url = slug ? `/liff/${slug}/checkout?productId=${productId}` : `/checkout?productId=${productId}`
+    router.push(url)
   }
+
+  const handleCheckoutAll = async () => {
+    if (submitting || items.length === 0) return
+    setSubmitting(true)
+    setErrorMsg(null)
+    try {
+      const res = await fetch('/api/orders/bundle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentMethod: 'CREDIT_CARD',
+          lines: items.map(i => ({ productId: i.productId, qty: i.qty })),
+        }),
+      }).then(r => r.json())
+
+      if (!res.ok) {
+        setErrorMsg(res.error ?? '建立訂單失敗，請稍後再試')
+        setSubmitting(false)
+        return
+      }
+
+      // Clear cart and jump to payment with the bundle id
+      const total = res.totalPaid
+      clear()
+      setOpen(false)
+      router.push(payHref(`?bundleId=${res.bundleId}&amount=${total}`))
+    } catch {
+      setErrorMsg('網路錯誤，請重試')
+      setSubmitting(false)
+    }
+  }
+
+  const badgeNumber = totalQty > 0 ? totalQty : count
 
   return (
     <>
@@ -94,7 +146,7 @@ export default function FloatingCart() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={`購物車（${count} 項商品）`}
+        aria-label={`購物車（${totalQty} 張 eSIM）`}
         style={{
           position: 'fixed',
           right: 16,
@@ -114,7 +166,7 @@ export default function FloatingCart() {
         }}
       >
         <CartIcon size={24} />
-        {count > 0 && (
+        {badgeNumber > 0 && (
           <span style={{
             position: 'absolute',
             top: -4, right: -4,
@@ -127,7 +179,7 @@ export default function FloatingCart() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid #fff',
             lineHeight: 1,
-          }}>{count > 99 ? '99+' : count}</span>
+          }}>{badgeNumber > 99 ? '99+' : badgeNumber}</span>
         )}
       </button>
 
@@ -151,7 +203,7 @@ export default function FloatingCart() {
               width: '100%', maxWidth: 520,
               background: '#fff',
               borderTopLeftRadius: 22, borderTopRightRadius: 22,
-              maxHeight: '85vh',
+              maxHeight: '88vh',
               display: 'flex', flexDirection: 'column',
               paddingBottom: 'env(safe-area-inset-bottom)',
               boxShadow: '0 -10px 40px rgba(0,0,0,0.18)',
@@ -171,7 +223,9 @@ export default function FloatingCart() {
             }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 800, color: '#1a1a1a', margin: 0, letterSpacing: '-0.01em' }}>購物車</h2>
-                <span style={{ fontSize: 13, color: '#94a3b8' }}>{count} 項</span>
+                <span style={{ fontSize: 13, color: '#94a3b8' }}>
+                  {count} 項 · 共 {totalQty} 張
+                </span>
               </div>
               <button
                 type="button"
@@ -198,92 +252,173 @@ export default function FloatingCart() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {items.slice().sort((a, b) => b.addedAt - a.addedAt).map(item => (
-                    <div
-                      key={item.productId}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '12px 14px',
-                        borderRadius: 14,
-                        background: '#f9fafb',
-                        border: '1px solid rgba(0,0,0,0.05)',
-                      }}
-                    >
-                      <div style={{
-                        width: 48, height: 48, borderRadius: 12, flexShrink: 0,
-                        background: C.light,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        <CountryFlag code={item.countryCode} fallbackEmoji={item.countryFlag} size={34} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {item.countryNameZh}
-                        </p>
-                        <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
-                          {item.displayDays} 天{item.dataCapacity ? ` · ${item.dataCapacity}` : ''}
-                        </p>
-                        {(item.networkType || item.isNativeSim) && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                            <NetworkBadge networkType={item.networkType} />
-                            <NativeSimBadge isNative={item.isNativeSim} />
+                  {items.slice().sort((a, b) => b.addedAt - a.addedAt).map(item => {
+                    const lineTotal = item.sellPrice * item.qty
+                    return (
+                      <div
+                        key={item.productId}
+                        style={{
+                          display: 'flex', alignItems: 'stretch', gap: 12,
+                          padding: '12px 14px',
+                          borderRadius: 14,
+                          background: '#f9fafb',
+                          border: '1px solid rgba(15,23,42,0.05)',
+                        }}
+                      >
+                        <div style={{
+                          width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+                          background: C.light,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <CountryFlag code={item.countryCode} fallbackEmoji={item.countryFlag} size={34} />
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.countryNameZh}
+                          </p>
+                          <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
+                            {item.displayDays} 天{item.dataCapacity ? ` · ${item.dataCapacity}` : ''}
+                          </p>
+                          {(item.networkType || item.isNativeSim) && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                              <NetworkBadge networkType={item.networkType} />
+                              <NativeSimBadge isNative={item.isNativeSim} />
+                            </div>
+                          )}
+
+                          {/* Qty stepper + price/remove row */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 8 }}>
+                            <div style={{
+                              display: 'inline-flex', alignItems: 'center',
+                              background: '#fff', border: '1px solid rgba(15,23,42,0.08)',
+                              borderRadius: 100,
+                              overflow: 'hidden',
+                            }}>
+                              <button
+                                type="button"
+                                aria-label="減少數量"
+                                onClick={() => item.qty <= 1 ? remove(item.productId) : setQty(item.productId, item.qty - 1)}
+                                style={{
+                                  width: 28, height: 28,
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  color: item.qty <= 1 ? '#cbd5e1' : '#1a1a1a',
+                                  WebkitTapHighlightColor: 'transparent',
+                                }}
+                              >
+                                {item.qty <= 1 ? <TrashIcon /> : <MinusIcon />}
+                              </button>
+                              <span style={{
+                                minWidth: 22,
+                                textAlign: 'center',
+                                fontSize: 13, fontWeight: 700, color: '#1a1a1a',
+                                fontVariantNumeric: 'tabular-nums',
+                              }}>{item.qty}</span>
+                              <button
+                                type="button"
+                                aria-label="增加數量"
+                                onClick={() => setQty(item.productId, item.qty + 1)}
+                                disabled={item.qty >= 9}
+                                style={{
+                                  width: 28, height: 28,
+                                  background: 'none', border: 'none',
+                                  cursor: item.qty >= 9 ? 'not-allowed' : 'pointer',
+                                  color: item.qty >= 9 ? '#cbd5e1' : '#1a1a1a',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  WebkitTapHighlightColor: 'transparent',
+                                }}
+                              >
+                                <PlusIcon />
+                              </button>
+                            </div>
+
+                            <div style={{ textAlign: 'right' }}>
+                              <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>
+                                NT${lineTotal.toLocaleString()}
+                              </p>
+                              {item.qty > 1 && (
+                                <p style={{ fontSize: 10, color: '#94a3b8', margin: '1px 0 0', fontVariantNumeric: 'tabular-nums' }}>
+                                  NT${item.sellPrice.toLocaleString()} × {item.qty}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        )}
-                        <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: '4px 0 0', letterSpacing: '-0.01em' }}>
-                          NT${item.sellPrice.toLocaleString()}
-                        </p>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                        <button
-                          type="button"
-                          onClick={() => goCheckout(item.productId)}
-                          style={{
-                            background: C.primary,
-                            color: C.onPrimary,
-                            border: 'none', borderRadius: 100,
-                            padding: '7px 14px',
-                            fontSize: 12, fontWeight: 700,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            WebkitTapHighlightColor: 'transparent',
-                          }}
-                        >結帳</button>
-                        <button
-                          type="button"
-                          onClick={() => remove(item.productId)}
-                          aria-label="移除"
-                          style={{
-                            background: 'none', border: 'none',
-                            color: '#94a3b8', cursor: 'pointer',
-                            padding: '4px 6px',
-                            display: 'flex', alignItems: 'center',
-                            WebkitTapHighlightColor: 'transparent',
-                          }}
-                        >
-                          <TrashIcon />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
 
-            {/* Footer summary */}
+            {/* Footer */}
             {items.length > 0 && (
               <div style={{
-                borderTop: '1px solid rgba(0,0,0,0.06)',
+                borderTop: '1px solid rgba(15,23,42,0.06)',
                 padding: '14px 20px 18px',
                 background: '#fff',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, color: '#64748b' }}>商品小計（{count} 項）</span>
-                  <span style={{ fontSize: 18, fontWeight: 800, color: '#1a1a1a', letterSpacing: '-0.02em' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, color: '#64748b' }}>
+                    共 {totalQty} 張 eSIM
+                  </span>
+                  <span style={{ fontSize: 22, fontWeight: 900, color: '#1a1a1a', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
                     NT${subtotal.toLocaleString()}
                   </span>
                 </div>
-                <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 10px' }}>
-                  *目前僅支援單筆結帳，可逐項點「結帳」完成購買
+
+                {errorMsg && (
+                  <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 8px' }}>{errorMsg}</p>
+                )}
+
+                {/* Single-line, single-qty cart: route through the coupon-aware
+                    /checkout page. Multi-line or qty > 1: use the bundle flow. */}
+                {count === 1 && items[0] && items[0].qty === 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => goSingleCheckout(items[0].productId)}
+                    style={{
+                      width: '100%',
+                      background: C.primary,
+                      color: C.onPrimary,
+                      border: 'none',
+                      borderRadius: 100,
+                      padding: '14px',
+                      fontSize: 15, fontWeight: 800,
+                      cursor: 'pointer',
+                      letterSpacing: '0.02em',
+                      boxShadow: `0 6px 18px ${C.primary}44`,
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >前往結帳 · NT${subtotal.toLocaleString()}</button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleCheckoutAll}
+                    disabled={submitting}
+                    style={{
+                      width: '100%',
+                      background: submitting ? '#94a3b8' : C.primary,
+                      color: C.onPrimary,
+                      border: 'none',
+                      borderRadius: 100,
+                      padding: '14px',
+                      fontSize: 15, fontWeight: 800,
+                      cursor: submitting ? 'not-allowed' : 'pointer',
+                      letterSpacing: '0.02em',
+                      boxShadow: submitting ? 'none' : `0 6px 18px ${C.primary}44`,
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >
+                    {submitting ? '處理中…' : `全部結帳 · NT$${subtotal.toLocaleString()}`}
+                  </button>
+                )}
+
+                <p style={{ fontSize: 10, color: '#94a3b8', margin: '10px 0 0', textAlign: 'center' }}>
+                  {count === 1 && items[0]?.qty === 1
+                    ? '結帳頁可選擇優惠券折扣'
+                    : '一次刷卡完成 · 每張 eSIM 會獨立發送 · 此模式不套用優惠券'}
                 </p>
               </div>
             )}

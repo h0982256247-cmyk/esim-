@@ -112,6 +112,131 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   }
 }
 
+// ─── 建立多品項訂單包（cart 一次結帳 N 張 eSIM）─────────────────────
+//
+// Schema constraint: each Order maps to one supplier eSIM (esimRcode/wmOrderId
+// live on Order itself, not OrderItem). So a multi-item cart is materialized
+// as N independent Orders sharing a `bundleId`. The TapPay charge happens
+// once for the sum; the notify webhook fans out to every order in the bundle.
+//
+// Coupons are intentionally NOT supported here in v1 — the existing single-
+// order coupon validation assumes one subtotal.
+
+export interface BundleCartLine {
+  productId: string
+  qty: number    // 1-9, expanded into N orders
+}
+
+export interface CreateBundleOrdersInput {
+  userId: string
+  lineUid: string
+  lines: BundleCartLine[]
+  paymentMethod: PaymentMethod
+}
+
+export type CreateBundleOrdersResult =
+  | { ok: true; bundleId: string; orderIds: string[]; orderCount: number; subtotal: number; totalPaid: number }
+  | { ok: false; reason: string }
+
+const MAX_BUNDLE_ITEMS = 20
+
+function generateBundleId(): string {
+  // Short URL-safe id; collision space is large because it's scoped to one user.
+  return 'BDL-' + Array.from({ length: 12 }, () =>
+    ORDER_CHARS[Math.floor(Math.random() * ORDER_CHARS.length)]
+  ).join('')
+}
+
+export async function createBundleOrders(input: CreateBundleOrdersInput): Promise<CreateBundleOrdersResult> {
+  if (!input.lines || input.lines.length === 0) {
+    return { ok: false, reason: '購物車是空的' }
+  }
+
+  // Expand qty into individual order slots
+  const slots: { productId: string }[] = []
+  for (const line of input.lines) {
+    const qty = Math.max(1, Math.min(9, Math.floor(line.qty || 1)))
+    for (let i = 0; i < qty; i++) slots.push({ productId: line.productId })
+  }
+
+  if (slots.length === 0) return { ok: false, reason: '購物車是空的' }
+  if (slots.length > MAX_BUNDLE_ITEMS) {
+    return { ok: false, reason: `單次結帳最多 ${MAX_BUNDLE_ITEMS} 張，請拆批購買` }
+  }
+
+  // Fetch products once (dedupe by id)
+  const uniqueIds = Array.from(new Set(slots.map(s => s.productId)))
+  const products = await Promise.all(uniqueIds.map(id => getProductById(id)))
+  const productMap = new Map<string, NonNullable<Awaited<ReturnType<typeof getProductById>>>>()
+  for (let i = 0; i < uniqueIds.length; i++) {
+    const p = products[i]
+    if (!p) return { ok: false, reason: `商品不存在或已下架：${uniqueIds[i]}` }
+    productMap.set(uniqueIds[i], p)
+  }
+
+  const subtotal = slots.reduce((sum, s) => sum + (productMap.get(s.productId)?.sellPrice ?? 0), 0)
+  const totalPaid = subtotal   // no coupons in v1
+  const bundleId = generateBundleId()
+
+  const orderIds = await prisma.$transaction(async tx => {
+    const ids: string[] = []
+    for (let i = 0; i < slots.length; i++) {
+      const p = productMap.get(slots[i].productId)!
+      let orderNumber = generateOrderNumber()
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const exists = await tx.order.findUnique({ where: { orderNumber } })
+        if (!exists) break
+        orderNumber = generateOrderNumber()
+      }
+      const o = await tx.order.create({
+        data: {
+          userId: input.userId,
+          currentOwnerId: input.userId,
+          orderNumber,
+          bundleId,
+          bundleSeq: i + 1,
+          status: OrderStatus.PENDING,
+          subtotal: p.sellPrice,
+          discountAmount: 0,
+          totalPaid: p.sellPrice,
+          taxAmount: 0,
+          paymentMethod: input.paymentMethod,
+          orderItems: {
+            create: {
+              productId: p.id,
+              productName: `${p.countryNameZh} ${p.displayDays}天`,
+              qty: 1,
+              unitPrice: p.sellPrice,
+              unitCost: p.costPrice,
+            },
+          },
+        },
+      })
+      ids.push(o.id)
+    }
+    return ids
+  })
+
+  return {
+    ok: true,
+    bundleId,
+    orderIds,
+    orderCount: orderIds.length,
+    subtotal,
+    totalPaid,
+  }
+}
+
+export async function getBundleOrders(bundleId: string, userId: string) {
+  return prisma.order.findMany({
+    where: { bundleId, userId },
+    orderBy: { bundleSeq: 'asc' },
+    include: {
+      orderItems: { select: { productName: true, qty: true, unitPrice: true, productId: true } },
+    },
+  })
+}
+
 // ─── 逾時判斷（30 分鐘）─────────────────────────────────────────────
 export const ORDER_EXPIRY_MS = 30 * 60 * 1000
 
@@ -128,6 +253,20 @@ export async function markOrderProcessing(orderId: string, tapPayOrderId: string
   })
 }
 
+export async function markBundleOrdersProcessing(bundleId: string, anchorOrderId: string, tapPayOrderId: string) {
+  // Only the anchor carries the unique tapPayOrderId; the rest just flip status.
+  return prisma.$transaction(async tx => {
+    await tx.order.update({
+      where: { id: anchorOrderId },
+      data: { status: OrderStatus.PROCESSING, tapPayOrderId },
+    })
+    await tx.order.updateMany({
+      where: { bundleId, id: { not: anchorOrderId } },
+      data: { status: OrderStatus.PROCESSING },
+    })
+  })
+}
+
 export async function markOrderPaid(orderId: string, tapPayRecTradeId: string) {
   return prisma.order.update({
     where: { id: orderId },
@@ -137,6 +276,23 @@ export async function markOrderPaid(orderId: string, tapPayRecTradeId: string) {
       paidAt: new Date(),
     },
   })
+}
+
+export async function markBundlePaid(bundleId: string, tapPayRecTradeId: string) {
+  // Fan out the anchor's PAID status (and the shared recTradeId) to every
+  // sibling in the bundle. Returns the affected order ids so the caller can
+  // trigger eSIM activation per-order.
+  const paidAt = new Date()
+  await prisma.order.updateMany({
+    where: { bundleId, status: { in: [OrderStatus.PENDING, OrderStatus.PROCESSING] } },
+    data: { status: OrderStatus.PAID, tapPayRecTradeId, paidAt },
+  })
+  const orders = await prisma.order.findMany({
+    where: { bundleId },
+    select: { id: true, userId: true, totalPaid: true, orderItems: { select: { productName: true }, take: 1 } },
+    orderBy: { bundleSeq: 'asc' },
+  })
+  return orders
 }
 
 export async function markOrderFailed(orderId: string) {
@@ -149,6 +305,21 @@ export async function markOrderFailed(orderId: string) {
     })
     await tx.coupon.updateMany({
       where: { usedOrderId: orderId },
+      data: { usedAt: null, usedOrderId: null },
+    })
+  })
+}
+
+export async function markBundleFailed(bundleId: string) {
+  return prisma.$transaction(async tx => {
+    await tx.order.updateMany({
+      where: { bundleId, status: { in: [OrderStatus.PENDING, OrderStatus.PROCESSING] } },
+      data: { status: OrderStatus.FAILED },
+    })
+    // Bundle orders are coupon-less in v1, but keep this for forward compat.
+    const orders = await tx.order.findMany({ where: { bundleId }, select: { id: true } })
+    await tx.coupon.updateMany({
+      where: { usedOrderId: { in: orders.map(o => o.id) } },
       data: { usedAt: null, usedOrderId: null },
     })
   })

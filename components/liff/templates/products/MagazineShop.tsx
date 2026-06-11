@@ -196,7 +196,7 @@ export default function MagazineShop({
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.88)', margin: 0, fontWeight: 500 }}>
           {filter.dayFilter
             ? `已篩選 ${filter.filteredCount} / ${filter.totalCount} 個方案`
-            : `${filter.totalCount} 個方案 · 按 CP 值排序`}
+            : `${filter.totalCount} 個方案`}
         </p>
       </div>
 
@@ -344,12 +344,11 @@ export default function MagazineShop({
                     <NativeSimBadge isNative={p.isNativeSim} />
                   </div>
                 )}
-                <p style={{ fontSize: 11, color: S.muted, margin: '6px 0 0', fontVariantNumeric: 'tabular-nums' }}>
-                  NT${d.perDayCost} / 天
-                  {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
-                    <> · 共 {Math.round(d.totalGB)} GB</>
-                  )}
-                </p>
+                {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
+                  <p style={{ fontSize: 11, color: S.muted, margin: '6px 0 0', fontVariantNumeric: 'tabular-nums' }}>
+                    共 {Math.round(d.totalGB)} GB
+                  </p>
+                )}
               </button>
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10, position: 'relative', zIndex: 1 }}>
@@ -476,12 +475,11 @@ function FeaturedCard({ display: d, coupons, colors: C, inCart, onToggleCart, on
               <NativeSimBadge isNative={p.isNativeSim} size="md" />
             </div>
           )}
-          <p style={{ fontSize: 12, color: S.muted, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
-            <span style={{ fontWeight: 700, color: tier.fg }}>NT${d.perDayCost}</span> / 天
-            {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
-              <> · 共 {Math.round(d.totalGB)} GB</>
-            )}
-          </p>
+          {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
+            <p style={{ fontSize: 12, color: S.muted, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+              共 {Math.round(d.totalGB)} GB
+            </p>
+          )}
         </div>
 
         <div style={{ textAlign: 'right', flexShrink: 0 }}>

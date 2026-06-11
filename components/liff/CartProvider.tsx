@@ -12,17 +12,23 @@ export type CartItem = {
   networkType?: string | null
   isNativeSim?: boolean
   sellPrice: number
+  qty: number
   addedAt: number
 }
 
-export type CartItemInput = Omit<CartItem, 'addedAt'>
+export type CartItemInput = Omit<CartItem, 'addedAt' | 'qty'> & { qty?: number }
 
 type CartContextValue = {
   items: CartItem[]
+  /** Distinct line count (e.g. 3 different SKUs). */
   count: number
+  /** Total physical eSIM count (sum of qty across all lines). */
+  totalQty: number
+  /** Sum of sellPrice × qty across all lines. */
   subtotal: number
   has: (productId: string) => boolean
   add: (item: CartItemInput) => void
+  setQty: (productId: string, qty: number) => void
   remove: (productId: string) => void
   clear: () => void
   hydrated: boolean
@@ -30,7 +36,8 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null)
 const STORAGE_KEY = 'esim_cart_v1'
-const MAX_ITEMS = 20
+const MAX_LINES = 20
+const MAX_QTY_PER_LINE = 9
 
 function readStorage(): CartItem[] {
   if (typeof window === 'undefined') return []
@@ -39,7 +46,8 @@ function readStorage(): CartItem[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(isValidItem)
+    // Backfill qty for items saved before the qty field existed (v1 carts)
+    return parsed.filter(isValidItem).map(it => ({ ...it, qty: typeof it.qty === 'number' && it.qty > 0 ? it.qty : 1 }))
   } catch {
     return []
   }
@@ -53,6 +61,10 @@ function isValidItem(x: unknown): x is CartItem {
     && typeof o.displayDays === 'number'
     && typeof o.countryCode === 'string'
     && typeof o.countryNameZh === 'string'
+}
+
+function clampQty(n: number): number {
+  return Math.max(1, Math.min(MAX_QTY_PER_LINE, Math.floor(n)))
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -83,10 +95,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const add = useCallback((input: CartItemInput) => {
     setItems(prev => {
-      if (prev.some(i => i.productId === input.productId)) return prev
-      const next = [...prev, { ...input, addedAt: Date.now() }]
-      return next.length > MAX_ITEMS ? next.slice(-MAX_ITEMS) : next
+      const existing = prev.find(i => i.productId === input.productId)
+      const qty = clampQty(input.qty ?? 1)
+      if (existing) {
+        // Bump qty instead of adding a duplicate line
+        return prev.map(i => i.productId === input.productId
+          ? { ...i, qty: clampQty(i.qty + qty) }
+          : i)
+      }
+      const next: CartItem = { ...input, qty, addedAt: Date.now() }
+      const all = [...prev, next]
+      return all.length > MAX_LINES ? all.slice(-MAX_LINES) : all
     })
+  }, [])
+
+  const setQty = useCallback((productId: string, qty: number) => {
+    setItems(prev => prev.map(i => i.productId === productId ? { ...i, qty: clampQty(qty) } : i))
   }, [])
 
   const remove = useCallback((productId: string) => {
@@ -100,13 +124,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CartContextValue>(() => ({
     items,
     count: items.length,
-    subtotal: items.reduce((s, i) => s + i.sellPrice, 0),
+    totalQty: items.reduce((s, i) => s + i.qty, 0),
+    subtotal: items.reduce((s, i) => s + i.sellPrice * i.qty, 0),
     has,
     add,
+    setQty,
     remove,
     clear,
     hydrated,
-  }), [items, has, add, remove, clear, hydrated])
+  }), [items, has, add, setQty, remove, clear, hydrated])
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
 }

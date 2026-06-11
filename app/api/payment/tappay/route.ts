@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
-import { getOrderByIdForUser, markOrderProcessing, markOrderPaid, markOrderFailed, markOrderCancelled, isOrderExpired } from '@/lib/services/order'
+import {
+  getOrderByIdForUser,
+  getBundleOrders,
+  markOrderProcessing,
+  markBundleOrdersProcessing,
+  markOrderPaid,
+  markBundlePaid,
+  markOrderFailed,
+  markBundleFailed,
+  markOrderCancelled,
+  isOrderExpired,
+} from '@/lib/services/order'
 import { tapPayCharge, tapPayChargeByToken } from '@/lib/services/tappay'
 import { triggerEsimActivation } from '@/lib/services/esim'
 import { calculateAndSaveCommission } from '@/lib/services/commission'
@@ -12,7 +23,9 @@ import { decrypt } from '@/lib/utils/crypto'
 import { OrderStatus } from '@prisma/client'
 
 // POST /api/payment/tappay
-// Body: { orderId, prime?, useToken?, remember?, returnUrl? }
+// Body: { orderId?, bundleId?, prime?, useToken?, remember?, returnUrl? }
+//   - Single order: pass orderId
+//   - Multi-item bundle: pass bundleId (charges sum of all bundle orders once)
 export async function POST(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -23,53 +36,118 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { orderId, prime, useToken, remember, returnUrl } = body as {
+  const { orderId, bundleId, prime, useToken, remember, returnUrl } = body as {
     orderId?: string
+    bundleId?: string
     prime?: string
     useToken?: boolean
     remember?: boolean
     returnUrl?: string
   }
 
-  if (!orderId) return NextResponse.json({ error: 'orderId 必填' }, { status: 400 })
-  if (!prime && !useToken) return NextResponse.json({ error: 'prime 或 useToken 擇一必填' }, { status: 400 })
-
-  const order = await getOrderByIdForUser(orderId, session.userId)
-  if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
-  if (order.status !== OrderStatus.PENDING) {
-    return NextResponse.json({ error: '訂單已不在待付款狀態' }, { status: 409 })
+  if (!orderId && !bundleId) {
+    return NextResponse.json({ error: 'orderId 或 bundleId 必填' }, { status: 400 })
+  }
+  if (orderId && bundleId) {
+    return NextResponse.json({ error: 'orderId 與 bundleId 不能同時傳入' }, { status: 400 })
+  }
+  if (!prime && !useToken) {
+    return NextResponse.json({ error: 'prime 或 useToken 擇一必填' }, { status: 400 })
   }
 
-  // 逾時檢查：建立超過 30 分鐘自動取消
-  if (isOrderExpired(order.createdAt)) {
-    await markOrderCancelled(orderId)
-    return NextResponse.json({ error: '訂單已逾時取消（超過 30 分鐘），請重新下單' }, { status: 410 })
+  // ─── Resolve orders + amount ────────────────────────────────────────
+  // Anchor order is what carries `tapPayOrderId` (unique constraint).
+  type Anchor = {
+    id: string
+    orderNumber: string | null
+    createdAt: Date
+    status: OrderStatus
+    totalPaid: number
+    productName: string
+  }
+  let anchor: Anchor
+  let amount: number
+  let isBundle = false
+  let bundleOrderIds: string[] = []
+
+  if (bundleId) {
+    const orders = await getBundleOrders(bundleId, session.userId)
+    if (orders.length === 0) return NextResponse.json({ error: '訂單組不存在' }, { status: 404 })
+    if (orders.some(o => o.status !== OrderStatus.PENDING)) {
+      return NextResponse.json({ error: '訂單組已不在待付款狀態' }, { status: 409 })
+    }
+    if (orders.some(o => isOrderExpired(o.createdAt))) {
+      await Promise.all(orders.map(o => markOrderCancelled(o.id)))
+      return NextResponse.json({ error: '訂單已逾時取消（超過 30 分鐘），請重新下單' }, { status: 410 })
+    }
+    const first = orders[0]
+    anchor = {
+      id: first.id,
+      orderNumber: first.orderNumber,
+      createdAt: first.createdAt,
+      status: first.status,
+      totalPaid: first.totalPaid,
+      productName: first.orderItems[0]?.productName ?? 'eSIM',
+    }
+    amount = orders.reduce((s, o) => s + o.totalPaid, 0)
+    isBundle = true
+    bundleOrderIds = orders.map(o => o.id)
+  } else {
+    const order = await getOrderByIdForUser(orderId!, session.userId)
+    if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
+    if (order.status !== OrderStatus.PENDING) {
+      return NextResponse.json({ error: '訂單已不在待付款狀態' }, { status: 409 })
+    }
+    if (isOrderExpired(order.createdAt)) {
+      await markOrderCancelled(order.id)
+      return NextResponse.json({ error: '訂單已逾時取消（超過 30 分鐘），請重新下單' }, { status: 410 })
+    }
+    anchor = {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      createdAt: order.createdAt,
+      status: order.status,
+      totalPaid: order.totalPaid,
+      productName: order.orderItems[0]?.productName ?? 'eSIM',
+    }
+    amount = order.totalPaid
   }
 
   const user = await getUserById(session.userId)
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  const tapPayOrderId = order.orderNumber ?? `ESM-${orderId.slice(-8).toUpperCase()}`
-  await markOrderProcessing(orderId, tapPayOrderId)
+  const tapPayOrderId = anchor.orderNumber ?? `ESM-${anchor.id.slice(-8).toUpperCase()}`
 
-  const productName = order.orderItems[0]?.productName ?? 'eSIM'
+  // ─── Lock state before charging ─────────────────────────────────────
+  if (isBundle) {
+    await markBundleOrdersProcessing(bundleId!, anchor.id, tapPayOrderId)
+  } else {
+    await markOrderProcessing(anchor.id, tapPayOrderId)
+  }
+
   const cardholder = {
     phone_number: user.phone ?? '',
     name: user.displayName ?? '',
     email: user.email ?? '',
   }
 
-  // Build 3DS result URLs if returnUrl provided
   const origin = req.nextUrl.origin
-  const frontendRedirectUrl = returnUrl ?? `${origin}/orders/${orderId}`
+  const frontendRedirectUrl = returnUrl ?? (isBundle
+    ? `${origin}/orders?bundleId=${bundleId}`
+    : `${origin}/orders/${anchor.id}`)
   const backendNotifyUrl = `${origin}/api/payment/tappay/notify`
   const resultUrl = { frontendRedirectUrl, backendNotifyUrl }
+
+  const detailsLabel = isBundle
+    ? `eSIM 組合 (${bundleOrderIds.length} 張)`
+    : anchor.productName
 
   let charge
   if (useToken) {
     const saved = await prisma.savedCard.findUnique({ where: { userId: session.userId } })
     if (!saved) {
-      await markOrderFailed(orderId)
+      if (isBundle) await markBundleFailed(bundleId!)
+      else await markOrderFailed(anchor.id)
       return NextResponse.json({ error: '未找到儲存卡片，請重新輸入卡號' }, { status: 400 })
     }
     charge = await tapPayChargeByToken(
@@ -77,8 +155,8 @@ export async function POST(req: NextRequest) {
         cardKey: decrypt(saved.cardKeyEnc),
         cardToken: decrypt(saved.cardTokenEnc),
         orderId: tapPayOrderId,
-        amount: order.totalPaid,
-        details: productName,
+        amount,
+        details: detailsLabel,
         cardholder,
         resultUrl,
       },
@@ -89,8 +167,8 @@ export async function POST(req: NextRequest) {
       {
         prime: prime!,
         orderId: tapPayOrderId,
-        amount: order.totalPaid,
-        details: productName,
+        amount,
+        details: detailsLabel,
         cardholder,
         remember: remember ?? false,
         resultUrl,
@@ -100,22 +178,38 @@ export async function POST(req: NextRequest) {
   }
 
   if (!charge.ok) {
-    await markOrderFailed(orderId)
+    if (isBundle) await markBundleFailed(bundleId!)
+    else await markOrderFailed(anchor.id)
     return NextResponse.json({ error: charge.message }, { status: 402 })
   }
 
-  // 3DS redirect — payment will be confirmed via webhook
+  // 3DS redirect — confirmation arrives via webhook
   if (charge.paymentUrl) {
-    return NextResponse.json({ requiresRedirect: true, paymentUrl: charge.paymentUrl, orderId })
+    return NextResponse.json({
+      requiresRedirect: true,
+      paymentUrl: charge.paymentUrl,
+      orderId: anchor.id,
+      bundleId: isBundle ? bundleId : undefined,
+    })
   }
 
-  // Non-3DS path: mark paid immediately and trigger downstream
-  await markOrderPaid(orderId, charge.recTradeId)
+  // ─── Sync success: mark paid and fan out downstream ─────────────────
+  if (isBundle) {
+    const orders = await markBundlePaid(bundleId!, charge.recTradeId)
+    for (const o of orders) {
+      triggerEsimActivation(o.id).catch(() => {})
+      calculateAndSaveCommission(o.id).catch(() => {})
+      issueRepurchaseCouponForOrder(o.id).catch(() => {})
+    }
+    notifyOrderPaid(session.userId, detailsLabel, amount).catch(() => {})
+    return NextResponse.json({ ok: true, bundleId, orderIds: orders.map(o => o.id) })
+  }
 
-  triggerEsimActivation(orderId).catch(() => {})
-  calculateAndSaveCommission(orderId).catch(() => {})
-  issueRepurchaseCouponForOrder(orderId).catch(() => {})
-  notifyOrderPaid(session.userId, productName, order.totalPaid).catch(() => {})
+  await markOrderPaid(anchor.id, charge.recTradeId)
+  triggerEsimActivation(anchor.id).catch(() => {})
+  calculateAndSaveCommission(anchor.id).catch(() => {})
+  issueRepurchaseCouponForOrder(anchor.id).catch(() => {})
+  notifyOrderPaid(session.userId, detailsLabel, amount).catch(() => {})
 
-  return NextResponse.json({ ok: true, orderId })
+  return NextResponse.json({ ok: true, orderId: anchor.id })
 }

@@ -123,7 +123,7 @@ export default function ClassicShop({
             <h1 style={{ fontSize: 17, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.01em' }}>{country?.countryNameZh ?? '方案'}</h1>
           </div>
           <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0', letterSpacing: '0.04em' }}>
-            {filter.dayFilter ? `已篩選 ${filter.filteredCount} / ${filter.totalCount}` : `${filter.totalCount} 個方案 · 已按 CP 值排序`}
+            {filter.dayFilter ? `已篩選 ${filter.filteredCount} / ${filter.totalCount}` : `${filter.totalCount} 個方案`}
           </p>
         </div>
         {filter.dayFilter > 0 && (
@@ -260,12 +260,7 @@ export default function ClassicShop({
                     </div>
                     {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
                       <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>
-                        共 {Math.round(d.totalGB)} GB · 平均 NT${d.perDayCost} / 天
-                      </p>
-                    )}
-                    {(!d.isPerDay || d.isUnlimited) && (
-                      <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>
-                        平均 NT${d.perDayCost} / 天
+                        共 {Math.round(d.totalGB)} GB
                       </p>
                     )}
                   </div>
