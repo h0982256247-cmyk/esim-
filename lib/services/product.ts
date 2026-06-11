@@ -229,23 +229,23 @@ export async function batchCreateProducts(
 
   // ─── Step 3: 對既有 SupplierProduct 更新 product_name + costPrice ─
   // 重新匯入時，wmInfo 提供新名稱 → 覆寫舊資料（解決「東南亞」之類錯誤）。
-  // PgBouncer connection_limit=1 下逐筆 await 會被序列化、CSV 大時動輒 30s+，
-  // 改成分批 transaction：同一交易內所有 statement 共用一個 server connection、
-  // 連續 pipeline 送出，可降一個數量級。
-  const supplierUpdates = wmIds.flatMap(wmId => {
+  //
+  // 規模背景：商品可能逾 10k 筆，逐筆 prisma.update 在 PgBouncer 序列化下會跑
+  // 數十分鐘且每個 transaction 5s 就 expire。改用 `UPDATE FROM VALUES` 一次 SQL
+  // 處理整批，1000 列為一批避免 SQL 過長。
+  type SupplierUpdate = { id: string; productName: string; costPrice: number }
+  const supplierUpdates: SupplierUpdate[] = []
+  for (const wmId of wmIds) {
     const existingRow = existingByWmId.get(wmId)
-    if (!existingRow) return []
+    if (!existingRow) continue
     const row = rows.find(r => r.supplierSkuId === wmId)!
     const wmInfo = supplierMap?.get(wmId)
     const desiredName = wmInfo?.productName ?? (row.countryNameZh || row.supplierSkuId)
     const desiredCost = wmInfo?.productPrice ?? row.costPrice
-    if (existingRow.productName === desiredName && existingRow.costPrice === desiredCost) return []
-    return [prisma.supplierProduct.update({
-      where: { id: existingRow.id },
-      data: { productName: desiredName, costPrice: desiredCost },
-    })]
-  })
-  await runInBatches(supplierUpdates)
+    if (existingRow.productName === desiredName && existingRow.costPrice === desiredCost) continue
+    supplierUpdates.push({ id: existingRow.id, productName: desiredName, costPrice: desiredCost })
+  }
+  await bulkUpdateSupplierProducts(supplierUpdates)
 
   // ─── Step 4: 拿到全部 SupplierProduct.id 對照表 ──────────────────
   const allSuppliers = await prisma.supplierProduct.findMany({
@@ -266,41 +266,105 @@ export async function batchCreateProducts(
   })
   const existingProductMap = new Map(existingProducts.map(p => [p.supplierSkuId, p.id]))
 
-  // ─── Step 6: 分流：既有 → update；新的 → createMany ─────────────
-  // 同 step 3，把 update 收集起來分批 transaction 送，避免 N 個 await 序列化。
-  const productUpdates: Prisma.PrismaPromise<unknown>[] = []
+  // ─── Step 6: 分流：既有 → bulk SQL update；新的 → createMany ─────
+  type ProductUpdate = { id: string; data: ReturnType<typeof buildProductData> }
+  const productUpdates: ProductUpdate[] = []
   const newProductData: ReturnType<typeof buildProductData>[] = []
   for (const row of rows) {
     const supplierId = supplierIdMap.get(row.supplierSkuId)
     if (!supplierId) throw new Error(`找不到 SupplierProduct.id for wmProductId=${row.supplierSkuId}`)
     const data = buildProductData(row, supplierId, tenantAdminId ?? null)
     const existingId = existingProductMap.get(supplierId)
-    if (existingId) {
-      productUpdates.push(prisma.product.update({ where: { id: existingId }, data }))
-    } else {
-      newProductData.push(data)
-    }
+    if (existingId) productUpdates.push({ id: existingId, data })
+    else            newProductData.push(data)
   }
   const updated = productUpdates.length
-  await runInBatches(productUpdates)
+  await bulkUpdateProducts(productUpdates)
 
   let created = 0
   if (newProductData.length > 0) {
-    const result = await prisma.product.createMany({ data: newProductData })
-    created = result.count
+    // createMany 也分批：單筆 SQL 太長會碰到 PostgreSQL 64K parameter 上限
+    const CREATE_BATCH = 500
+    for (let i = 0; i < newProductData.length; i += CREATE_BATCH) {
+      const chunk = newProductData.slice(i, i + CREATE_BATCH)
+      const result = await prisma.product.createMany({ data: chunk })
+      created += result.count
+    }
   }
 
   return { count: created + updated, created, updated }
 }
 
-// 分批 transaction 執行：PgBouncer 序列化下，把 N 個 update 包成多個小交易，
-// 每個交易內所有 statement 共用同一 server connection 可連續 pipeline。
-// 50 是 Prisma transaction max statements 的安全值。
-async function runInBatches(operations: Prisma.PrismaPromise<unknown>[], batchSize = 50): Promise<void> {
-  if (operations.length === 0) return
-  for (let i = 0; i < operations.length; i += batchSize) {
-    const chunk = operations.slice(i, i + batchSize)
-    await prisma.$transaction(chunk)
+// SQL bulk update — 把 N 個 update 壓成一個 `UPDATE ... FROM (VALUES ...)`。
+// PgBouncer connection_limit=1 + 11000+ 列規模下，逐筆 prisma.update 會跑數十
+// 分鐘且每個 $transaction 5s 就 expire。raw SQL 1000 列只要 1~2 秒。
+const BULK_CHUNK = 1000
+
+async function bulkUpdateSupplierProducts(
+  updates: { id: string; productName: string; costPrice: number }[],
+): Promise<void> {
+  if (updates.length === 0) return
+  for (let i = 0; i < updates.length; i += BULK_CHUNK) {
+    const chunk = updates.slice(i, i + BULK_CHUNK)
+    const values = chunk.map(u => Prisma.sql`(${u.id}::text, ${u.productName}::text, ${u.costPrice}::int)`)
+    await prisma.$executeRaw`
+      UPDATE supplier_products AS s SET
+        product_name = v.product_name,
+        cost_price   = v.cost_price,
+        updated_at   = NOW()
+      FROM (VALUES ${Prisma.join(values)}) AS v(id, product_name, cost_price)
+      WHERE s.id = v.id
+    `
+  }
+}
+
+async function bulkUpdateProducts(
+  updates: { id: string; data: ReturnType<typeof buildProductData> }[],
+): Promise<void> {
+  if (updates.length === 0) return
+  for (let i = 0; i < updates.length; i += BULK_CHUNK) {
+    const chunk = updates.slice(i, i + BULK_CHUNK)
+    const values = chunk.map(({ id, data: d }) => Prisma.sql`(
+      ${id}::text,
+      ${d.supplierSkuId}::text,
+      ${d.countryCode}::text,
+      ${d.countryNameZh}::text,
+      ${d.countryNameEn}::text,
+      ${d.countryFlag ?? null}::text,
+      ${d.displayDays}::int,
+      ${d.dataCapacity ?? null}::text,
+      ${d.planCode ?? null}::text,
+      ${d.networkType ?? null}::text,
+      ${d.isNativeSim ?? false}::boolean,
+      ${d.description ?? null}::text,
+      ${d.sellPrice}::int,
+      ${d.costPrice}::int,
+      ${d.sortOrder ?? 0}::int
+    )`)
+    await prisma.$executeRaw`
+      UPDATE products AS p SET
+        supplier_sku_id  = v.supplier_sku_id,
+        country_code     = v.country_code,
+        country_name_zh  = v.country_name_zh,
+        country_name_en  = v.country_name_en,
+        country_flag     = v.country_flag,
+        display_days     = v.display_days,
+        data_capacity    = v.data_capacity,
+        plan_code        = v.plan_code,
+        network_type     = v.network_type,
+        is_native_sim    = v.is_native_sim,
+        description      = v.description,
+        sell_price       = v.sell_price,
+        cost_price       = v.cost_price,
+        sort_order       = v.sort_order,
+        updated_at       = NOW()
+      FROM (VALUES ${Prisma.join(values)}) AS v(
+        id, supplier_sku_id, country_code, country_name_zh, country_name_en, country_flag,
+        display_days, data_capacity, plan_code, network_type, is_native_sim, description,
+        sell_price, cost_price, sort_order
+      )
+      WHERE p.id = v.id
+    `
   }
 }
 
