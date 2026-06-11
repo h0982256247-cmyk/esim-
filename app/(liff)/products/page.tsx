@@ -9,6 +9,7 @@ import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
 import { useCart } from '@/components/liff/CartProvider'
+import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR } from '@/lib/utils/product-display'
 
 type Country = {
   countryCode: string
@@ -304,6 +305,14 @@ function CheckIconSm() {
   )
 }
 
+function CrownIconSm({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3 18l-2-11 6 4 5-8 5 8 6-4-2 11H3zm0 2h18v2H3v-2z" />
+    </svg>
+  )
+}
+
 function PlansView({ countries, products, coupons, selectedCountry, slug, showSetup, dismissSetup, router }: PlansViewProps) {
   const C = useTenantColors()
   const country = countries.find(c => c.countryCode === selectedCountry)
@@ -335,6 +344,9 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
     return products.filter(p => p.displayDays === dayFilter)
   }, [products, dayFilter])
 
+  // Annotate filtered plans with per-day cost + recommendation, then sort by value
+  const displays = useMemo(() => sortByValue(annotatePlans(filtered)), [filtered])
+
   // Suggest nearest day if no exact match
   const nearestDays = useMemo(() => {
     if (!dayFilter || filtered.length > 0) return []
@@ -362,14 +374,15 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
   return (
     <>
       {showSetup && <SetupModal slug={slug} onDismiss={dismissSetup} />}
-      <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96 }}>
+      <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96, background: '#f7f8fa', minHeight: '100vh' }}>
         {/* Sticky header */}
         <div style={{
           position: 'sticky', top: 0,
-          background: 'rgba(249,249,249,0.96)',
-          backdropFilter: 'blur(10px)',
+          background: 'rgba(247,248,250,0.92)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           zIndex: 10,
-          padding: '14px 16px',
+          padding: '14px 16px 12px',
           borderBottom: `1px solid ${S.line}`,
           display: 'flex',
           alignItems: 'center',
@@ -381,13 +394,13 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
           >
             <BackArrow />
           </button>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {country && <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={22} />}
-              <h1 style={{ fontSize: 17, fontWeight: 700, color: S.ink, margin: 0 }}>{country?.countryNameZh ?? '方案'}</h1>
+              <h1 style={{ fontSize: 17, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.01em' }}>{country?.countryNameZh ?? '方案'}</h1>
             </div>
-            <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>
-              {dayFilter ? `${filtered.length} / ${products.length} 個方案` : `${products.length} 個方案`}
+            <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0', letterSpacing: '0.04em' }}>
+              {dayFilter ? `已篩選 ${filtered.length} / ${products.length}` : `${products.length} 個方案 · 已按 CP 值排序`}
             </p>
           </div>
           {dayFilter > 0 && (
@@ -400,17 +413,18 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
                 color: S.muted,
                 fontSize: 12,
                 fontWeight: 600,
-                padding: '6px 10px',
+                padding: '6px 11px',
                 borderRadius: 100,
                 cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
               }}
-            >顯示全部</button>
+            >全部</button>
           )}
         </div>
 
         {/* Day picker filter */}
         {availableDays.length > 0 && (
-          <div style={{ padding: '14px 16px 4px' }}>
+          <div style={{ padding: '16px 16px 4px' }}>
             <DayPicker
               value={pickerDays || availableDays[0]}
               onChange={applyFilter}
@@ -420,36 +434,29 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
               label="想用幾天？"
               caption={dayFilter
                 ? (filtered.length > 0 ? `找到 ${filtered.length} 個 ${dayFilter} 天方案` : `沒有 ${dayFilter} 天的方案`)
-                : '選擇天數即可篩選方案'}
+                : '點 +/− 或輸入即可篩選'}
             />
           </div>
         )}
 
         {/* Plans */}
-        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {products.length === 0 && (
             <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>此目的地暫無可購買方案</p>
           )}
 
           {dayFilter > 0 && filtered.length === 0 && nearestDays.length > 0 && (
             <div style={{ padding: '8px 4px' }}>
-              <p style={{ fontSize: 13, color: S.muted, margin: '0 0 8px' }}>
-                您也可以選擇相近天數：
-              </p>
+              <p style={{ fontSize: 13, color: S.muted, margin: '0 0 8px' }}>您也可以選擇相近天數：</p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {nearestDays.map(n => (
                   <button
                     key={n}
                     onClick={() => applyFilter(n)}
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: 100,
-                      border: `1px solid ${C.border}`,
-                      background: C.light,
-                      color: C.primary,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: 'pointer',
+                      padding: '7px 14px', borderRadius: 100,
+                      border: `1px solid ${C.border}`, background: C.light, color: C.primary,
+                      fontSize: 13, fontWeight: 700, cursor: 'pointer',
                     }}
                   >{n} 天</button>
                 ))}
@@ -457,122 +464,138 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
             </div>
           )}
 
-          {filtered.map(p => {
+          {displays.map(d => {
+            const p = d.plan
+            const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
             const inCart = cart.has(p.id)
+            const tier = TIER_COLOR[d.tier]
             return (
               <div
                 key={p.id}
                 style={{
-                  width: '100%',
-                  background: S.white,
-                  borderRadius: 14,
+                  position: 'relative',
+                  width: '100%', background: S.white, borderRadius: 18,
                   border: `1px solid ${inCart ? C.border : S.line}`,
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-                  display: 'flex',
-                  alignItems: 'stretch',
-                  gap: 0,
+                  boxShadow: inCart
+                    ? `0 2px 6px rgba(15,23,42,0.04), 0 0 0 1.5px ${C.primary}33`
+                    : '0 1px 2px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.03)',
                   overflow: 'hidden',
+                  transition: 'box-shadow 0.18s',
                 }}
               >
-                <button
-                  type="button"
-                  onClick={() => router.push(`/products/${p.id}`)}
-                  style={{
-                    flex: 1,
-                    textAlign: 'left',
-                    background: 'transparent',
-                    border: 'none',
-                    padding: '16px 16px 16px 18px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    WebkitTapHighlightColor: 'transparent',
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
-                      <span style={{ fontSize: 22, fontWeight: 800, color: S.ink, letterSpacing: '-0.02em' }}>{p.displayDays}</span>
-                      <span style={{ fontSize: 13, color: S.muted, fontWeight: 500 }}>天</span>
-                    </div>
-                    {p.dataCapacity && (
-                      <span style={{
-                        display: 'inline-block',
-                        fontSize: 12, fontWeight: 600, color: S.muted,
-                        background: '#f3f4f6', borderRadius: 6, padding: '2px 8px',
-                        marginBottom: 4,
-                      }}>
-                        {p.dataCapacity}
-                      </span>
-                    )}
-                    {p.description && (
-                      <p style={{ fontSize: 12, color: S.faint, margin: 0, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {p.description}
-                      </p>
-                    )}
+                {d.recommended && (
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0,
+                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    color: '#fff',
+                    fontSize: 10, fontWeight: 800,
+                    padding: '4px 10px',
+                    borderTopLeftRadius: 18, borderBottomRightRadius: 10,
+                    display: 'flex', alignItems: 'center', gap: 3,
+                    letterSpacing: '0.08em',
+                    zIndex: 1,
+                  }}>
+                    <CrownIconSm size={11} /> 最划算
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    {(() => {
-                      const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
-                      return hasDiscount ? (
-                        <>
-                          <p style={{ fontSize: 12, color: S.faint, margin: 0, textDecoration: 'line-through' }}>
-                            NT${p.sellPrice.toLocaleString()}
-                          </p>
-                          <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
-                            NT${bestPrice.toLocaleString()}
-                          </p>
-                          <p style={{ fontSize: 11, color: '#16a34a', marginTop: 1, fontWeight: 600 }}>
-                            省 NT${savedAmount.toLocaleString()}
-                          </p>
-                        </>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/products/${p.id}`)}
+                    style={{
+                      flex: 1, textAlign: 'left',
+                      background: 'transparent', border: 'none',
+                      padding: d.recommended ? '26px 18px 18px' : '18px',
+                      cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >
+                    {/* Day badge */}
+                    <div style={{
+                      width: 64, height: 64, borderRadius: 16, flexShrink: 0,
+                      background: tier.bg, color: tier.fg,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: 24, fontWeight: 900, lineHeight: 1, letterSpacing: '-0.03em' }}>{p.displayDays}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, marginTop: 2, letterSpacing: '0.1em' }}>天</span>
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, color: tier.accent,
+                          background: tier.bg, borderRadius: 6, padding: '3px 8px',
+                          letterSpacing: '0.04em',
+                        }}>{TIER_LABEL[d.tier]}</span>
+                        {p.dataCapacity && (
+                          <span style={{ fontSize: 13, fontWeight: 700, color: S.ink, letterSpacing: '-0.01em' }}>
+                            {p.dataCapacity}
+                          </span>
+                        )}
+                      </div>
+                      {d.totalGB > 0 && !d.isUnlimited && d.isPerDay ? (
+                        <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>
+                          共 {Math.round(d.totalGB)} GB · 平均 NT${d.perDayCost} / 天
+                        </p>
                       ) : (
-                        <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                        <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>
+                          平均 NT${d.perDayCost} / 天
+                        </p>
+                      )}
+                    </div>
+
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      {hasDiscount && (
+                        <p style={{ fontSize: 11, color: S.faint, margin: 0, textDecoration: 'line-through' }}>
                           NT${p.sellPrice.toLocaleString()}
                         </p>
-                      )
-                    })()}
-                  </div>
-                </button>
+                      )}
+                      <p style={{ fontSize: 20, fontWeight: 900, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                        NT${bestPrice.toLocaleString()}
+                      </p>
+                      {hasDiscount && (
+                        <p style={{ fontSize: 10, color: '#16a34a', margin: '2px 0 0', fontWeight: 700 }}>
+                          省 NT${savedAmount.toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </button>
 
-                {/* Add-to-cart side button */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (inCart) {
-                      cart.remove(p.id)
-                    } else {
-                      cart.add({
-                        productId: p.id,
-                        countryCode: p.countryCode,
-                        countryNameZh: p.countryNameZh,
-                        countryFlag: country?.countryFlag ?? null,
-                        displayDays: p.displayDays,
-                        dataCapacity: p.dataCapacity,
-                        sellPrice: p.sellPrice,
-                      })
-                    }
-                  }}
-                  aria-label={inCart ? '從購物車移除' : '加入購物車'}
-                  style={{
-                    width: 52,
-                    flexShrink: 0,
-                    background: inCart ? C.primary : C.light,
-                    color: inCart ? C.onPrimary : C.primary,
-                    border: 'none',
-                    borderLeft: `1px solid ${inCart ? 'transparent' : S.line}`,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'background 0.15s, color 0.15s',
-                    WebkitTapHighlightColor: 'transparent',
-                  }}
-                >
-                  {inCart ? <CheckIconSm /> : <PlusIconSm />}
-                </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (inCart) {
+                        cart.remove(p.id)
+                      } else {
+                        cart.add({
+                          productId: p.id,
+                          countryCode: p.countryCode,
+                          countryNameZh: p.countryNameZh,
+                          countryFlag: country?.countryFlag ?? null,
+                          displayDays: p.displayDays,
+                          dataCapacity: p.dataCapacity,
+                          sellPrice: p.sellPrice,
+                        })
+                      }
+                    }}
+                    aria-label={inCart ? '從購物車移除' : '加入購物車'}
+                    style={{
+                      width: 52, flexShrink: 0,
+                      background: inCart ? C.primary : 'transparent',
+                      color: inCart ? C.onPrimary : C.primary,
+                      border: 'none', borderLeft: `1px solid ${inCart ? 'transparent' : S.line}`,
+                      cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'background 0.15s, color 0.15s',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >
+                    {inCart ? <CheckIconSm /> : <PlusIconSm />}
+                  </button>
+                </div>
               </div>
             )
           })}

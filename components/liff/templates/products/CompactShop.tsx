@@ -1,13 +1,15 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
+import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR, type DataTier } from '@/lib/utils/product-display'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
-  ink: '#111', muted: '#6b7280', faint: '#9ca3af',
-  white: '#ffffff', bg: '#f3f4f6', line: 'rgba(0,0,0,0.06)',
+  ink: '#0b0f17', muted: '#475569', faint: '#94a3b8',
+  white: '#ffffff', bg: '#f4f5f8', line: 'rgba(15,23,42,0.06)',
 } as const
 
 function BackArrow() {
@@ -35,21 +37,33 @@ function CheckIconSm() {
   )
 }
 
+function StarIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <polygon points="12 2 15 9 22 9 17 14 19 22 12 17 5 22 7 14 2 9 9 9" />
+    </svg>
+  )
+}
+
+const TIER_ORDER: DataTier[] = ['light', 'standard', 'medium', 'heavy', 'unlimited', 'unknown']
+
 export default function CompactShop({
   countries, products, coupons, selectedCountry,
   colors: C, onSelectCountry, onSelectProduct, onBack,
   filter, cart,
 }: ProductsTemplateProps) {
+  const [tierFilter, setTierFilter] = useState<DataTier | 'all'>('all')
+
   if (!selectedCountry) {
     return (
-      <div style={{ paddingBottom: 96 }}>
-        {/* 搜尋風格標題列 */}
+      <div style={{ paddingBottom: 96, background: S.white, minHeight: '100vh' }}>
         <div style={{
           padding: '20px 16px 12px',
           borderBottom: `1px solid ${S.line}`,
           background: S.white,
           position: 'sticky', top: 0, zIndex: 10,
         }}>
+          <h1 style={{ fontSize: 22, fontWeight: 900, color: S.ink, letterSpacing: '-0.02em', margin: '0 0 10px' }}>選擇目的地</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               flex: 1, background: S.bg, borderRadius: 12,
@@ -63,7 +77,6 @@ export default function CompactShop({
           </div>
         </div>
 
-        {/* 密集列表 */}
         <div style={{ background: S.white }}>
           {countries.length === 0 && (
             <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>目前沒有可購買的商品</p>
@@ -76,15 +89,16 @@ export default function CompactShop({
                 width: '100%', display: 'flex', alignItems: 'center', gap: 14,
                 background: 'none', border: 'none',
                 borderBottom: i < countries.length - 1 ? `1px solid ${S.line}` : 'none',
-                padding: '13px 16px', cursor: 'pointer', textAlign: 'left',
+                padding: '14px 16px', cursor: 'pointer', textAlign: 'left',
+                WebkitTapHighlightColor: 'transparent',
               }}
             >
               <span style={{ width: 32, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}>
                 <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={28} />
               </span>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 15, fontWeight: 600, color: S.ink, margin: 0 }}>{c.countryNameZh}</p>
-                <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{c.countryNameEn}</p>
+                <p style={{ fontSize: 11, color: S.faint, margin: 0, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{c.countryNameEn}</p>
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={S.faint} strokeWidth="2" strokeLinecap="round">
                 <polyline points="9 18 15 12 9 6"/>
@@ -99,23 +113,38 @@ export default function CompactShop({
   const country = countries.find(c => c.countryCode === selectedCountry)
   const showNoMatch = filter.dayFilter > 0 && filter.filteredCount === 0
 
+  // Annotate + sort
+  const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
+
+  // Available tiers in the current results
+  const availableTiers = useMemo(() => {
+    const set = new Set<DataTier>()
+    displays.forEach(d => set.add(d.tier))
+    return TIER_ORDER.filter(t => set.has(t))
+  }, [displays])
+
+  const visible = useMemo(() => {
+    if (tierFilter === 'all') return displays
+    return displays.filter(d => d.tier === tierFilter)
+  }, [displays, tierFilter])
+
   return (
-    <div style={{ paddingBottom: 96 }}>
-      {/* 頂欄 */}
+    <div style={{ paddingBottom: 96, background: S.bg, minHeight: '100vh' }}>
+      {/* Sticky top bar */}
       <div style={{
-        background: S.white, padding: '14px 16px',
+        background: S.white, padding: '12px 16px',
         borderBottom: `1px solid ${S.line}`,
-        position: 'sticky', top: 0, zIndex: 10,
+        position: 'sticky', top: 0, zIndex: 11,
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: S.muted, padding: 4, display: 'flex', alignItems: 'center' }}>
           <BackArrow />
         </button>
         {country && <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={26} />}
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: 16, fontWeight: 700, color: S.ink, margin: 0 }}>{country?.countryNameZh}</p>
-          <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>
-            {filter.dayFilter ? `${filter.filteredCount} / ${filter.totalCount} 個方案` : `${filter.totalCount} 個方案`}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 15, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.01em' }}>{country?.countryNameZh}</p>
+          <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>
+            {filter.dayFilter ? `${filter.filteredCount} / ${filter.totalCount} 個方案` : `${filter.totalCount} 個 · 按 CP 值排序`}
           </p>
         </div>
         {filter.dayFilter > 0 && (
@@ -124,16 +153,17 @@ export default function CompactShop({
             onClick={filter.onClear}
             style={{
               background: 'transparent', border: `1px solid ${S.line}`, color: S.muted,
-              fontSize: 12, fontWeight: 600, padding: '5px 10px',
+              fontSize: 11, fontWeight: 600, padding: '4px 9px',
               borderRadius: 100, cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
             }}
           >全部</button>
         )}
       </div>
 
-      {/* DayPicker (compact) */}
+      {/* DayPicker compact */}
       {filter.availableDays.length > 0 && (
-        <div style={{ padding: '10px 16px 4px', background: S.white, borderBottom: `1px solid ${S.line}` }}>
+        <div style={{ padding: '10px 16px 0', background: S.white }}>
           <DayPicker
             value={filter.pickerDays}
             onChange={filter.onChange}
@@ -149,8 +179,50 @@ export default function CompactShop({
         </div>
       )}
 
-      {/* 方案列表（密集） */}
-      <div style={{ background: S.white, marginTop: 8 }}>
+      {/* Tier filter chips */}
+      {availableTiers.length > 1 && (
+        <div style={{
+          padding: '10px 16px 10px',
+          background: S.white,
+          borderBottom: `1px solid ${S.line}`,
+          display: 'flex', gap: 6, overflowX: 'auto',
+          msOverflowStyle: 'none', scrollbarWidth: 'none',
+        }}>
+          {(['all', ...availableTiers] as const).map(t => {
+            const active = tierFilter === t
+            const color = t === 'all' ? null : TIER_COLOR[t as DataTier]
+            return (
+              <button
+                key={t}
+                onClick={() => setTierFilter(t as DataTier | 'all')}
+                style={{
+                  flex: '0 0 auto',
+                  padding: '6px 12px', borderRadius: 100,
+                  border: active
+                    ? `1.5px solid ${color ? color.accent : C.primary}`
+                    : '1.5px solid rgba(15,23,42,0.08)',
+                  background: active
+                    ? (color ? color.bg : C.light)
+                    : '#fff',
+                  color: active
+                    ? (color ? color.fg : C.primary)
+                    : '#64748b',
+                  fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  WebkitTapHighlightColor: 'transparent',
+                  transition: 'all 0.12s',
+                }}
+              >
+                {t === 'all' ? '全部流量' : TIER_LABEL[t as DataTier]}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Plan list */}
+      <div style={{ background: S.white, marginTop: 0 }}>
         {filter.totalCount === 0 && (
           <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>此目的地暫無可購買方案</p>
         )}
@@ -174,62 +246,87 @@ export default function CompactShop({
           </div>
         )}
 
-        {products.map((p, i) => {
+        {visible.length === 0 && tierFilter !== 'all' && (
+          <p style={{ textAlign: 'center', color: S.faint, padding: '32px 0', fontSize: 13 }}>
+            此天數沒有「{TIER_LABEL[tierFilter]}」方案
+          </p>
+        )}
+
+        {visible.map((d, i) => {
+          const p = d.plan
           const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
           const inCart = cart.has(p.id)
+          const tier = TIER_COLOR[d.tier]
           return (
             <div
               key={p.id}
               style={{
                 display: 'flex', alignItems: 'stretch',
-                borderBottom: i < products.length - 1 ? `1px solid ${S.line}` : 'none',
+                borderBottom: i < visible.length - 1 ? `1px solid ${S.line}` : 'none',
+                position: 'relative',
               }}
             >
+              {/* Tier color stripe */}
+              <div style={{ width: 4, background: tier.accent, flexShrink: 0 }} />
+
               <button
                 onClick={() => onSelectProduct(p.id)}
                 style={{
                   flex: 1, textAlign: 'left', background: 'none', border: 'none',
-                  padding: '14px 16px', cursor: 'pointer',
+                  padding: '14px 14px', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 12,
                   WebkitTapHighlightColor: 'transparent',
                 }}
               >
-                {/* 天數 badge */}
-                <div style={{
-                  width: 52, height: 52, borderRadius: 12, flexShrink: 0,
-                  background: C.light,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <span style={{ fontSize: 20, fontWeight: 900, color: C.primary, lineHeight: 1 }}>{p.displayDays}</span>
-                  <span style={{ fontSize: 10, color: C.primary, fontWeight: 600 }}>天</span>
+                {/* Days */}
+                <div style={{ minWidth: 44, textAlign: 'center' }}>
+                  <p style={{ fontSize: 22, fontWeight: 900, color: S.ink, margin: 0, lineHeight: 1, letterSpacing: '-0.03em' }}>{p.displayDays}</p>
+                  <p style={{ fontSize: 10, color: S.faint, margin: '3px 0 0', letterSpacing: '0.1em', fontWeight: 600 }}>天</p>
                 </div>
 
-                {/* 資訊 */}
+                {/* Info */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
                     {p.dataCapacity && (
-                      <span style={{ fontSize: 12, fontWeight: 700, color: S.muted, background: S.bg, borderRadius: 6, padding: '1px 7px' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: S.ink, letterSpacing: '-0.01em' }}>
                         {p.dataCapacity}
                       </span>
                     )}
+                    {d.recommended && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        fontSize: 10, fontWeight: 800, color: '#a16207',
+                        background: '#fef3c7', borderRadius: 4, padding: '2px 6px',
+                        letterSpacing: '0.05em',
+                      }}>
+                        <StarIcon size={10} /> 最划算
+                      </span>
+                    )}
                   </div>
-                  {p.description && (
-                    <p style={{ fontSize: 12, color: S.faint, margin: '3px 0 0', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                      {p.description}
-                    </p>
-                  )}
+                  <p style={{ fontSize: 11, color: S.muted, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                    NT$<span style={{ fontWeight: 700, color: tier.fg }}>{d.perDayCost}</span> / 天
+                    {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
+                      <> · 共 {Math.round(d.totalGB)} GB</>
+                    )}
+                  </p>
                 </div>
 
-                {/* 價格 */}
+                {/* Price */}
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   {hasDiscount ? (
                     <>
-                      <p style={{ fontSize: 11, color: S.faint, margin: 0, textDecoration: 'line-through' }}>NT${p.sellPrice.toLocaleString()}</p>
-                      <p style={{ fontSize: 17, fontWeight: 800, color: C.primary, margin: 0 }}>NT${bestPrice.toLocaleString()}</p>
-                      <p style={{ fontSize: 10, color: '#16a34a', fontWeight: 600, margin: 0 }}>省{savedAmount}</p>
+                      <p style={{ fontSize: 10, color: S.faint, margin: 0, textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+                        NT${p.sellPrice.toLocaleString()}
+                      </p>
+                      <p style={{ fontSize: 17, fontWeight: 900, color: C.primary, margin: 0, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                        NT${bestPrice.toLocaleString()}
+                      </p>
+                      <p style={{ fontSize: 9, color: '#16a34a', fontWeight: 700, margin: 0 }}>省 {savedAmount}</p>
                     </>
                   ) : (
-                    <p style={{ fontSize: 17, fontWeight: 800, color: C.primary, margin: 0 }}>NT${p.sellPrice.toLocaleString()}</p>
+                    <p style={{ fontSize: 17, fontWeight: 900, color: C.primary, margin: 0, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                      NT${p.sellPrice.toLocaleString()}
+                    </p>
                   )}
                 </div>
               </button>
@@ -242,8 +339,7 @@ export default function CompactShop({
                   width: 44, flexShrink: 0,
                   background: inCart ? C.primary : 'transparent',
                   color: inCart ? C.onPrimary : C.primary,
-                  border: 'none',
-                  borderLeft: `1px solid ${S.line}`,
+                  border: 'none', borderLeft: `1px solid ${S.line}`,
                   cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'background 0.15s, color 0.15s',

@@ -73,9 +73,10 @@ export default function FloatingCart() {
   if (count === 0 && !open) return null
 
   // Pages with their own sticky bottom CTA: raise the FAB to clear it.
+  // Sticky CTA on product detail sits at bottom calc(64 + safe-area), height ~75px.
   const hasStickyCta = /\/products\/[^/]+$/.test(pathname)
   const fabBottom = hasStickyCta
-    ? 'calc(150px + env(safe-area-inset-bottom))'
+    ? 'calc(160px + env(safe-area-inset-bottom))'
     : 'calc(72px + env(safe-area-inset-bottom))'
 
   const checkoutHref = (productId: string) =>

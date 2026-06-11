@@ -99,7 +99,7 @@ export default function ProductDetailPage() {
   ].filter(Boolean) as string[]
 
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 100 }}>
+    <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 'calc(160px + env(safe-area-inset-bottom))' }}>
       {/* Nav bar */}
       <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
@@ -162,14 +162,16 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Sticky CTA */}
+      {/* Sticky CTA — sits above the bottom nav (zIndex 50) */}
       <div style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0,
+        position: 'fixed',
+        bottom: 'calc(64px + env(safe-area-inset-bottom))',
+        left: 0, right: 0,
+        zIndex: 49,
         background: 'rgba(249,249,249,0.97)',
         backdropFilter: 'blur(10px)',
         borderTop: `1px solid ${S.line}`,
         padding: '12px 16px',
-        paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
       }}>
         <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ minWidth: 0 }}>

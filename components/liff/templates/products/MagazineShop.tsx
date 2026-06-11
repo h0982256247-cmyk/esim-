@@ -1,16 +1,18 @@
 'use client'
 
+import { useMemo } from 'react'
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
+import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR } from '@/lib/utils/product-display'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
-  ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
-  white: '#ffffff', line: 'rgba(0,0,0,0.07)',
+  ink: '#0b0f17', muted: '#475569', faint: '#94a3b8',
+  white: '#ffffff', line: 'rgba(15,23,42,0.07)',
 } as const
 
-// 每個國家固定一個漸層色組
+// Country → fixed gradient (same hash as before)
 const COUNTRY_GRADIENTS = [
   ['#667eea', '#764ba2'], ['#f093fb', '#f5576c'], ['#4facfe', '#00f2fe'],
   ['#43e97b', '#38f9d7'], ['#fa709a', '#fee140'], ['#a18cd1', '#fbc2eb'],
@@ -49,6 +51,14 @@ function CheckIcon() {
   )
 }
 
+function CrownIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3 18l-2-11 6 4 5-8 5 8 6-4-2 11H3zm0 2h18v2H3v-2z" />
+    </svg>
+  )
+}
+
 export default function MagazineShop({
   countries, products, coupons, selectedCountry,
   colors: C, onSelectCountry, onSelectProduct, onBack,
@@ -56,79 +66,76 @@ export default function MagazineShop({
 }: ProductsTemplateProps) {
   if (!selectedCountry) {
     return (
-      <div style={{ paddingBottom: 96 }}>
-        {/* Header */}
+      <div style={{ paddingBottom: 96, background: '#fafafa', minHeight: '100vh' }}>
         <div style={{ padding: '32px 20px 20px' }}>
-          <h1 style={{ fontSize: 28, fontWeight: 900, color: S.ink, letterSpacing: '-0.03em', margin: '0 0 4px' }}>
+          <p style={{ fontSize: 11, fontWeight: 800, color: S.muted, letterSpacing: '0.18em', margin: '0 0 6px', textTransform: 'uppercase' }}>Explore</p>
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: S.ink, letterSpacing: '-0.03em', margin: '0 0 6px', lineHeight: 1.05 }}>
             去哪裡？
           </h1>
-          <p style={{ fontSize: 14, color: S.faint, margin: 0 }}>選擇你的旅遊目的地</p>
+          <p style={{ fontSize: 14, color: S.muted, margin: 0 }}>選一個目的地開始你的旅程</p>
         </div>
 
-        {/* 橫向捲動大卡 */}
+        {/* Featured carousel */}
         <div style={{
           display: 'flex', gap: 14,
-          overflowX: 'auto', padding: '0 20px 8px',
+          overflowX: 'auto', padding: '0 20px 12px',
           scrollSnapType: 'x mandatory',
           WebkitOverflowScrolling: 'touch',
           msOverflowStyle: 'none', scrollbarWidth: 'none',
         }}>
-          {countries.map(c => (
+          {countries.slice(0, 8).map(c => (
             <button
               key={c.countryCode}
               onClick={() => onSelectCountry(c.countryCode)}
               style={{
-                flexShrink: 0, width: 160, height: 200,
-                borderRadius: 20, border: 'none', cursor: 'pointer',
+                flexShrink: 0, width: 168, height: 212,
+                borderRadius: 22, border: 'none', cursor: 'pointer',
                 background: getGradient(c.countryCode),
                 scrollSnapAlign: 'start',
                 display: 'flex', flexDirection: 'column',
                 alignItems: 'flex-start', justifyContent: 'flex-end',
-                padding: 18, boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                padding: 20, boxShadow: '0 12px 28px rgba(0,0,0,0.18)',
                 position: 'relative', overflow: 'hidden',
+                WebkitTapHighlightColor: 'transparent',
               }}
             >
-              <div style={{
-                position: 'absolute', top: 16, right: 16,
-                filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))',
-              }}>
-                <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={48} />
+              <div style={{ position: 'absolute', top: 18, right: 18, filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.3))' }}>
+                <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={52} />
               </div>
               <div style={{ position: 'relative', zIndex: 1 }}>
-                <p style={{ fontSize: 18, fontWeight: 800, color: '#fff', margin: '0 0 2px', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
+                <p style={{ fontSize: 19, fontWeight: 900, color: '#fff', margin: '0 0 2px', textShadow: '0 1px 4px rgba(0,0,0,0.3)', letterSpacing: '-0.01em' }}>
                   {c.countryNameZh}
                 </p>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', margin: 0, letterSpacing: '0.06em' }}>
-                  {c.countryNameEn}
+                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.78)', margin: 0, letterSpacing: '0.12em', fontWeight: 600 }}>
+                  {c.countryNameEn.toUpperCase()}
                 </p>
               </div>
             </button>
           ))}
         </div>
 
-        {/* 全部國家列表 */}
         {countries.length > 0 && (
           <div style={{ padding: '24px 20px 0' }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: S.faint, letterSpacing: '0.12em', margin: '0 0 12px' }}>ALL DESTINATIONS</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {countries.map(c => (
+            <p style={{ fontSize: 11, fontWeight: 800, color: S.faint, letterSpacing: '0.18em', margin: '0 0 14px' }}>ALL DESTINATIONS</p>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {countries.map((c, i) => (
                 <button
                   key={c.countryCode}
                   onClick={() => onSelectCountry(c.countryCode)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 14,
-                    background: 'none', border: 'none', borderRadius: 12,
-                    padding: '12px 8px', cursor: 'pointer',
-                    borderBottom: `1px solid ${S.line}`,
-                    textAlign: 'left',
+                    background: 'none', border: 'none', padding: '14px 4px',
+                    cursor: 'pointer', textAlign: 'left',
+                    borderBottom: i < countries.length - 1 ? `1px solid ${S.line}` : 'none',
+                    WebkitTapHighlightColor: 'transparent',
                   }}
                 >
                   <span style={{ width: 32, display: 'inline-flex', justifyContent: 'center' }}>
                     <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={28} />
                   </span>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 15, fontWeight: 600, color: S.ink, margin: 0 }}>{c.countryNameZh}</p>
-                    <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{c.countryNameEn}</p>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 15, fontWeight: 700, color: S.ink, margin: 0, letterSpacing: '-0.01em' }}>{c.countryNameZh}</p>
+                    <p style={{ fontSize: 11, color: S.faint, margin: 0, letterSpacing: '0.08em' }}>{c.countryNameEn.toUpperCase()}</p>
                   </div>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={S.faint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="9 18 15 12 9 6"/>
@@ -145,24 +152,29 @@ export default function MagazineShop({
   const country = countries.find(c => c.countryCode === selectedCountry)
   const gradient = getGradient(selectedCountry)
   const showNoMatch = filter.dayFilter > 0 && filter.filteredCount === 0
+  const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
+  const featured = displays.find(d => d.recommended)
+  const rest = displays.filter(d => d !== featured)
 
   return (
-    <div style={{ paddingBottom: 96 }}>
+    <div style={{ paddingBottom: 96, background: '#fafafa', minHeight: '100vh' }}>
       {/* Hero banner */}
       <div style={{
         background: gradient,
         padding: '0 20px',
         paddingTop: 'calc(env(safe-area-inset-top, 0px) + 20px)',
-        paddingBottom: 32,
+        paddingBottom: 40,
         position: 'relative', overflow: 'hidden',
       }}>
         <button
           onClick={onBack}
           style={{
             background: 'rgba(255,255,255,0.2)', border: 'none',
-            borderRadius: 10, padding: '8px 10px', cursor: 'pointer',
+            borderRadius: 10, padding: '8px 12px', cursor: 'pointer',
             color: '#fff', display: 'flex', alignItems: 'center', gap: 4,
-            marginBottom: 20, fontSize: 13, fontWeight: 600,
+            marginBottom: 24, fontSize: 13, fontWeight: 600,
+            WebkitTapHighlightColor: 'transparent',
+            backdropFilter: 'blur(8px)',
           }}
         >
           <BackArrow />
@@ -170,23 +182,26 @@ export default function MagazineShop({
         </button>
 
         {country && (
-          <div style={{ marginBottom: 14, filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.3))' }}>
+          <div style={{ marginBottom: 14, filter: 'drop-shadow(0 4px 14px rgba(0,0,0,0.32))' }}>
             <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={80} />
           </div>
         )}
-        <h1 style={{ fontSize: 32, fontWeight: 900, color: '#fff', margin: '0 0 4px', letterSpacing: '-0.02em', textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', margin: '0 0 4px', letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase', textShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
+          {country?.countryNameEn ?? 'Destination'}
+        </p>
+        <h1 style={{ fontSize: 36, fontWeight: 900, color: '#fff', margin: '0 0 6px', letterSpacing: '-0.025em', textShadow: '0 2px 10px rgba(0,0,0,0.22)', lineHeight: 1 }}>
           {country?.countryNameZh}
         </h1>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', margin: 0 }}>
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.88)', margin: 0, fontWeight: 500 }}>
           {filter.dayFilter
-            ? `${filter.filteredCount} / ${filter.totalCount} 個方案`
-            : `${filter.totalCount} 個方案可選`}
+            ? `已篩選 ${filter.filteredCount} / ${filter.totalCount} 個方案`
+            : `${filter.totalCount} 個方案 · 按 CP 值排序`}
         </p>
       </div>
 
-      {/* Day picker (overlapping the hero) */}
+      {/* DayPicker overlapping hero */}
       {filter.availableDays.length > 0 && (
-        <div style={{ padding: '0 16px', marginTop: -18 }}>
+        <div style={{ padding: '0 16px', marginTop: -22 }}>
           <DayPicker
             value={filter.pickerDays}
             onChange={filter.onChange}
@@ -195,18 +210,19 @@ export default function MagazineShop({
             presets={filter.presets}
             label="想用幾天？"
             caption={filter.dayFilter
-              ? (filter.filteredCount > 0 ? `找到 ${filter.filteredCount} 個 ${filter.dayFilter} 天方案` : `沒有 ${filter.dayFilter} 天的方案`)
+              ? (filter.filteredCount > 0 ? `找到 ${filter.filteredCount} 個方案` : `沒有 ${filter.dayFilter} 天的方案`)
               : '選擇天數即可篩選方案'}
           />
           {filter.dayFilter > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
               <button
                 type="button"
                 onClick={filter.onClear}
                 style={{
                   background: 'transparent', border: `1px solid ${S.line}`, color: S.muted,
-                  fontSize: 12, fontWeight: 600, padding: '5px 14px',
+                  fontSize: 12, fontWeight: 600, padding: '6px 14px',
                   borderRadius: 100, cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
                 }}
               >顯示全部</button>
             </div>
@@ -214,8 +230,29 @@ export default function MagazineShop({
         </div>
       )}
 
-      {/* 方案卡片 */}
-      <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Featured "best value" card */}
+      {featured && (
+        <div style={{ padding: '20px 16px 8px' }}>
+          <p style={{
+            fontSize: 11, fontWeight: 800, color: '#a16207',
+            letterSpacing: '0.18em', margin: '0 0 10px',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <CrownIcon size={14} /> EDITOR&apos;S PICK
+          </p>
+          <FeaturedCard
+            display={featured}
+            coupons={coupons}
+            colors={C}
+            inCart={cart.has(featured.plan.id)}
+            onToggleCart={() => cart.toggle(featured.plan)}
+            onSelectProduct={() => onSelectProduct(featured.plan.id)}
+          />
+        </div>
+      )}
+
+      {/* Rest of plans */}
+      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {filter.totalCount === 0 && (
           <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>此目的地暫無可購買方案</p>
         )}
@@ -229,7 +266,7 @@ export default function MagazineShop({
                   key={n}
                   onClick={() => filter.onChange(n)}
                   style={{
-                    padding: '6px 12px', borderRadius: 100,
+                    padding: '7px 14px', borderRadius: 100,
                     border: `1px solid ${C.border}`, background: C.light, color: C.primary,
                     fontSize: 13, fontWeight: 700, cursor: 'pointer',
                   }}
@@ -239,9 +276,18 @@ export default function MagazineShop({
           </div>
         )}
 
-        {products.map(p => {
+        {rest.length > 0 && featured && (
+          <p style={{
+            fontSize: 11, fontWeight: 800, color: S.faint,
+            letterSpacing: '0.18em', margin: '8px 4px 0',
+          }}>OTHER PLANS</p>
+        )}
+
+        {rest.map(d => {
+          const p = d.plan
           const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
           const inCart = cart.has(p.id)
+          const tier = TIER_COLOR[d.tier]
           return (
             <div
               key={p.id}
@@ -249,51 +295,64 @@ export default function MagazineShop({
                 width: '100%',
                 background: S.white, borderRadius: 18,
                 boxShadow: inCart
-                  ? `0 4px 20px ${C.primary}33, 0 0 0 1.5px ${C.primary}`
-                  : '0 2px 16px rgba(0,0,0,0.08)',
+                  ? `0 6px 22px rgba(0,0,0,0.06), 0 0 0 1.5px ${C.primary}`
+                  : '0 2px 16px rgba(15,23,42,0.06)',
                 display: 'grid', gridTemplateColumns: '1fr auto',
-                padding: '20px', gap: 12,
+                padding: '18px', gap: 12,
                 position: 'relative',
                 transition: 'box-shadow 0.18s',
+                overflow: 'hidden',
               }}
             >
+              {/* Tier color accent corner */}
+              <div style={{
+                position: 'absolute', top: 0, right: 0,
+                width: 80, height: 80,
+                background: `radial-gradient(circle at top right, ${tier.accent}22, transparent 70%)`,
+                pointerEvents: 'none',
+              }} />
+
               <button
                 onClick={() => onSelectProduct(p.id)}
                 style={{
                   background: 'transparent', border: 'none', textAlign: 'left',
                   cursor: 'pointer', padding: 0,
                   WebkitTapHighlightColor: 'transparent',
+                  position: 'relative', zIndex: 1,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
-                  <span style={{ fontSize: 36, fontWeight: 900, color: S.ink, letterSpacing: '-0.04em', lineHeight: 1 }}>{p.displayDays}</span>
-                  <span style={{ fontSize: 14, color: S.muted }}>天</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 800, color: tier.accent,
+                    background: tier.bg, borderRadius: 6, padding: '3px 8px',
+                    letterSpacing: '0.06em',
+                  }}>{TIER_LABEL[d.tier]}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
+                  <span style={{ fontSize: 38, fontWeight: 900, color: S.ink, letterSpacing: '-0.045em', lineHeight: 1 }}>{p.displayDays}</span>
+                  <span style={{ fontSize: 14, color: S.muted, fontWeight: 600 }}>天</span>
                 </div>
                 {p.dataCapacity && (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    fontSize: 12, fontWeight: 700, color: C.primary,
-                    background: C.light, borderRadius: 8, padding: '3px 10px',
-                    marginBottom: 6,
-                  }}>
-                    📶 {p.dataCapacity}
-                  </span>
-                )}
-                {p.description && (
-                  <p style={{ fontSize: 12, color: S.faint, margin: 0, lineHeight: 1.5 }}>
-                    {p.description}
+                  <p style={{ fontSize: 13, fontWeight: 700, color: S.ink, margin: 0, letterSpacing: '-0.01em' }}>
+                    {p.dataCapacity}
                   </p>
                 )}
+                <p style={{ fontSize: 11, color: S.muted, margin: '4px 0 0', fontVariantNumeric: 'tabular-nums' }}>
+                  NT${d.perDayCost} / 天
+                  {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
+                    <> · 共 {Math.round(d.totalGB)} GB</>
+                  )}
+                </p>
               </button>
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10, position: 'relative', zIndex: 1 }}>
                 <div style={{ textAlign: 'right' }}>
                   {hasDiscount && (
-                    <p style={{ fontSize: 11, color: S.faint, margin: '0 0 2px', textDecoration: 'line-through' }}>
+                    <p style={{ fontSize: 11, color: S.faint, margin: '0 0 2px', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
                       NT${p.sellPrice.toLocaleString()}
                     </p>
                   )}
-                  <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                  <p style={{ fontSize: 22, fontWeight: 900, color: C.primary, margin: 0, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
                     NT${bestPrice.toLocaleString()}
                   </p>
                   {hasDiscount && (
@@ -309,13 +368,13 @@ export default function MagazineShop({
                     onClick={(e) => { e.stopPropagation(); cart.toggle(p) }}
                     aria-label={inCart ? '從購物車移除' : '加入購物車'}
                     style={{
-                      width: 36, height: 36, borderRadius: 10,
-                      background: inCart ? C.primary : C.light,
-                      color: inCart ? C.onPrimary : C.primary,
+                      width: 38, height: 38, borderRadius: 11,
+                      background: inCart ? C.primary : tier.bg,
+                      color: inCart ? C.onPrimary : tier.fg,
                       border: 'none',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       cursor: 'pointer',
-                      transition: 'background 0.15s, color 0.15s',
+                      transition: 'all 0.15s',
                       WebkitTapHighlightColor: 'transparent',
                     }}
                   >
@@ -325,11 +384,12 @@ export default function MagazineShop({
                     type="button"
                     onClick={() => onSelectProduct(p.id)}
                     style={{
-                      background: C.primary, borderRadius: 10, border: 'none',
-                      padding: '8px 14px', fontSize: 13, fontWeight: 700,
+                      background: C.primary, borderRadius: 11, border: 'none',
+                      padding: '9px 16px', fontSize: 13, fontWeight: 800,
                       color: C.onPrimary, cursor: 'pointer',
                       whiteSpace: 'nowrap',
                       WebkitTapHighlightColor: 'transparent',
+                      letterSpacing: '0.02em',
                     }}
                   >
                     購買
@@ -339,6 +399,127 @@ export default function MagazineShop({
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Featured card — bigger, gradient background based on tier
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface FeaturedCardProps {
+  display: ReturnType<typeof annotatePlans>[number]
+  coupons: Parameters<typeof calcBestPrice>[0]
+  colors: ProductsTemplateProps['colors']
+  inCart: boolean
+  onToggleCart: () => void
+  onSelectProduct: () => void
+}
+
+function FeaturedCard({ display: d, coupons, colors: C, inCart, onToggleCart, onSelectProduct }: FeaturedCardProps) {
+  const p = d.plan
+  const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
+  const tier = TIER_COLOR[d.tier]
+
+  return (
+    <div style={{
+      position: 'relative',
+      borderRadius: 22,
+      background: `linear-gradient(140deg, ${tier.bg} 0%, ${S.white} 60%)`,
+      boxShadow: '0 8px 28px rgba(15,23,42,0.10), 0 0 0 1.5px #fbbf24',
+      overflow: 'hidden',
+      padding: '22px 20px 20px',
+    }}>
+      {/* Ribbon */}
+      <div style={{
+        position: 'absolute', top: 0, right: 0,
+        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+        color: '#fff',
+        fontSize: 11, fontWeight: 800,
+        padding: '6px 14px',
+        borderBottomLeftRadius: 12,
+        letterSpacing: '0.08em',
+      }}>
+        最划算
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{
+            fontSize: 11, fontWeight: 800, color: tier.accent,
+            background: tier.bg, borderRadius: 8, padding: '4px 10px',
+            display: 'inline-block',
+            letterSpacing: '0.08em', margin: '0 0 12px',
+          }}>{TIER_LABEL[d.tier]}</p>
+
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 48, fontWeight: 900, color: S.ink, letterSpacing: '-0.05em', lineHeight: 1 }}>{p.displayDays}</span>
+            <span style={{ fontSize: 16, color: S.muted, fontWeight: 600 }}>天方案</span>
+          </div>
+
+          {p.dataCapacity && (
+            <p style={{ fontSize: 15, fontWeight: 800, color: S.ink, margin: '0 0 4px', letterSpacing: '-0.01em' }}>
+              {p.dataCapacity}
+            </p>
+          )}
+          <p style={{ fontSize: 12, color: S.muted, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontWeight: 700, color: tier.fg }}>NT${d.perDayCost}</span> / 天
+            {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
+              <> · 共 {Math.round(d.totalGB)} GB</>
+            )}
+          </p>
+        </div>
+
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          {hasDiscount && (
+            <p style={{ fontSize: 11, color: S.faint, margin: '0 0 2px', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+              NT${p.sellPrice.toLocaleString()}
+            </p>
+          )}
+          <p style={{ fontSize: 28, fontWeight: 900, color: C.primary, margin: 0, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+            NT${bestPrice.toLocaleString()}
+          </p>
+          {hasDiscount && (
+            <p style={{ fontSize: 11, color: '#16a34a', fontWeight: 700, margin: '4px 0 0' }}>
+              省 NT${savedAmount.toLocaleString()}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+        <button
+          type="button"
+          onClick={onToggleCart}
+          aria-label={inCart ? '從購物車移除' : '加入購物車'}
+          style={{
+            width: 48, height: 48, borderRadius: 14, flexShrink: 0,
+            background: inCart ? C.primary : '#fff',
+            color: inCart ? C.onPrimary : C.primary,
+            border: inCart ? 'none' : `1.5px solid ${C.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          {inCart ? <CheckIcon /> : <PlusIcon />}
+        </button>
+        <button
+          type="button"
+          onClick={onSelectProduct}
+          style={{
+            flex: 1, background: C.primary, borderRadius: 14, border: 'none',
+            padding: '13px', fontSize: 15, fontWeight: 800,
+            color: C.onPrimary, cursor: 'pointer',
+            letterSpacing: '0.02em',
+            boxShadow: `0 6px 18px ${C.primary}44`,
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          立即購買
+        </button>
       </div>
     </div>
   )
