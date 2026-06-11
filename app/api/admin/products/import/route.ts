@@ -162,6 +162,52 @@ function matchCountryInText(text: string): { code: string; zh: string } | null {
   return null
 }
 
+// 從商品名稱 + CSV 各欄位解析出國家。順序：
+//   1) 商品名稱第 1 段做 substring 包含匹配
+//   2) 整段商品名稱兜底（防第 1 段是空或亂碼）
+//   3) CSV 「國家代碼」欄
+//   4) CSV 「適用地區」欄
+// 抽出來是為了 POST 階段拿到 supplierMap 後可以用供應商方案名稱再跑一次。
+function resolveCountry(
+  productName: string,
+  csvCountryCode: string,
+  csvCountryNameZh: string,
+  csvCountryNameEn: string,
+  csvCountryFlag: string,
+): {
+  countryCode: string
+  countryNameZh: string
+  countryNameEn: string
+  countryFlag: string
+  matchedByName: boolean
+} {
+  const nameSegs = parseProductNameSegments(productName)
+  const nameMatch =
+    matchCountryInText(nameSegs.country ?? '')
+    ?? matchCountryInText(productName)
+
+  const explicitCode = csvCountryCode.toUpperCase()
+
+  const countryCode = nameMatch?.code
+    || explicitCode
+    || countryNameToCode(csvCountryNameZh)
+    || ''
+  const countryNameZh = nameMatch?.zh
+    || (explicitCode ? (CODE_TO_NAME_ZH[explicitCode] ?? '') : '')
+    || nameSegs.country
+    || csvCountryNameZh
+    || ''
+  const countryFlag = csvCountryFlag || countryCodeToFlag(countryCode) || ''
+
+  return {
+    countryCode,
+    countryNameZh,
+    countryNameEn: csvCountryNameEn,
+    countryFlag,
+    matchedByName: !!nameMatch,
+  }
+}
+
 // 從商品名稱／SKU 自動解析流量
 // 1. 吃到飽 token：MAX / TI / HSD（先檢查，避免被一般數字 regex 誤匹配）
 //    例如 WM-e-AN-MAX-1D → 吃到飽
@@ -239,33 +285,19 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
     // 商品名稱通常為「菲律賓, 1天, 2GB/天」「日本Softbank, 3天, 5GB」格式：先拆段
     const nameSegs = parseProductNameSegments(productName)
 
-    // ── 國家解析：以 C 欄商品名稱為唯一依據 ─────────────────────────
-    // 使用者明確要求「不要從 SKU / planCode 推斷」，只看商品名稱。
-    // 順序：(1) 名稱第 1 段做包含匹配 → (2) 整段名稱兜底 → (3) 顯式 countryCode 欄
-    //       → (4) CSV 「適用地區」欄當最後 fallback。
-    // 「適用地區」常被供應商填成「東南亞」這種錯誤的區域名，因此放在最低優先。
-    const nameMatch =
-      matchCountryInText(nameSegs.country ?? '')
-      ?? matchCountryInText(productName)
-
-    const explicitCode = get('countryCode').toUpperCase()
-    const rawRegion    = get('countryNameZh')  // CSV 「適用地區」欄
-
-    const countryCode = nameMatch?.code
-      || explicitCode
-      || countryNameToCode(rawRegion)
-      || ''
-    // countryNameZh 也以名稱為主；只有商品名稱完全沒命中時才接受 CSV 適用地區，
-    // 否則 D 欄寫「東南亞」會覆蓋掉名稱抓到的「菲律賓」。
-    const countryNameZh = nameMatch?.zh
-      || (explicitCode ? (CODE_TO_NAME_ZH[explicitCode] ?? '') : '')
-      || nameSegs.country
-      || rawRegion
-      || ''
-
-    const countryNameEn = get('countryNameEn') || ''
-    // countryFlag: explicit → auto-derive from countryCode（自訂 code 如 SEA/ANZ 抓不到，留空）
-    const countryFlag   = get('countryFlag') || countryCodeToFlag(countryCode) || ''
+    // 用 helper 解析國家。商品名稱為空或抓不到時，POST 階段會再用供應商
+    // API 提供的方案名稱補強，所以這裡先得到「以 CSV 為主」的結果即可。
+    const resolved = resolveCountry(
+      productName,
+      get('countryCode'),
+      get('countryNameZh'),
+      get('countryNameEn'),
+      get('countryFlag'),
+    )
+    const countryCode   = resolved.countryCode
+    const countryNameZh = resolved.countryNameZh
+    const countryNameEn = resolved.countryNameEn
+    const countryFlag   = resolved.countryFlag
 
     // displayDays:
     //   1) CSV displayDays 欄位
@@ -315,7 +347,9 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
         sellPrice,
         costPrice,
         sortOrder,
-      })
+        _rawProductName: productName,
+        _matchedByName: resolved.matchedByName,
+      } as CsvProductRow & { _rawProductName: string; _matchedByName: boolean })
     }
   }
 
@@ -384,6 +418,24 @@ export async function POST(req: NextRequest) {
     }
   } catch {
     // API 不可用時略過驗證，繼續匯入；SupplierProduct 將以 CSV 資料 stub
+  }
+
+  // ── 用供應商方案名稱補強國家解析 ──────────────────────────────────
+  // CSV 第 3 欄商品名稱可能為空（或 header 名稱沒對到），但世界移動 API 提供
+  // 的 wmInfo.productName 通常有正確國名（例如「新馬」「日本Softbank」）。
+  // 當 CSV name 沒匹配出國家、且 supplier name 能匹配，覆寫該 row 的 country。
+  if (supplierMap) {
+    for (const row of rows as Array<CsvProductRow & { _rawProductName?: string; _matchedByName?: boolean }>) {
+      if (row._matchedByName) continue  // CSV name 已解析出國家，不動
+      const supplierName = supplierMap.get(row.supplierSkuId)?.productName
+      if (!supplierName) continue
+      const refined = resolveCountry(supplierName, '', '', '', row.countryFlag ?? '')
+      if (refined.matchedByName) {
+        row.countryCode   = refined.countryCode
+        row.countryNameZh = refined.countryNameZh
+        row.countryFlag   = refined.countryFlag
+      }
+    }
   }
 
   try {
