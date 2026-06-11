@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { GlobeIllustration, BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
 import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
+import DayPicker from '@/components/liff/DayPicker'
+import { useCart } from '@/components/liff/CartProvider'
 
 type Country = {
   countryCode: string
@@ -262,7 +264,100 @@ function ProductsContent() {
   }
 
   // ── 方案選擇畫面 (Step 2) ──
+  return <PlansView
+    countries={countries}
+    products={products}
+    coupons={coupons}
+    selectedCountry={selectedCountry}
+    slug={slug}
+    showSetup={showSetup}
+    dismissSetup={dismissSetup}
+    router={router}
+  />
+}
+
+type PlansViewProps = {
+  countries: Country[]
+  products: Product[]
+  coupons: CouponItem[]
+  selectedCountry: string
+  slug: string
+  showSetup: boolean
+  dismissSetup: () => void
+  router: ReturnType<typeof useRouter>
+}
+
+function PlusIconSm() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+}
+
+function CheckIconSm() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
+function PlansView({ countries, products, coupons, selectedCountry, slug, showSetup, dismissSetup, router }: PlansViewProps) {
+  const C = useTenantColors()
   const country = countries.find(c => c.countryCode === selectedCountry)
+  const cart = useCart()
+
+  // Compute available day options from products
+  const availableDays = useMemo(() => {
+    const set = new Set<number>()
+    products.forEach(p => set.add(p.displayDays))
+    return Array.from(set).sort((a, b) => a - b)
+  }, [products])
+
+  const minDay = availableDays[0] ?? 1
+  const maxDay = availableDays[availableDays.length - 1] ?? 30
+
+  // 0 = no filter (show all)
+  const [dayFilter, setDayFilter] = useState<number>(0)
+  const [pickerDays, setPickerDays] = useState<number>(0)
+
+  // Init picker once products load
+  useEffect(() => {
+    if (availableDays.length > 0 && pickerDays === 0) {
+      setPickerDays(availableDays[0])
+    }
+  }, [availableDays, pickerDays])
+
+  const filtered = useMemo(() => {
+    if (!dayFilter) return products
+    return products.filter(p => p.displayDays === dayFilter)
+  }, [products, dayFilter])
+
+  // Suggest nearest day if no exact match
+  const nearestDays = useMemo(() => {
+    if (!dayFilter || filtered.length > 0) return []
+    return [...availableDays]
+      .sort((a, b) => Math.abs(a - dayFilter) - Math.abs(b - dayFilter))
+      .slice(0, 3)
+  }, [dayFilter, filtered.length, availableDays])
+
+  // Compute preset chips: prefer common counts that exist in data, else fall back to defaults
+  const presets = useMemo(() => {
+    const common = [1, 3, 5, 7, 14, 30]
+    const fromData = common.filter(n => availableDays.includes(n))
+    return fromData.length >= 3 ? fromData : availableDays.slice(0, 6)
+  }, [availableDays])
+
+  const applyFilter = (n: number) => {
+    setPickerDays(n)
+    setDayFilter(n)
+  }
+
+  const clearFilter = () => {
+    setDayFilter(0)
+  }
 
   return (
     <>
@@ -286,87 +381,201 @@ function ProductsContent() {
           >
             <BackArrow />
           </button>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {country && <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={22} />}
               <h1 style={{ fontSize: 17, fontWeight: 700, color: S.ink, margin: 0 }}>{country?.countryNameZh ?? '方案'}</h1>
             </div>
-            <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>{products.length} 個方案</p>
+            <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>
+              {dayFilter ? `${filtered.length} / ${products.length} 個方案` : `${products.length} 個方案`}
+            </p>
           </div>
+          {dayFilter > 0 && (
+            <button
+              type="button"
+              onClick={clearFilter}
+              style={{
+                background: 'transparent',
+                border: `1px solid ${S.line}`,
+                color: S.muted,
+                fontSize: 12,
+                fontWeight: 600,
+                padding: '6px 10px',
+                borderRadius: 100,
+                cursor: 'pointer',
+              }}
+            >顯示全部</button>
+          )}
         </div>
+
+        {/* Day picker filter */}
+        {availableDays.length > 0 && (
+          <div style={{ padding: '14px 16px 4px' }}>
+            <DayPicker
+              value={pickerDays || availableDays[0]}
+              onChange={applyFilter}
+              min={minDay}
+              max={maxDay}
+              presets={presets}
+              label="想用幾天？"
+              caption={dayFilter
+                ? (filtered.length > 0 ? `找到 ${filtered.length} 個 ${dayFilter} 天方案` : `沒有 ${dayFilter} 天的方案`)
+                : '選擇天數即可篩選方案'}
+            />
+          </div>
+        )}
 
         {/* Plans */}
         <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {products.length === 0 && (
             <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>此目的地暫無可購買方案</p>
           )}
-          {products.map(p => (
-            <button
-              key={p.id}
-              onClick={() => router.push(`/products/${p.id}`)}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                background: S.white,
-                borderRadius: 14,
-                border: `1px solid ${S.line}`,
-                padding: '16px 18px',
-                cursor: 'pointer',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
-                  <span style={{ fontSize: 22, fontWeight: 800, color: S.ink, letterSpacing: '-0.02em' }}>{p.displayDays}</span>
-                  <span style={{ fontSize: 13, color: S.muted, fontWeight: 500 }}>天</span>
-                </div>
-                {p.dataCapacity && (
-                  <span style={{
-                    display: 'inline-block',
-                    fontSize: 12, fontWeight: 600, color: S.muted,
-                    background: '#f3f4f6', borderRadius: 6, padding: '2px 8px',
-                    marginBottom: 4,
-                  }}>
-                    {p.dataCapacity}
-                  </span>
-                )}
-                {p.description && (
-                  <p style={{ fontSize: 12, color: S.faint, margin: 0, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {p.description}
-                  </p>
-                )}
+
+          {dayFilter > 0 && filtered.length === 0 && nearestDays.length > 0 && (
+            <div style={{ padding: '8px 4px' }}>
+              <p style={{ fontSize: 13, color: S.muted, margin: '0 0 8px' }}>
+                您也可以選擇相近天數：
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {nearestDays.map(n => (
+                  <button
+                    key={n}
+                    onClick={() => applyFilter(n)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 100,
+                      border: `1px solid ${C.border}`,
+                      background: C.light,
+                      color: C.primary,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >{n} 天</button>
+                ))}
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                {(() => {
-                  const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
-                  return hasDiscount ? (
-                    <>
-                      <p style={{ fontSize: 12, color: S.faint, margin: 0, textDecoration: 'line-through' }}>
-                        NT${p.sellPrice.toLocaleString()}
+            </div>
+          )}
+
+          {filtered.map(p => {
+            const inCart = cart.has(p.id)
+            return (
+              <div
+                key={p.id}
+                style={{
+                  width: '100%',
+                  background: S.white,
+                  borderRadius: 14,
+                  border: `1px solid ${inCart ? C.border : S.line}`,
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                  display: 'flex',
+                  alignItems: 'stretch',
+                  gap: 0,
+                  overflow: 'hidden',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => router.push(`/products/${p.id}`)}
+                  style={{
+                    flex: 1,
+                    textAlign: 'left',
+                    background: 'transparent',
+                    border: 'none',
+                    padding: '16px 16px 16px 18px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
+                      <span style={{ fontSize: 22, fontWeight: 800, color: S.ink, letterSpacing: '-0.02em' }}>{p.displayDays}</span>
+                      <span style={{ fontSize: 13, color: S.muted, fontWeight: 500 }}>天</span>
+                    </div>
+                    {p.dataCapacity && (
+                      <span style={{
+                        display: 'inline-block',
+                        fontSize: 12, fontWeight: 600, color: S.muted,
+                        background: '#f3f4f6', borderRadius: 6, padding: '2px 8px',
+                        marginBottom: 4,
+                      }}>
+                        {p.dataCapacity}
+                      </span>
+                    )}
+                    {p.description && (
+                      <p style={{ fontSize: 12, color: S.faint, margin: 0, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {p.description}
                       </p>
-                      <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
-                        NT${bestPrice.toLocaleString()}
-                      </p>
-                      <p style={{ fontSize: 11, color: '#16a34a', marginTop: 1, fontWeight: 600 }}>
-                        省 NT${savedAmount.toLocaleString()}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
-                        NT${p.sellPrice.toLocaleString()}
-                      </p>
-                      <p style={{ fontSize: 11, color: S.faint, marginTop: 2 }}>點選購買</p>
-                    </>
-                  )
-                })()}
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    {(() => {
+                      const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
+                      return hasDiscount ? (
+                        <>
+                          <p style={{ fontSize: 12, color: S.faint, margin: 0, textDecoration: 'line-through' }}>
+                            NT${p.sellPrice.toLocaleString()}
+                          </p>
+                          <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                            NT${bestPrice.toLocaleString()}
+                          </p>
+                          <p style={{ fontSize: 11, color: '#16a34a', marginTop: 1, fontWeight: 600 }}>
+                            省 NT${savedAmount.toLocaleString()}
+                          </p>
+                        </>
+                      ) : (
+                        <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                          NT${p.sellPrice.toLocaleString()}
+                        </p>
+                      )
+                    })()}
+                  </div>
+                </button>
+
+                {/* Add-to-cart side button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (inCart) {
+                      cart.remove(p.id)
+                    } else {
+                      cart.add({
+                        productId: p.id,
+                        countryCode: p.countryCode,
+                        countryNameZh: p.countryNameZh,
+                        countryFlag: country?.countryFlag ?? null,
+                        displayDays: p.displayDays,
+                        dataCapacity: p.dataCapacity,
+                        sellPrice: p.sellPrice,
+                      })
+                    }
+                  }}
+                  aria-label={inCart ? '從購物車移除' : '加入購物車'}
+                  style={{
+                    width: 52,
+                    flexShrink: 0,
+                    background: inCart ? C.primary : C.light,
+                    color: inCart ? C.onPrimary : C.primary,
+                    border: 'none',
+                    borderLeft: `1px solid ${inCart ? 'transparent' : S.line}`,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'background 0.15s, color 0.15s',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  {inCart ? <CheckIconSm /> : <PlusIconSm />}
+                </button>
               </div>
-            </button>
-          ))}
+            )
+          })}
         </div>
       </div>
     </>

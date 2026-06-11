@@ -6,6 +6,7 @@ import { SignalIllustration } from '@/components/liff/LiffIllustrations'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
+import { useCart } from '@/components/liff/CartProvider'
 
 type Product = {
   id: string
@@ -48,10 +49,12 @@ export default function ProductDetailPage() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
   const C = useTenantColors()
+  const cart = useCart()
   const [product, setProduct] = useState<Product | null>(null)
   const [coupons, setCoupons] = useState<CouponItem[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [justAdded, setJustAdded] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -168,8 +171,8 @@ export default function ProductDetailPage() {
         padding: '12px 16px',
         paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
       }}>
-        <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div>
+        <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ minWidth: 0 }}>
             {(() => {
               const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, product.sellPrice)
               return hasDiscount ? (
@@ -177,23 +180,75 @@ export default function ProductDetailPage() {
                   <p style={{ fontSize: 11, color: S.faint, margin: 0, textDecoration: 'line-through' }}>
                     NT${product.sellPrice.toLocaleString()}
                   </p>
-                  <p style={{ fontSize: 26, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                  <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
                     NT${bestPrice.toLocaleString()}
                   </p>
                   <p style={{ fontSize: 11, color: '#16a34a', marginTop: 1, fontWeight: 600 }}>
-                    套用優惠券省 NT${savedAmount.toLocaleString()}
+                    省 NT${savedAmount.toLocaleString()}
                   </p>
                 </>
               ) : (
                 <>
                   <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>售價</p>
-                  <p style={{ fontSize: 26, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                  <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
                     NT${product.sellPrice.toLocaleString()}
                   </p>
                 </>
               )
             })()}
           </div>
+
+          {/* Add to cart (icon button) */}
+          {(() => {
+            const inCart = cart.has(product.id)
+            return (
+              <button
+                onClick={() => {
+                  if (inCart) {
+                    cart.remove(product.id)
+                  } else {
+                    cart.add({
+                      productId: product.id,
+                      countryCode: product.countryCode,
+                      countryNameZh: product.countryNameZh,
+                      countryFlag: product.countryFlag,
+                      displayDays: product.displayDays,
+                      dataCapacity: product.dataCapacity,
+                      sellPrice: product.sellPrice,
+                    })
+                    setJustAdded(true)
+                    setTimeout(() => setJustAdded(false), 1200)
+                  }
+                }}
+                aria-label={inCart ? '從購物車移除' : '加入購物車'}
+                style={{
+                  width: 54, height: 54, flexShrink: 0,
+                  borderRadius: '50%',
+                  border: `1.5px solid ${inCart ? C.primary : C.border}`,
+                  background: inCart ? C.primary : '#fff',
+                  color: inCart ? C.onPrimary : C.primary,
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.15s, color 0.15s, border-color 0.15s, transform 0.18s',
+                  transform: justAdded ? 'scale(1.1)' : 'scale(1)',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                {inCart ? (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="9" cy="20" r="1.4" fill="currentColor" />
+                    <circle cx="18" cy="20" r="1.4" fill="currentColor" />
+                    <path d="M2.5 3h2.6l2.4 12.1a2 2 0 0 0 2 1.6h9.3a2 2 0 0 0 2-1.55L22.5 7H6.3" />
+                  </svg>
+                )}
+              </button>
+            )
+          })()}
+
           <button
             onClick={() => router.push(`/checkout?productId=${product.id}`)}
             style={{
@@ -206,11 +261,38 @@ export default function ProductDetailPage() {
               cursor: 'pointer',
               letterSpacing: '0.02em',
               boxShadow: `0 4px 14px ${C.primary}40`,
+              WebkitTapHighlightColor: 'transparent',
             }}
           >
             立即購買
           </button>
         </div>
+
+        {/* Toast: just added */}
+        {justAdded && (
+          <div style={{
+            position: 'absolute',
+            top: -52, left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#1a1a1a',
+            color: '#fff',
+            fontSize: 13, fontWeight: 600,
+            padding: '10px 18px',
+            borderRadius: 100,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+            whiteSpace: 'nowrap',
+            animation: 'pdToast 1.2s ease',
+            pointerEvents: 'none',
+          }}>已加入購物車</div>
+        )}
+        <style>{`
+          @keyframes pdToast {
+            0% { opacity: 0; transform: translate(-50%, 10px); }
+            15% { opacity: 1; transform: translate(-50%, 0); }
+            85% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -10px); }
+          }
+        `}</style>
       </div>
     </div>
   )

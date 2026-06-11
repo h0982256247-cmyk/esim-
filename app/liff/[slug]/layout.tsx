@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { LiffProvider } from '@/components/liff/LiffProvider'
 import LiffBottomNav from '@/components/liff/LiffBottomNav'
 import { TenantProvider } from '@/components/liff/TenantContext'
+import { CartProvider } from '@/components/liff/CartProvider'
+import FloatingCart from '@/components/liff/FloatingCart'
 import { getTenantBySlug } from '@/lib/services/tenant'
 
 interface Props {
@@ -19,10 +21,13 @@ export default async function TenantLiffLayout({ children, params }: Props) {
   return (
     <TenantProvider tenant={tenant}>
       <LiffProvider liffId={tenant.liffId} tenantSlug={slug}>
-        <div className="min-h-screen pb-16 liff-root" style={{ background: '#f9f9f9' }}>
-          {children}
-        </div>
-        <LiffBottomNav />
+        <CartProvider>
+          <div className="min-h-screen pb-16 liff-root" style={{ background: '#f9f9f9' }}>
+            {children}
+          </div>
+          <FloatingCart />
+          <LiffBottomNav />
+        </CartProvider>
       </LiffProvider>
     </TenantProvider>
   )
