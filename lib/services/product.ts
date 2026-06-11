@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db/prisma'
-import { ProductStatus, SupplierProductStatus, SupplierProductType } from '@prisma/client'
+import { Prisma, ProductStatus, SupplierProductStatus, SupplierProductType } from '@prisma/client'
 import type { SupplierProductMap } from './esim'
 
 export async function getActiveProducts(countryCode?: string, tenantAdminId?: string | null) {
@@ -228,20 +228,24 @@ export async function batchCreateProducts(
   }
 
   // ─── Step 3: 對既有 SupplierProduct 更新 product_name + costPrice ─
-  // 重新匯入時，wmInfo 提供新名稱 → 覆寫舊資料（解決「東南亞」之類錯誤）
-  for (const wmId of wmIds) {
+  // 重新匯入時，wmInfo 提供新名稱 → 覆寫舊資料（解決「東南亞」之類錯誤）。
+  // PgBouncer connection_limit=1 下逐筆 await 會被序列化、CSV 大時動輒 30s+，
+  // 改成分批 transaction：同一交易內所有 statement 共用一個 server connection、
+  // 連續 pipeline 送出，可降一個數量級。
+  const supplierUpdates = wmIds.flatMap(wmId => {
     const existingRow = existingByWmId.get(wmId)
-    if (!existingRow) continue
+    if (!existingRow) return []
     const row = rows.find(r => r.supplierSkuId === wmId)!
     const wmInfo = supplierMap?.get(wmId)
     const desiredName = wmInfo?.productName ?? (row.countryNameZh || row.supplierSkuId)
     const desiredCost = wmInfo?.productPrice ?? row.costPrice
-    if (existingRow.productName === desiredName && existingRow.costPrice === desiredCost) continue
-    await prisma.supplierProduct.update({
+    if (existingRow.productName === desiredName && existingRow.costPrice === desiredCost) return []
+    return [prisma.supplierProduct.update({
       where: { id: existingRow.id },
       data: { productName: desiredName, costPrice: desiredCost },
-    })
-  }
+    })]
+  })
+  await runInBatches(supplierUpdates)
 
   // ─── Step 4: 拿到全部 SupplierProduct.id 對照表 ──────────────────
   const allSuppliers = await prisma.supplierProduct.findMany({
@@ -263,7 +267,8 @@ export async function batchCreateProducts(
   const existingProductMap = new Map(existingProducts.map(p => [p.supplierSkuId, p.id]))
 
   // ─── Step 6: 分流：既有 → update；新的 → createMany ─────────────
-  let updated = 0
+  // 同 step 3，把 update 收集起來分批 transaction 送，避免 N 個 await 序列化。
+  const productUpdates: Prisma.PrismaPromise<unknown>[] = []
   const newProductData: ReturnType<typeof buildProductData>[] = []
   for (const row of rows) {
     const supplierId = supplierIdMap.get(row.supplierSkuId)
@@ -271,12 +276,13 @@ export async function batchCreateProducts(
     const data = buildProductData(row, supplierId, tenantAdminId ?? null)
     const existingId = existingProductMap.get(supplierId)
     if (existingId) {
-      await prisma.product.update({ where: { id: existingId }, data })
-      updated++
+      productUpdates.push(prisma.product.update({ where: { id: existingId }, data }))
     } else {
       newProductData.push(data)
     }
   }
+  const updated = productUpdates.length
+  await runInBatches(productUpdates)
 
   let created = 0
   if (newProductData.length > 0) {
@@ -285,6 +291,17 @@ export async function batchCreateProducts(
   }
 
   return { count: created + updated, created, updated }
+}
+
+// 分批 transaction 執行：PgBouncer 序列化下，把 N 個 update 包成多個小交易，
+// 每個交易內所有 statement 共用同一 server connection 可連續 pipeline。
+// 50 是 Prisma transaction max statements 的安全值。
+async function runInBatches(operations: Prisma.PrismaPromise<unknown>[], batchSize = 50): Promise<void> {
+  if (operations.length === 0) return
+  for (let i = 0; i < operations.length; i += batchSize) {
+    const chunk = operations.slice(i, i + batchSize)
+    await prisma.$transaction(chunk)
+  }
 }
 
 function buildProductData(
