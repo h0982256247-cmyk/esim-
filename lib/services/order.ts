@@ -387,13 +387,19 @@ export async function markOrderRefunded(orderId: string) {
   })
 }
 
-// 取消超過 30 分鐘仍為 PENDING 的訂單，並歸還該訂單佔用的優惠券
+// 取消超過 30 分鐘未完成付款的訂單，並歸還該訂單佔用的優惠券。
+// 涵蓋 PENDING（尚未送出金流）與 PROCESSING（已送出／3DS 進行中但使用者放棄、
+// 銀行未回傳 notify）——後者若稍後仍收到成功 notify，notify route 會走
+// 「訂單已 CANCELLED → 自動退款」保護路徑，不會誤發卡。
 export async function cancelExpiredPendingOrders(): Promise<number> {
   const cutoff = new Date(Date.now() - 30 * 60 * 1000)
 
   return prisma.$transaction(async tx => {
     const expired = await tx.order.findMany({
-      where: { status: OrderStatus.PENDING, createdAt: { lt: cutoff } },
+      where: {
+        status: { in: [OrderStatus.PENDING, OrderStatus.PROCESSING] },
+        createdAt: { lt: cutoff },
+      },
       select: { id: true },
     })
     if (expired.length === 0) return 0

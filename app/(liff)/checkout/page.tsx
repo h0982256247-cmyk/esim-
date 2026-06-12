@@ -313,10 +313,18 @@ function CheckoutContent() {
   }
 
   // 付款結果處理（3DS 導轉 / 成功 / 失敗共用）
+  // 只有在扣款被受理（導轉 3DS）或同步成功時才清空購物車；
+  // 第一階段失敗時保留購物車，讓使用者可直接重試。
+  const clearCartAfterCommit = () => {
+    if (bundleMode) cart.clear()
+    else if (productId) cart.remove(productId)
+  }
   const handlePayResult = (res: { requiresRedirect?: boolean; paymentUrl?: string; ok?: boolean; error?: string }, successHref: string) => {
     if (res.requiresRedirect && res.paymentUrl) {
+      clearCartAfterCommit()
       window.location.href = res.paymentUrl
     } else if (res.ok) {
+      clearCartAfterCommit()
       router.replace(successHref)
     } else {
       setErrorMsg(res.error ?? '付款失敗，請重試')
@@ -364,7 +372,6 @@ function CheckoutContent() {
         setSubmitting(false)
         return
       }
-      cart.clear()
       successHref = `/orders?bundleId=${res.bundleId}`
       chargeBody = { bundleId: res.bundleId, returnUrl: `${window.location.origin}${successHref}` }
     } else {
@@ -387,7 +394,6 @@ function CheckoutContent() {
         setSubmitting(false)
         return
       }
-      cart.remove(productId)
       successHref = `/orders/${orderRes.orderId}`
       chargeBody = { orderId: orderRes.orderId, returnUrl: `${window.location.origin}${successHref}` }
     }
