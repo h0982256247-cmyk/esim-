@@ -941,12 +941,45 @@ function CheckoutContent() {
           </div>
         </div>
 
-        {errorMsg && (
-          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '12px 16px' }}>
-            <p style={{ fontSize: 13, color: '#dc2626', margin: 0 }}>{errorMsg}</p>
-          </div>
-        )}
       </div>
+
+      {/* 付款失敗彈窗：信用卡第一段（pay-by-prime / pay-by-token）失敗時，
+          以中文原因跳窗提醒，避免被底部固定列遮住而漏看。 */}
+      {errorMsg && (
+        <div
+          onClick={() => setErrorMsg(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: 16, padding: '24px 20px',
+              maxWidth: 360, width: '100%',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: 36, lineHeight: 1, marginBottom: 12 }}>⚠️</div>
+            <p style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a', margin: '0 0 8px' }}>付款失敗</p>
+            <p style={{ fontSize: 14, color: '#dc2626', margin: '0 0 20px', lineHeight: 1.5 }}>{errorMsg}</p>
+            <button
+              onClick={() => setErrorMsg(null)}
+              style={{
+                width: '100%', padding: '12px 0', border: 'none', borderRadius: 12,
+                background: C.primary, color: '#fff', fontSize: 15, fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              我知道了
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Sticky bottom bar */}
       <div style={{

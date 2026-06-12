@@ -143,7 +143,9 @@ export async function getDashboardStats(tenantAdminId: string | null) {
       },
       _sum: { commissionAmount: true },
     }),
-    prisma.order.count({ where: { status: 'ESIM_PENDING', ...orderTenantWhere } }),
+    // 「付款成功但尚未發卡」：PAID 即為已付款但尚未轉 COMPLETED（發卡）的訂單，
+    // 涵蓋發卡進行中與下單失敗待補發者（後者已不再轉 ESIM_PENDING）。
+    prisma.order.count({ where: { status: 'PAID', ...orderTenantWhere } }),
     aggregateMargin(paidOrderWhere),
   ])
 

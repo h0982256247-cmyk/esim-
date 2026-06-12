@@ -3,7 +3,7 @@ import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
 import { Prisma, OrderStatus } from '@prisma/client'
 
-// GET /api/platform/orders?page=1&status=ESIM_PENDING
+// GET /api/platform/orders?page=1&status=PENDING（待付款涵蓋 PENDING+PROCESSING）
 export async function GET(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
@@ -19,10 +19,17 @@ export async function GET(req: NextRequest) {
     user: { tenantAdminId },
   } : {}
 
+  // 待付款 filter（status=PENDING）需同時涵蓋 PENDING（建立中）與 PROCESSING
+  // （金流進行中／已送出尚未收到 backend notify）——兩者前台皆顯示「待付款」。
+  const statusWhere: Prisma.OrderWhereInput =
+    statusParam === OrderStatus.PENDING
+      ? { status: { in: [OrderStatus.PENDING, OrderStatus.PROCESSING] } }
+      : statusParam && Object.values(OrderStatus).includes(statusParam as OrderStatus)
+        ? { status: statusParam as OrderStatus }
+        : {}
+
   const where: Prisma.OrderWhereInput = {
-    ...(statusParam && Object.values(OrderStatus).includes(statusParam as OrderStatus)
-      ? { status: statusParam as OrderStatus }
-      : {}),
+    ...statusWhere,
     ...tenantWhere,
   }
 

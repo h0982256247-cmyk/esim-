@@ -40,6 +40,40 @@ export type TapPayChargeResult =
   | { ok: true; recTradeId: string; bankTransactionId: string; paymentUrl?: string }
   | { ok: false; message: string }
 
+// 第一段（pay-by-prime / pay-by-token）同步回應失敗時，TapPay 的 msg 多為英文。
+// 依使用者要求，前端需顯示「中文失敗原因」彈窗，故在此把回應轉成中文：
+// 先用 status 對應常見錯誤碼，再用英文 msg 關鍵字補強，最後給出通用中文訊息，
+// 並一律附上原始代碼（與英文 msg）方便客服／後台對帳查詢。
+const TAPPAY_STATUS_MESSAGES: Record<number, string> = {
+  2: '發卡銀行拒絕此筆交易，請聯絡發卡銀行或改用其他卡片',
+  10003: '付款資料不完整，請重新整理頁面後再試一次',
+  10009: '系統忙碌中，請稍後再試一次',
+}
+
+export function tapPayErrorMessage(status: number, msg?: string): string {
+  if (status === 0) return ''
+
+  // 1) 已知的 status 錯誤碼
+  const byStatus = TAPPAY_STATUS_MESSAGES[status]
+  if (byStatus) return `${byStatus}（代碼 ${status}）`
+
+  // 2) 用英文 msg 關鍵字判斷常見刷卡失敗原因（不依賴完整錯誤碼表，較穩定）
+  const lower = (msg ?? '').toLowerCase()
+  let reason = ''
+  if (/expire/.test(lower)) reason = '信用卡已過期，請改用其他卡片'
+  else if (/insufficient|not enough|exceed|limit/.test(lower)) reason = '信用卡額度或餘額不足，請改用其他卡片'
+  else if (/declin|reject|deny|denied|risk|fraud|blacklist/.test(lower)) reason = '發卡銀行拒絕此筆交易，請聯絡發卡銀行或改用其他卡片'
+  else if (/cvc|cvv|security code/.test(lower)) reason = '卡片背面末三碼有誤，請確認後再試一次'
+  else if (/invalid card|card number|card_number|wrong card/.test(lower)) reason = '卡號或卡片資訊有誤，請確認後再試一次'
+  else if (/3d|otp|secure|authenticat/.test(lower)) reason = '3D 驗證失敗，請重新進行驗證或改用其他卡片'
+
+  if (reason) return `${reason}（代碼 ${status}）`
+
+  // 3) 通用中文訊息（保留原始代碼與 msg 以利查詢）
+  const tail = msg ? `（代碼 ${status}：${msg}）` : `（代碼 ${status}）`
+  return `信用卡交易失敗，請確認卡片資訊或改用其他卡片後再試一次${tail}`
+}
+
 async function getConfig(tenantAdminId?: string | null, gateway: string = 'tappay_credit') {
   if (tenantAdminId) {
     const cfg = await prisma.tenantPaymentConfig.findFirst({
@@ -112,7 +146,7 @@ export async function tapPayCharge(input: TapPayChargeInput, tenantAdminId?: str
   const data = await res.json()
 
   if (data.status !== 0) {
-    return { ok: false, message: data.msg ?? '付款失敗' }
+    return { ok: false, message: tapPayErrorMessage(data.status, data.msg) }
   }
 
   return {
@@ -151,7 +185,7 @@ export async function tapPayChargeByToken(input: TapPayTokenChargeInput, tenantA
   const data = await res.json()
 
   if (data.status !== 0) {
-    return { ok: false, message: data.msg ?? '付款失敗' }
+    return { ok: false, message: tapPayErrorMessage(data.status, data.msg) }
   }
 
   return {
@@ -265,7 +299,8 @@ export async function tapPayChargeLinePay(
   const data = await res.json()
 
   if (data.status !== 0) {
-    return { ok: false, message: data.msg ?? 'LINE Pay 付款失敗' }
+    const tail = data.msg ? `（代碼 ${data.status}：${data.msg}）` : `（代碼 ${data.status}）`
+    return { ok: false, message: `LINE Pay 付款失敗，請稍後再試或改用其他付款方式${tail}` }
   }
 
   // LINE Pay 必定回傳 payment_url；若沒有代表設定有誤

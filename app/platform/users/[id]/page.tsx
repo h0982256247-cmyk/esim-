@@ -41,11 +41,11 @@ type UserDetail = {
 
 const STATUS_META: Record<string, { text: string; bg: string; color: string }> = {
   PENDING:      { text: '待付款',      bg: '#fef9c3', color: '#a16207' },
-  PROCESSING:   { text: '付款中',      bg: '#dbeafe', color: '#1d4ed8' },
+  PROCESSING:   { text: '待付款',      bg: '#fef9c3', color: '#a16207' },
   PAID:         { text: '付款成功',    bg: '#dcfce7', color: '#15803d' },
-  COMPLETED:    { text: '已完成',      bg: '#dcfce7', color: '#15803d' },
+  COMPLETED:    { text: '已完成發送',  bg: '#dcfce7', color: '#15803d' },
   FAILED:       { text: '付款失敗',    bg: '#fee2e2', color: '#b91c1c' },
-  ESIM_PENDING: { text: 'eSIM處理中', bg: '#fff7ed', color: '#c2410c' },
+  ESIM_PENDING: { text: '待發送',     bg: '#fff7ed', color: '#c2410c' },
   REFUNDED:     { text: '已退款',      bg: '#f1f5f9', color: '#475569' },
 }
 

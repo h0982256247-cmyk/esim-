@@ -411,13 +411,6 @@ export async function cancelExpiredPendingOrders(): Promise<number> {
   })
 }
 
-export async function markOrderEsimPending(orderId: string) {
-  return prisma.order.update({
-    where: { id: orderId },
-    data: { status: OrderStatus.ESIM_PENDING },
-  })
-}
-
 export async function markOrderCompleted(orderId: string, esimData: {
   wmOrderId?: string
   wmOrderSn?: string

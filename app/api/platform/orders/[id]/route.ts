@@ -53,8 +53,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (action === 'retry_esim') {
     const order = await prisma.order.findFirst({ where: { id, ...tenantWhere }, select: { status: true } })
     if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
-    if (order.status !== OrderStatus.ESIM_PENDING) {
-      return NextResponse.json({ error: '只有 ESIM_PENDING 狀態可補發' }, { status: 409 })
+    // 補發對象：付款成功但尚未發卡（PAID；含下單失敗的訂單，已不再轉 ESIM_PENDING）。
+    // ESIM_PENDING 保留以相容歷史訂單。COMPLETED 已發卡、其餘狀態未付款，皆不可補發。
+    // retryEsimActivation 內部具冪等守門（wmOrderId 已存在則略過），重複觸發安全。
+    if (order.status !== OrderStatus.PAID && order.status !== OrderStatus.ESIM_PENDING) {
+      return NextResponse.json({ error: '只有「付款成功但尚未發卡」的訂單可補發' }, { status: 409 })
     }
     retryEsimActivation(id).catch(() => {})
     return NextResponse.json({ ok: true, message: '已觸發補發流程' })

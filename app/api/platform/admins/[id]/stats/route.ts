@@ -36,7 +36,8 @@ export async function GET(req: NextRequest, { params }: Params) {
         where: { status: CommissionStatus.PENDING, group: { tenantAdminId } },
         _sum: { commissionAmount: true },
       }),
-      prisma.order.count({ where: { user: { tenantAdminId }, status: OrderStatus.ESIM_PENDING } }),
+      // 付款成功但尚未發卡：PAID = 已付款、尚未轉 COMPLETED（發卡）
+      prisma.order.count({ where: { user: { tenantAdminId }, status: OrderStatus.PAID } }),
     ])
 
     return NextResponse.json({

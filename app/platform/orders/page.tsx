@@ -11,14 +11,17 @@ type Order = {
   user: { displayName: string }
   orderItems: { productName: string }[]
 }
-const STATUS_OPTS = ['','PENDING','PROCESSING','PAID','COMPLETED','FAILED','ESIM_PENDING','REFUNDED','CANCELLED']
+// 「待付款」filter 同時涵蓋 PENDING 與 PROCESSING（金流送出、收到 notify 前皆顯示待付款），
+// 故 filter 不另列 PROCESSING；ESIM_PENDING 已自流程移除，亦不列入 filter。
+const STATUS_OPTS = ['','PENDING','PAID','COMPLETED','FAILED','REFUNDED','CANCELLED']
 const STATUS: Record<string,{text:string;cls:string}> = {
   PENDING:      {text:'待付款',cls:'bg-yellow-50 text-yellow-600'},
-  PROCESSING:   {text:'付款中',cls:'bg-blue-50 text-blue-500'},
+  PROCESSING:   {text:'待付款',cls:'bg-yellow-50 text-yellow-600'},
   PAID:         {text:'付款成功',cls:'bg-blue-50 text-blue-600'},
-  COMPLETED:    {text:'已完成',cls:'bg-green-50 text-green-600'},
+  COMPLETED:    {text:'已完成發送',cls:'bg-green-50 text-green-600'},
   FAILED:       {text:'付款失敗',cls:'bg-red-50 text-red-500'},
-  ESIM_PENDING: {text:'eSIM 待補',cls:'bg-orange-50 text-orange-600'},
+  // ESIM_PENDING 已不再產生新訂單；保留標籤讓歷史資料仍能正常顯示
+  ESIM_PENDING: {text:'待發送',cls:'bg-orange-50 text-orange-600'},
   REFUNDED:     {text:'已退款',cls:'bg-gray-100 text-gray-400'},
   CANCELLED:    {text:'已取消',cls:'bg-gray-100 text-gray-400'},
 }
@@ -143,7 +146,7 @@ function OrdersContent() {
                     <td className="px-5 py-3.5 text-xs text-gray-400">{new Date(o.createdAt).toLocaleDateString('zh-TW')}</td>
                     <td className="px-5 py-3.5">
                       <div className="flex gap-1.5">
-                        {o.status==='ESIM_PENDING'&&(
+                        {(o.status==='PAID'||o.status==='ESIM_PENDING')&&(
                           <button onClick={()=>handleRetry(o.id)} disabled={actionLoading===o.id} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">補發</button>
                         )}
                         {(o.status==='PAID'||o.status==='COMPLETED'||o.status==='ESIM_PENDING')&&(

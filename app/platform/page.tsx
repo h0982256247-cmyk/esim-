@@ -36,12 +36,15 @@ type Stats = {
 }
 
 const ORDER_STATUS: Record<string, { label: string; cls: string }> = {
-  PAID:          { label: '已付款', cls: 'bg-blue-50 text-blue-600' },
-  COMPLETED:     { label: '已完成', cls: 'bg-green-50 text-green-600' },
-  PENDING:       { label: '待付款', cls: 'bg-yellow-50 text-yellow-600' },
-  ESIM_PENDING:  { label: '待補發', cls: 'bg-orange-50 text-orange-600' },
-  CANCELLED:     { label: '已取消', cls: 'bg-gray-100 text-gray-400' },
-  REFUNDED:      { label: '已退款', cls: 'bg-red-50 text-red-500' },
+  PAID:          { label: '已付款',     cls: 'bg-blue-50 text-blue-600' },
+  COMPLETED:     { label: '已完成發送', cls: 'bg-green-50 text-green-600' },
+  PENDING:       { label: '待付款',     cls: 'bg-yellow-50 text-yellow-600' },
+  PROCESSING:    { label: '待付款',     cls: 'bg-yellow-50 text-yellow-600' },
+  FAILED:        { label: '付款失敗',   cls: 'bg-red-50 text-red-500' },
+  // ESIM_PENDING 已不再產生新訂單；保留標籤相容歷史資料
+  ESIM_PENDING:  { label: '待發送',     cls: 'bg-orange-50 text-orange-600' },
+  CANCELLED:     { label: '已取消',     cls: 'bg-gray-100 text-gray-400' },
+  REFUNDED:      { label: '已退款',     cls: 'bg-red-50 text-red-500' },
 }
 
 function MiniChart({ data }: { data: MonthlyRevenue[] }) {
@@ -286,11 +289,11 @@ export default function PlatformDashboard() {
                 </svg>
               </div>
               <div className="flex-1">
-                <p className="font-semibold text-red-800">eSIM 待補發</p>
-                <p className="text-sm text-red-600">共有 <strong>{stats.esimPendingOrders}</strong> 張 eSIM 派發失敗，需人工補發。</p>
+                <p className="font-semibold text-red-800">付款成功・尚未發卡</p>
+                <p className="text-sm text-red-600">共有 <strong>{stats.esimPendingOrders}</strong> 張已付款但尚未發送 eSIM，請確認或補發。</p>
               </div>
               <Link
-                href="/platform/orders?status=ESIM_PENDING"
+                href="/platform/orders?status=PAID"
                 className="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition flex items-center gap-1"
               >
                 查看詳情

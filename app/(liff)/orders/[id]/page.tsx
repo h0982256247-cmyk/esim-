@@ -50,11 +50,11 @@ type EsimUsage = {
 
 const STATUS_META: Record<string, { text: string; bg: string; color: string }> = {
   PENDING:      { text: '待付款',       bg: '#fef9c3', color: '#a16207' },
-  PROCESSING:   { text: '付款中',       bg: '#e0f2fe', color: '#0369a1' },
+  PROCESSING:   { text: '待付款',       bg: '#fef9c3', color: '#a16207' },
   PAID:         { text: '付款成功',     bg: '#dcfce7', color: '#15803d' },
-  COMPLETED:    { text: '已完成',       bg: '#d1fae5', color: '#065f46' },
+  COMPLETED:    { text: '已完成發送',   bg: '#d1fae5', color: '#065f46' },
   FAILED:       { text: '付款失敗',     bg: '#fee2e2', color: '#b91c1c' },
-  ESIM_PENDING: { text: 'eSIM 處理中',  bg: '#ffedd5', color: '#c2410c' },
+  ESIM_PENDING: { text: '待發送',      bg: '#ffedd5', color: '#c2410c' },
   REFUNDED:     { text: '已退款',       bg: '#f1f5f9', color: '#475569' },
   CANCELLED:    { text: '已取消',       bg: '#f1f5f9', color: '#94a3b8' },
 }
@@ -584,15 +584,15 @@ export default function OrderDetailPage() {
         </div>
       )}
 
-      {/* 付款確認中（3DS 完成後等待 webhook） */}
+      {/* 待付款（金流已送出、尚未收到 backend notify 之前） */}
       {order.status === 'PROCESSING' && (
-        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 16, padding: '18px 20px', marginBottom: 12 }}>
+        <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 16, padding: '18px 20px', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <div style={{ width: 18, height: 18, border: '2.5px solid #bfdbfe', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
-            <p style={{ fontSize: 14, fontWeight: 700, color: '#1d4ed8', margin: 0 }}>付款確認中</p>
+            <div style={{ width: 18, height: 18, border: '2.5px solid #fde68a', borderTopColor: '#d97706', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+            <p style={{ fontSize: 14, fontWeight: 700, color: '#a16207', margin: 0 }}>待付款</p>
           </div>
-          <p style={{ fontSize: 13, color: '#1e40af', margin: 0, lineHeight: 1.6 }}>
-            正在與銀行確認付款結果，通常在幾秒內完成。請勿關閉此頁面。
+          <p style={{ fontSize: 13, color: '#92400e', margin: 0, lineHeight: 1.6 }}>
+            正在等待銀行確認付款結果，通常在幾秒內完成。請勿關閉此頁面。
           </p>
         </div>
       )}

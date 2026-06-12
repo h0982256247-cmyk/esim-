@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { prisma } from '@/lib/db/prisma'
-import { markOrderCompleted, markOrderEsimPending } from './order'
+import { markOrderCompleted } from './order'
 import { notifyEsimPending } from './notification'
 import { safeDecrypt } from '@/lib/utils/crypto'
 
@@ -258,7 +258,8 @@ export async function triggerEsimActivation(orderId: string): Promise<void> {
   // 只負責下單，等 WM 推 2.5 callback 完成餘下流程
   const wmOrderId = await placeWmOrder(orderId, tenantAdminId)
   if (!wmOrderId) {
-    await markOrderEsimPending(orderId)
+    // 下單失敗：訂單維持 PAID（付款成功但尚未發卡），不再轉成 ESIM_PENDING。
+    // 後台「待補發」統計與補發功能皆改以「PAID 且尚未發卡」為準，仍會發通知提醒。
     notifyEsimPending(userId, productName).catch(() => {})
     return
   }

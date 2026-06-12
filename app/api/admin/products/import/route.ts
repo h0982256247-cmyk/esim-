@@ -106,6 +106,14 @@ function parseMatrix(matrix: unknown[][]): { rows: CsvProductRow[]; errors: stri
     }
 
     const supplierSkuId = get('supplierSkuId')
+    const sellPriceRaw  = get('sellPrice')
+    const costPriceRaw  = get('costPrice')
+    // 跳過「非商品雜訊列」：三個必要欄位（供應商方案ID、售價、成本價）全空。
+    // 常見於右側說明欄文字、合併儲存格殘影、或被套用格式但無資料的列——
+    // 這些列雖非「全空」（某個遠處欄位有值）卻不是商品，不應讓整批驗證失敗。
+    // 有填到其中任一必要欄位才視為商品列並照常驗證/回報缺漏。
+    if (!supplierSkuId && !sellPriceRaw && !costPriceRaw) continue
+
     const productName   = get('productName')
     const planCode      = get('planCode')
     const networkType   = get('networkType') || undefined
@@ -150,8 +158,8 @@ function parseMatrix(matrix: unknown[][]): { rows: CsvProductRow[]; errors: stri
       || (supplierSkuId  ? parseCapacityFromName(supplierSkuId)  : null),
     ) ?? undefined
 
-    const sellPrice = parseInt(get('sellPrice'))
-    const costPrice = parseInt(get('costPrice'))
+    const sellPrice = parseInt(sellPriceRaw)
+    const costPrice = parseInt(costPriceRaw)
     const sortOrder = parseInt(get('sortOrder')) || 0
     const description = get('description') || undefined
 
