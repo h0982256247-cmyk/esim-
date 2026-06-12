@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Script from 'next/script'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { findBestCouponCombo as _findBestCouponCombo } from '@/lib/utils/coupon-combo'
@@ -214,21 +213,35 @@ function CheckoutContent() {
     if (pollRef.current) clearInterval(pollRef.current)
   }, [])
 
-  // next/script 的 onReady/onLoad 在 LINE webview（尤其腳本已被快取、元件重新掛載）
-  // 常常不觸發，導致 sdkLoaded 永遠是 false：信用卡欄位不初始化、LINE Pay 的
-  // 確認付款鈕也一直 disabled。改用輪詢直接偵測 window.TPDirect 是否就緒，
-  // 與 onReady 互為備援，先到者勝。
+  // 在 LINE webview 用 next/script 經常吃掉 onLoad/onReady，且我們的 <Script>
+  // 寫在 !pageReady 的早退之後，使用者點進來時 script 還沒掛到 DOM。改成
+  // 元件一掛載就 imperatively 把 <script> 直接 append 到 document.head，
+  // 並用輪詢偵測 window.TPDirect，無論頁面是否在 spinner 都會載入。
   useEffect(() => {
-    if (sdkLoaded) return
-    if (typeof window !== 'undefined' && window.TPDirect) { setSdkLoaded(true); return }
+    if (typeof window === 'undefined') return
+    if (window.TPDirect) { setSdkLoaded(true); return }
+
+    const SDK_SRC = 'https://js.tappaysdk.com/tappay.js'
+    let script = document.querySelector<HTMLScriptElement>('script[data-tappay-sdk="1"]')
+    if (!script) {
+      script = document.createElement('script')
+      script.src = SDK_SRC
+      script.async = true
+      script.dataset.tappaySdk = '1'
+      script.onload = () => {
+        if (window.TPDirect) setSdkLoaded(true)
+      }
+      document.head.appendChild(script)
+    }
+
     const t = setInterval(() => {
-      if (typeof window !== 'undefined' && window.TPDirect) {
+      if (window.TPDirect) {
         setSdkLoaded(true)
         clearInterval(t)
       }
     }, 300)
     return () => clearInterval(t)
-  }, [sdkLoaded])
+  }, [])
 
   const showCardForm = useNewCard || savedCard === null
 
@@ -521,13 +534,6 @@ function CheckoutContent() {
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 120 }}>
-      <Script
-        src="https://js.tappaysdk.com/tappay.js"
-        strategy="afterInteractive"
-        onReady={() => setSdkLoaded(true)}
-        onLoad={() => setSdkLoaded(true)}
-      />
-
       {/* Header */}
       <div style={{ padding: '20px 20px 8px' }}>
         <button
