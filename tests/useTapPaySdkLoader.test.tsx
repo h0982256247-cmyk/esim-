@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
-import { useTapPaySdkLoader, TAPPAY_SDK_SRC } from '@/hooks/useTapPaySdkLoader'
+import {
+  useTapPaySdkLoader,
+  TAPPAY_SDK_SRC,
+  TAPPAY_SDK_INTEGRITY,
+} from '@/hooks/useTapPaySdkLoader'
 
 function clearSdk() {
   delete (window as unknown as { TPDirect?: unknown }).TPDirect
@@ -11,12 +15,19 @@ describe('useTapPaySdkLoader', () => {
   beforeEach(() => { clearSdk() })
   afterEach(() => { clearSdk() })
 
-  it('appends the SDK script to document.head when not present', () => {
+  it('appends the SDK script to document.head with correct src + integrity + crossorigin', () => {
     renderHook(() => useTapPaySdkLoader({ pollIntervalMs: 10 }))
     const script = document.querySelector<HTMLScriptElement>('script[data-tappay-sdk="1"]')
     expect(script).not.toBeNull()
     expect(script?.src).toBe(TAPPAY_SDK_SRC)
     expect(script?.async).toBe(true)
+    expect(script?.integrity).toBe(TAPPAY_SDK_INTEGRITY)
+    expect(script?.crossOrigin).toBe('anonymous')
+  })
+
+  it('uses a valid TapPay CDN path (regression: not the bogus /tappay.js that returns 403)', () => {
+    // 必須是 /sdk/tpdirect/v<x.y.z> 結構，不能是 /tappay.js 或其他短路徑
+    expect(TAPPAY_SDK_SRC).toMatch(/^https:\/\/js\.tappaysdk\.com\/sdk\/tpdirect\/v\d+\.\d+\.\d+$/)
   })
 
   it('does not double-inject when remounted', () => {
