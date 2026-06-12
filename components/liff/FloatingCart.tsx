@@ -63,11 +63,9 @@ export default function FloatingCart() {
   const params = useParams<{ slug?: string }>()
   const slug = params?.slug ?? ''
   const C = useTenantColors()
-  const { items, count, totalQty, subtotal, remove, setQty, clear, hydrated } = useCart()
+  const { items, count, totalQty, subtotal, remove, setQty, hydrated } = useCart()
   const [open, setOpen] = useState(false)
   const [bumped, setBumped] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   // Bump animation when qty count increases
   const [prevTotalQty, setPrevTotalQty] = useState(totalQty)
@@ -98,49 +96,19 @@ export default function FloatingCart() {
     ? 'calc(160px + env(safe-area-inset-bottom))'
     : 'calc(72px + env(safe-area-inset-bottom))'
 
-  const payHref = (search: string) =>
-    slug ? `/liff/${slug}/checkout/pay${search}` : `/checkout/pay${search}`
-
   const goSingleCheckout = (productId: string) => {
     setOpen(false)
     const url = slug ? `/liff/${slug}/checkout?productId=${productId}` : `/checkout?productId=${productId}`
     router.push(url)
   }
 
-  const handleCheckoutAll = async () => {
-    if (submitting || items.length === 0) return
-    setSubmitting(true)
-    setErrorMsg(null)
-    try {
-      const r = await fetch('/api/orders/bundle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentMethod: 'CREDIT_CARD',
-          lines: items.map(i => ({ productId: i.productId, qty: i.qty })),
-        }),
-      })
-
-      // Parse defensively: a 500 may return an HTML error page, in which case
-      // r.json() throws — fall back to the HTTP status so we never hide the
-      // real failure behind a generic「網路錯誤」.
-      const res = await r.json().catch(() => null)
-
-      if (!r.ok || !res || !res.ok) {
-        setErrorMsg(res?.error ?? `建立訂單失敗（${r.status}），請稍後再試`)
-        setSubmitting(false)
-        return
-      }
-
-      // Clear cart and jump to payment with the bundle id
-      const total = res.totalPaid
-      clear()
-      setOpen(false)
-      router.push(payHref(`?bundleId=${res.bundleId}&amount=${total}`))
-    } catch {
-      setErrorMsg('網路錯誤，請重試')
-      setSubmitting(false)
-    }
+  // 多張 / 數量 > 1：導向統一結帳頁（不帶 productId → bundle 模式），
+  // 建立訂單與刷卡都在 /checkout 內完成，購物車於成功付款後清空。
+  const goBundleCheckout = () => {
+    if (items.length === 0) return
+    setOpen(false)
+    const url = slug ? `/liff/${slug}/checkout?bundle=1` : `/checkout?bundle=1`
+    router.push(url)
   }
 
   const badgeNumber = totalQty > 0 ? totalQty : count
@@ -373,10 +341,6 @@ export default function FloatingCart() {
                   </span>
                 </div>
 
-                {errorMsg && (
-                  <p style={{ fontSize: 12, color: '#dc2626', margin: '0 0 8px' }}>{errorMsg}</p>
-                )}
-
                 {/* Single-line, single-qty cart: route through the coupon-aware
                     /checkout page. Multi-line or qty > 1: use the bundle flow. */}
                 {count === 1 && items[0] && items[0].qty === 1 ? (
@@ -400,23 +364,22 @@ export default function FloatingCart() {
                 ) : (
                   <button
                     type="button"
-                    onClick={handleCheckoutAll}
-                    disabled={submitting}
+                    onClick={goBundleCheckout}
                     style={{
                       width: '100%',
-                      background: submitting ? '#94a3b8' : C.primary,
+                      background: C.primary,
                       color: C.onPrimary,
                       border: 'none',
                       borderRadius: 100,
                       padding: '14px',
                       fontSize: 15, fontWeight: 800,
-                      cursor: submitting ? 'not-allowed' : 'pointer',
+                      cursor: 'pointer',
                       letterSpacing: '0.02em',
-                      boxShadow: submitting ? 'none' : `0 6px 18px ${C.primary}44`,
+                      boxShadow: `0 6px 18px ${C.primary}44`,
                       WebkitTapHighlightColor: 'transparent',
                     }}
                   >
-                    {submitting ? '處理中…' : `全部結帳 · NT$${subtotal.toLocaleString()}`}
+                    {`全部結帳 · NT$${subtotal.toLocaleString()}`}
                   </button>
                 )}
 

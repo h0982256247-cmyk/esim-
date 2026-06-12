@@ -124,6 +124,8 @@ function CheckoutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const productId = searchParams.get('productId')
+  // 沒有 productId → 多張（購物車）結帳模式
+  const bundleMode = !productId
   const C = useTenantColors()
   const cart = useCart()
   const { liff } = useLiff()
@@ -149,7 +151,9 @@ function CheckoutContent() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tapPayConfigRef = useRef<{ appId: number; appKey: string; env: string } | null>(null)
 
+  // 單張：載入商品 + 優惠券；多張：直接用購物車內容，不需打 API
   useEffect(() => {
+    if (bundleMode) { setLoading(false); return }
     if (!productId) return
     Promise.all([
       fetch(`/api/products/${productId}`).then(r => r.json()),
@@ -170,7 +174,7 @@ function CheckoutContent() {
         setAutoSelectedIds(best)
       }
     }).finally(() => setLoading(false))
-  }, [productId])
+  }, [productId, bundleMode])
 
   // 載入已儲存卡片
   useEffect(() => {
@@ -221,7 +225,7 @@ function CheckoutContent() {
         ccv:            { element: '#card-ccv',    placeholder: 'CVV' },
       },
       styles: {
-        input:    { color: '#374151', 'font-size': '16px' },
+        input:    { color: '#1a1a1a', 'font-size': '16px' },
         ':focus': { color: '#1a1a1a' },
         '.valid':   { color: '#059669' },
         '.invalid': { color: '#dc2626' },
@@ -235,16 +239,19 @@ function CheckoutContent() {
     }, 500)
   }
 
-  // SDK 載入完成 + 卡號欄位已渲染（在 DOM 中）時才初始化，避免 setup 找不到元素
+  // SDK 載入完成 + 頁面就緒 + 卡號欄位已渲染時才初始化，避免 setup 找不到元素
   useEffect(() => {
-    if (!sdkLoaded || loading || !product) return
+    const pageReady = bundleMode ? cart.hydrated : (!loading && !!product)
+    if (!sdkLoaded || !pageReady) return
     if (paymentMethod !== 'CREDIT_CARD' || !showCardForm) return
     if (sdkReady) return
     initTapPay()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sdkLoaded, loading, product, paymentMethod, showCardForm, sdkReady])
+  }, [sdkLoaded, bundleMode, cart.hydrated, loading, product, paymentMethod, showCardForm, sdkReady])
 
+  // 優惠券試算（僅單張模式）
   useEffect(() => {
+    if (bundleMode) return
     if (!product || selectedCouponIds.length === 0) {
       setFinalPrice(product?.sellPrice ?? null)
       setComboError(null)
@@ -263,7 +270,7 @@ function CheckoutContent() {
         setComboError(d.reason)
       }
     })
-  }, [selectedCouponIds, product])
+  }, [selectedCouponIds, product, bundleMode])
 
   const toggleCoupon = (id: string) => {
     setSelectedCouponIds(prev =>
@@ -284,54 +291,80 @@ function CheckoutContent() {
   }
 
   const handleSubmit = async () => {
-    if (!product || !productId || comboError || submitting) return
+    if (submitting) return
+    if (paymentMethod === 'LINE_PAY') {
+      setErrorMsg('LINE Pay 即將推出，請改用信用卡付款')
+      return
+    }
     // 信用卡 + 新卡：必須 SDK 就緒且卡片資訊有效
-    if (paymentMethod === 'CREDIT_CARD' && useNewCard && (!canPay || !sdkReady)) return
+    if (useNewCard && (!canPay || !sdkReady)) return
 
     setSubmitting(true)
     setErrorMsg(null)
 
-    // 1. 建立訂單
-    let orderRes: { ok?: boolean; orderId?: string; error?: string }
-    try {
-      orderRes = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId, couponIds: selectedCouponIds, paymentMethod }),
-      }).then(r => r.json())
-    } catch {
-      setErrorMsg('網路錯誤，請重試')
-      setSubmitting(false)
-      return
+    let chargeBody: Record<string, unknown>
+    let successHref: string
+
+    if (bundleMode) {
+      // ── 多張：建立 bundle 訂單 ──
+      if (cart.items.length === 0) { setErrorMsg('購物車是空的'); setSubmitting(false); return }
+      let res: { ok?: boolean; bundleId?: string; error?: string } | null
+      try {
+        const r = await fetch('/api/orders/bundle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentMethod: 'CREDIT_CARD',
+            lines: cart.items.map(i => ({ productId: i.productId, qty: i.qty })),
+          }),
+        })
+        res = await r.json().catch(() => null)
+        if (!r.ok || !res || !res.ok || !res.bundleId) {
+          setErrorMsg(res?.error ?? `建立訂單失敗（${r.status}），請稍後再試`)
+          setSubmitting(false)
+          return
+        }
+      } catch {
+        setErrorMsg('網路錯誤，請重試')
+        setSubmitting(false)
+        return
+      }
+      cart.clear()
+      successHref = `/orders?bundleId=${res.bundleId}`
+      chargeBody = { bundleId: res.bundleId, returnUrl: `${window.location.origin}${successHref}` }
+    } else {
+      // ── 單張：建立單筆訂單 ──
+      if (!product || !productId || comboError) { setSubmitting(false); return }
+      let orderRes: { ok?: boolean; orderId?: string; error?: string }
+      try {
+        orderRes = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId, couponIds: selectedCouponIds, paymentMethod: 'CREDIT_CARD' }),
+        }).then(r => r.json())
+      } catch {
+        setErrorMsg('網路錯誤，請重試')
+        setSubmitting(false)
+        return
+      }
+      if (!orderRes.ok || !orderRes.orderId) {
+        setErrorMsg(orderRes.error ?? '建立訂單失敗')
+        setSubmitting(false)
+        return
+      }
+      cart.remove(productId)
+      successHref = `/orders/${orderRes.orderId}`
+      chargeBody = { orderId: orderRes.orderId, returnUrl: `${window.location.origin}${successHref}` }
     }
 
-    if (!orderRes.ok || !orderRes.orderId) {
-      setErrorMsg(orderRes.error ?? '建立訂單失敗')
-      setSubmitting(false)
-      return
-    }
-
-    const orderId = orderRes.orderId
-    // 訂單已建立 → 從購物車移除，避免返回後還看到
-    cart.remove(productId)
-
-    // 2. LINE Pay 仍走原本的付款頁流程
-    if (paymentMethod === 'LINE_PAY') {
-      router.push(`/checkout/pay?orderId=${orderId}&amount=${finalPrice ?? product.sellPrice}&method=LINE_PAY`)
-      return
-    }
-
-    // 3. 信用卡：直接呼叫 TapPay 發動交易
-    const successHref = `/orders/${orderId}`
-    const returnUrl = `${window.location.origin}${successHref}`
-
-    // 3a. 使用已儲存卡片（代扣）
+    // ── 呼叫 TapPay 發動交易（單張 / 多張共用）──
+    // 使用已儲存卡片（代扣）
     if (!useNewCard && savedCard) {
       try {
         const res = await fetch('/api/payment/tappay', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, useToken: true, returnUrl }),
+          body: JSON.stringify({ ...chargeBody, useToken: true }),
         }).then(r => r.json())
         handlePayResult(res, successHref)
       } catch {
@@ -341,7 +374,7 @@ function CheckoutContent() {
       return
     }
 
-    // 3b. 新卡：取得 prime 後送出
+    // 新卡：取得 prime 後送出
     window.TPDirect.card.getPrime(async result => {
       if (result.status !== 0) {
         setErrorMsg(result.msg ?? '取得卡片資訊失敗')
@@ -352,7 +385,7 @@ function CheckoutContent() {
         const res = await fetch('/api/payment/tappay', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, prime: result.card.prime, remember, returnUrl }),
+          body: JSON.stringify({ ...chargeBody, prime: result.card.prime, remember }),
         }).then(r => r.json())
         handlePayResult(res, successHref)
       } catch {
@@ -362,31 +395,20 @@ function CheckoutContent() {
     })
   }
 
-  // iOS 玻璃透明風輸入欄位
+  // 信用卡輸入框（實心、可點擊、不過高）— 不可用 backdrop-filter，否則 LINE 內嵌瀏覽器無法點擊 TapPay iframe
   const fieldStyle: React.CSSProperties = {
-    border: '1px solid rgba(255,255,255,0.7)',
-    borderRadius: 12,
-    padding: '13px 15px',
-    background: 'rgba(255,255,255,0.45)',
-    backdropFilter: 'blur(12px) saturate(180%)',
-    WebkitBackdropFilter: 'blur(12px) saturate(180%)',
-    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.6), 0 1px 2px rgba(0,0,0,0.03)',
-    minHeight: 48,
+    border: '1px solid rgba(0,0,0,0.12)',
+    borderRadius: 10,
+    padding: '11px 14px',
+    minHeight: 44,
+    background: '#f6f7f9',
+  }
+  const fieldLabel: React.CSSProperties = {
+    display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6b7280', marginBottom: 5,
   }
 
-  // 卡片表單外框（毛玻璃）
-  const glassBox: React.CSSProperties = {
-    borderRadius: 18,
-    padding: '18px',
-    background: 'linear-gradient(135deg, rgba(255,255,255,0.72), rgba(243,244,250,0.5))',
-    backdropFilter: 'blur(24px) saturate(180%)',
-    WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-    border: '1px solid rgba(255,255,255,0.8)',
-    boxShadow: '0 8px 28px rgba(0,0,0,0.07)',
-    display: 'flex', flexDirection: 'column', gap: 14,
-  }
-
-  if (loading || !product) {
+  const pageReady = bundleMode ? cart.hydrated : (!loading && !!product)
+  if (!pageReady) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
         <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
@@ -395,21 +417,33 @@ function CheckoutContent() {
     )
   }
 
-  const displayPrice = finalPrice ?? product.sellPrice
-  const discount = product.sellPrice - displayPrice
+  // 多張模式但購物車空了
+  if (bundleMode && cart.items.length === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 14, padding: 24 }}>
+        <p style={{ color: '#94a3b8', fontSize: 15 }}>購物車是空的</p>
+        <button
+          onClick={() => router.back()}
+          style={{ background: C.primary, color: C.onPrimary, border: 'none', borderRadius: 100, padding: '12px 28px', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
+        >
+          返回
+        </button>
+      </div>
+    )
+  }
 
-  const paymentOptions = [
-    { key: 'CREDIT_CARD' as const, label: '信用卡', sublabel: 'Visa / Mastercard / JCB', Icon: CreditCardIcon },
-    { key: 'LINE_PAY' as const,   label: 'LINE Pay', sublabel: '使用 LINE Pay 付款', Icon: LinePayIcon },
-  ]
+  const bundleItems = cart.items
+  const bundleQty = cart.totalQty
+  const bundleSubtotal = cart.subtotal
+  const displayPrice = bundleMode ? bundleSubtotal : (finalPrice ?? product!.sellPrice)
+  const discount = bundleMode ? 0 : (product!.sellPrice - displayPrice)
 
-  // 按鈕可否點擊：信用卡新卡需 SDK 就緒且卡片有效；已儲存卡片或 LINE Pay 則直接可送出
-  const cardReady = paymentMethod !== 'CREDIT_CARD'
-    ? true
-    : (!useNewCard && savedCard)
-      ? true
-      : canPay && sdkReady
-  const canSubmit = !submitting && !comboError && cardReady
+  const cc = paymentMethod === 'CREDIT_CARD'
+  const lp = paymentMethod === 'LINE_PAY'
+
+  // 按鈕可否點擊：信用卡新卡需 SDK 就緒且卡片有效；已儲存卡片可直接送出；LINE Pay 也可點（點了給提示）
+  const cardReady = !cc ? true : (!useNewCard && savedCard) ? true : (canPay && sdkReady)
+  const canSubmit = !submitting && (bundleMode ? true : !comboError) && cardReady
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 120 }}>
@@ -431,293 +465,377 @@ function CheckoutContent() {
 
       <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* Product card */}
-        <div style={{
-          background: '#fff',
-          borderRadius: 16,
-          border: '1px solid rgba(0,0,0,0.07)',
-          padding: '18px 20px',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-          display: 'flex', alignItems: 'center', gap: 16,
-        }}>
-          {/* Flag / icon */}
+        {bundleMode ? (
+          /* ── 多張：購物車明細 + 上方張數 ── */
           <div style={{
-            width: 56, height: 56, borderRadius: 14, flexShrink: 0,
-            background: C.light,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: '#fff', borderRadius: 16, border: '1px solid rgba(0,0,0,0.07)',
+            padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+            display: 'flex', flexDirection: 'column', gap: 12,
           }}>
-            <CountryFlag code={product.countryCode} fallbackEmoji={product.countryFlag} size={40} />
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a', margin: '0 0 4px' }}>{product.countryNameZh}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontSize: 16, fontWeight: 800, color: '#1a1a1a', margin: 0 }}>
+                共 {bundleQty} 張 eSIM
+              </p>
               <span style={{
-                fontSize: 12, fontWeight: 600, color: '#4b5563',
-                background: '#f3f4f6', borderRadius: 6, padding: '2px 8px',
+                fontSize: 12, fontWeight: 700, color: C.primary,
+                background: C.light, borderRadius: 100, padding: '3px 12px',
               }}>
-                {product.displayDays} 天
+                {bundleItems.length} 項
               </span>
-              {product.dataCapacity && (
+            </div>
+
+            {bundleItems.map(item => (
+              <div key={item.productId} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)',
+              }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 12, flexShrink: 0, background: C.light,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <CountryFlag code={item.countryCode} fallbackEmoji={item.countryFlag} size={30} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: '0 0 2px' }}>{item.countryNameZh}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11.5, color: '#64748b' }}>
+                      {item.displayDays} 天{item.dataCapacity ? ` · ${item.dataCapacity}` : ''}
+                    </span>
+                    <NetworkBadge networkType={item.networkType} />
+                    <NativeSimBadge isNative={item.isNativeSim} />
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                    NT${(item.sellPrice * item.qty).toLocaleString()}
+                  </p>
+                  {item.qty > 1 && (
+                    <p style={{ fontSize: 10.5, color: '#94a3b8', margin: '1px 0 0', fontVariantNumeric: 'tabular-nums' }}>
+                      NT${item.sellPrice.toLocaleString()} × {item.qty}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>
+              一次刷卡完成 · 每張 eSIM 會獨立發送 · 此模式不套用優惠券
+            </p>
+          </div>
+        ) : (
+          /* ── 單張：商品卡 ── */
+          <div style={{
+            background: '#fff',
+            borderRadius: 16,
+            border: '1px solid rgba(0,0,0,0.07)',
+            padding: '18px 20px',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+            display: 'flex', alignItems: 'center', gap: 16,
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 14, flexShrink: 0,
+              background: C.light,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <CountryFlag code={product!.countryCode} fallbackEmoji={product!.countryFlag} size={40} />
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a', margin: '0 0 4px' }}>{product!.countryNameZh}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
                 <span style={{
                   fontSize: 12, fontWeight: 600, color: '#4b5563',
                   background: '#f3f4f6', borderRadius: 6, padding: '2px 8px',
                 }}>
-                  {product.dataCapacity}
+                  {product!.displayDays} 天
+                </span>
+                {product!.dataCapacity && (
+                  <span style={{
+                    fontSize: 12, fontWeight: 600, color: '#4b5563',
+                    background: '#f3f4f6', borderRadius: 6, padding: '2px 8px',
+                  }}>
+                    {product!.dataCapacity}
+                  </span>
+                )}
+                <NetworkBadge networkType={product!.networkType} />
+                <NativeSimBadge isNative={product!.isNativeSim} />
+              </div>
+              <p style={{ fontSize: 20, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                NT${product!.sellPrice.toLocaleString()}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Coupon section（僅單張） */}
+        {!bundleMode && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 8px 4px' }}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>使用優惠券</p>
+              {autoSelectedIds.length > 0 && (
+                <span style={{
+                  fontSize: 11, fontWeight: 600,
+                  background: '#d1fae5', color: '#065f46',
+                  padding: '2px 8px', borderRadius: 100,
+                  display: 'flex', alignItems: 'center', gap: 3,
+                }}>
+                  ✦ 已自動帶入最優惠組合
                 </span>
               )}
-              <NetworkBadge networkType={product.networkType} />
-              <NativeSimBadge isNative={product.isNativeSim} />
             </div>
-            <p style={{ fontSize: 20, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
-              NT${product.sellPrice.toLocaleString()}
-            </p>
-          </div>
-        </div>
-
-        {/* Coupon section */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 8px 4px' }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>使用優惠券</p>
-            {autoSelectedIds.length > 0 && (
-              <span style={{
-                fontSize: 11, fontWeight: 600,
-                background: '#d1fae5', color: '#065f46',
-                padding: '2px 8px', borderRadius: 100,
-                display: 'flex', alignItems: 'center', gap: 3,
+            {coupons.length === 0 ? (
+              <div style={{
+                background: '#fff', borderRadius: 12,
+                border: '1px solid rgba(0,0,0,0.07)',
+                padding: '14px 16px',
+                display: 'flex', alignItems: 'center', gap: 10,
               }}>
-                ✦ 已自動帶入最優惠組合
-              </span>
+                <TicketIcon color="#94a3b8" />
+                <span style={{ flex: 1, fontSize: 14, color: '#94a3b8' }}>選取或輸入優惠碼</span>
+                <span style={{ fontSize: 13, color: '#c4c9d4' }}>尚無可用 ›</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {coupons.map(c => {
+                  const selected = selectedCouponIds.includes(c.id)
+                  return (
+                    <label
+                      key={c.id}
+                      style={{
+                        display: 'flex', alignItems: 'center',
+                        background: selected ? C.light : '#fff',
+                        borderRadius: 12,
+                        border: `1.5px solid ${selected ? C.primary : 'rgba(0,0,0,0.07)'}`,
+                        padding: '13px 16px', cursor: 'pointer',
+                        transition: 'border-color 0.15s, background 0.15s',
+                      }}
+                    >
+                      <div style={{ marginRight: 12, flexShrink: 0 }}>
+                        <TicketIcon color={selected ? C.primary : '#94a3b8'} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>{TYPE_LABEL[c.type] ?? c.type}</p>
+                        <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>{c.level} 級券</p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 15, fontWeight: 800, color: C.primary }}>
+                          {Math.round((1 - c.discount) * 100)}% OFF
+                        </span>
+                        <div
+                          style={{
+                            width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                            border: `2px solid ${selected ? C.primary : '#d1d5db'}`,
+                            background: selected ? C.primary : '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.15s',
+                          }}
+                          onClick={() => toggleCoupon(c.id)}
+                        >
+                          {selected && (
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke={C.onPrimary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="2 6 5 9 10 3" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                    </label>
+                  )
+                })}
+                {comboError && (
+                  <p style={{ fontSize: 12, color: '#ef4444', margin: '0 0 0 4px' }}>{comboError}</p>
+                )}
+              </div>
             )}
           </div>
-          {coupons.length === 0 ? (
-            <div style={{
-              background: '#fff', borderRadius: 12,
-              border: '1px solid rgba(0,0,0,0.07)',
-              padding: '14px 16px',
-              display: 'flex', alignItems: 'center', gap: 10,
-            }}>
-              <TicketIcon color="#94a3b8" />
-              <span style={{ flex: 1, fontSize: 14, color: '#94a3b8' }}>選取或輸入優惠碼</span>
-              <span style={{ fontSize: 13, color: '#c4c9d4' }}>尚無可用 ›</span>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {coupons.map(c => {
-                const selected = selectedCouponIds.includes(c.id)
-                return (
-                  <label
-                    key={c.id}
-                    style={{
-                      display: 'flex', alignItems: 'center',
-                      background: selected ? C.light : '#fff',
-                      borderRadius: 12,
-                      border: `1.5px solid ${selected ? C.primary : 'rgba(0,0,0,0.07)'}`,
-                      padding: '13px 16px', cursor: 'pointer',
-                      transition: 'border-color 0.15s, background 0.15s',
-                    }}
-                  >
-                    <div style={{ marginRight: 12, flexShrink: 0 }}>
-                      <TicketIcon color={selected ? C.primary : '#94a3b8'} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>{TYPE_LABEL[c.type] ?? c.type}</p>
-                      <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>{c.level} 級券</p>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 15, fontWeight: 800, color: C.primary }}>
-                        {Math.round((1 - c.discount) * 100)}% OFF
-                      </span>
-                      {/* Custom checkbox */}
-                      <div
-                        style={{
-                          width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                          border: `2px solid ${selected ? C.primary : '#d1d5db'}`,
-                          background: selected ? C.primary : '#fff',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          transition: 'all 0.15s',
-                        }}
-                        onClick={() => toggleCoupon(c.id)}
-                      >
-                        {selected && (
-                          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke={C.onPrimary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="2 6 5 9 10 3" />
-                          </svg>
-                        )}
-                      </div>
-                    </div>
-                  </label>
-                )
-              })}
-              {comboError && (
-                <p style={{ fontSize: 12, color: '#ef4444', margin: '0 0 0 4px' }}>{comboError}</p>
-              )}
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Payment method */}
         <div>
           <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: '0 0 8px 4px' }}>付款方式</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {paymentOptions.map(({ key, label, sublabel, Icon }) => {
-              const active = paymentMethod === key
-              return (
-                <div key={key}>
-                  <label
-                    onClick={() => setPaymentMethod(key)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 14,
-                      background: active ? C.light : '#fff',
-                      borderRadius: 14,
-                      border: `1.5px solid ${active ? C.primary : 'rgba(0,0,0,0.07)'}`,
-                      padding: '14px 16px', cursor: 'pointer',
-                      transition: 'border-color 0.15s, background 0.15s',
-                    }}
-                  >
-                    {/* Custom radio */}
-                    <div style={{
-                      width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                      border: `2px solid ${active ? C.primary : '#d1d5db'}`,
-                      background: '#fff',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'border-color 0.15s',
-                    }}>
-                      {active && (
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.primary }} />
-                      )}
-                    </div>
-                    <div style={{ color: active ? C.primary : '#4b5563', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                      <Icon />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>{label}</p>
-                      <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>{sublabel}</p>
-                    </div>
-                  </label>
 
-                  {/* 信用卡刷卡欄位：緊接在「信用卡」選項正下方 */}
-                  {key === 'CREDIT_CARD' && active && (
-                    <div style={{ marginTop: 10 }}>
-                      {savedCard === undefined ? (
-                        <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>載入付款模組中…</div>
-                      ) : (
+            {/* 信用卡：可展開的同一框格，刷卡欄位就在框內 */}
+            <div style={{
+              borderRadius: 14,
+              border: `1.5px solid ${cc ? C.primary : 'rgba(0,0,0,0.07)'}`,
+              background: '#fff',
+              overflow: 'hidden',
+              transition: 'border-color 0.15s',
+            }}>
+              <label
+                onClick={() => setPaymentMethod('CREDIT_CARD')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '14px 16px', cursor: 'pointer',
+                  background: cc ? C.light : '#fff',
+                }}
+              >
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  border: `2px solid ${cc ? C.primary : '#d1d5db'}`,
+                  background: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {cc && <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.primary }} />}
+                </div>
+                <div style={{ color: cc ? C.primary : '#4b5563', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <CreditCardIcon />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>信用卡</p>
+                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>Visa / Mastercard / JCB</p>
+                </div>
+              </label>
+
+              {/* 展開：刷卡欄位（與信用卡同框） */}
+              {cc && (
+                <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', padding: '14px 16px', background: '#fff' }}>
+                  {savedCard === undefined ? (
+                    <div style={{ padding: '8px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>載入付款模組中…</div>
+                  ) : (
+                    <>
+                      {/* 已儲存卡片 */}
+                      {savedCard && !useNewCard && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 14,
+                          padding: '12px 14px', borderRadius: 12,
+                          background: '#f6f7f9', border: '1px solid rgba(0,0,0,0.06)',
+                        }}>
+                          <CardTypeBadge type={savedCard.cardType} />
+                          <div style={{ flex: 1 }}>
+                            <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>
+                              {savedCard.cardTypeLabel} **** {savedCard.lastFour}
+                            </p>
+                            {savedCard.expiresAt && (
+                              <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>有效期限 {savedCard.expiresAt}</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => setUseNewCard(true)}
+                            style={{
+                              background: '#fff', border: '1px solid rgba(0,0,0,0.1)',
+                              borderRadius: 8, padding: '6px 12px',
+                              fontSize: 12, fontWeight: 600, color: '#4b5563', cursor: 'pointer',
+                            }}
+                          >
+                            更換
+                          </button>
+                        </div>
+                      )}
+
+                      {/* 新卡輸入 */}
+                      {showCardForm && (
                         <>
-                          {/* 已儲存卡片 */}
-                          {savedCard && !useNewCard && (
-                            <div style={{
-                              background: '#fff', borderRadius: 14, border: `1.5px solid ${C.primary}`,
-                              padding: '14px 16px',
-                              boxShadow: `0 0 0 3px ${C.primary}18`,
-                              display: 'flex', alignItems: 'center', gap: 14,
-                            }}>
-                              <CardTypeBadge type={savedCard.cardType} />
-                              <div style={{ flex: 1 }}>
-                                <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>
-                                  {savedCard.cardTypeLabel} **** {savedCard.lastFour}
-                                </p>
-                                {savedCard.expiresAt && (
-                                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>有效期限 {savedCard.expiresAt}</p>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => setUseNewCard(true)}
-                                style={{
-                                  background: 'none', border: '1px solid rgba(0,0,0,0.07)',
-                                  borderRadius: 8, padding: '6px 12px',
-                                  fontSize: 12, fontWeight: 600, color: '#4b5563', cursor: 'pointer',
-                                }}
-                              >
-                                更換
-                              </button>
-                            </div>
+                          {savedCard && useNewCard && (
+                            <button
+                              onClick={() => setUseNewCard(false)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 4,
+                                background: 'none', border: 'none', padding: '0 0 12px',
+                                fontSize: 13, color: C.primary, cursor: 'pointer', fontWeight: 600,
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="15 18 9 12 15 6" />
+                              </svg>
+                              使用已儲存的卡片
+                            </button>
                           )}
 
-                          {/* 新卡輸入（iOS 玻璃透明風） */}
-                          {showCardForm && (
-                            <>
-                              {savedCard && useNewCard && (
-                                <button
-                                  onClick={() => setUseNewCard(false)}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: 4,
-                                    background: 'none', border: 'none', padding: '0 0 10px',
-                                    fontSize: 13, color: C.primary, cursor: 'pointer', fontWeight: 600,
-                                  }}
-                                >
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="15 18 9 12 15 6" />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div>
+                              <label style={fieldLabel}>卡號</label>
+                              <div id="card-number" style={fieldStyle} />
+                            </div>
+                            <div style={{ display: 'flex', gap: 12 }}>
+                              <div style={{ flex: 1 }}>
+                                <label style={fieldLabel}>有效期限</label>
+                                <div id="card-expiry" style={fieldStyle} />
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <label style={fieldLabel}>安全碼</label>
+                                <div id="card-ccv" style={fieldStyle} />
+                              </div>
+                            </div>
+
+                            {/* 記住此卡片：與卡號同框、壓成一行 */}
+                            <label
+                              onClick={() => setRemember(r => !r)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginTop: 2 }}
+                            >
+                              <div style={{
+                                width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                                border: `2px solid ${remember ? C.primary : 'rgba(0,0,0,0.2)'}`,
+                                background: remember ? C.primary : 'transparent',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'all 0.15s',
+                              }}>
+                                {remember && (
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.onPrimary} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="20 6 9 17 4 12" />
                                   </svg>
-                                  使用已儲存的卡片
-                                </button>
-                              )}
-
-                              <div style={glassBox}>
-                                <div>
-                                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6b7280', marginBottom: 6 }}>卡號</label>
-                                  <div id="card-number" style={fieldStyle} />
-                                </div>
-                                <div style={{ display: 'flex', gap: 12 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6b7280', marginBottom: 6 }}>有效期限</label>
-                                    <div id="card-expiry" style={fieldStyle} />
-                                  </div>
-                                  <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6b7280', marginBottom: 6 }}>安全碼</label>
-                                    <div id="card-ccv" style={fieldStyle} />
-                                  </div>
-                                </div>
-
-                                {/* 記住此卡片：與卡號同框、壓成一行 */}
-                                <label
-                                  onClick={() => setRemember(r => !r)}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: 10,
-                                    borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14, marginTop: 2,
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  <div style={{
-                                    width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                                    border: `2px solid ${remember ? C.primary : 'rgba(0,0,0,0.2)'}`,
-                                    background: remember ? C.primary : 'transparent',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    transition: 'all 0.15s',
-                                  }}>
-                                    {remember && (
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.onPrimary} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                        <polyline points="20 6 9 17 4 12" />
-                                      </svg>
-                                    )}
-                                  </div>
-                                  <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>記住此卡片</span>
-                                  <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 'auto' }}>下次快速付款</span>
-                                </label>
+                                )}
                               </div>
+                              <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>記住此卡片</span>
+                              <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 'auto' }}>下次快速付款</span>
+                            </label>
+                          </div>
 
-                              {/* TapPay 安全性聲明 */}
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '0 4px', marginTop: 12 }}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }} aria-hidden>
-                                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                </svg>
-                                <p style={{ fontSize: 11, lineHeight: 1.6, color: '#9ca3af', margin: 0 }}>
-                                  本公司採用喬睿科技 TapPay 金流交易系統，消費者刷卡時直接在銀行端系統中交易，本公司不會留下您的信用卡資料，資料傳輸採用 SSL 2048bit 加密技術保護。
-                                </p>
-                              </div>
+                          {/* TapPay 安全性聲明 */}
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 12 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }} aria-hidden>
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                            <p style={{ fontSize: 11, lineHeight: 1.6, color: '#9ca3af', margin: 0 }}>
+                              本公司採用喬睿科技 TapPay 金流交易系統，消費者刷卡時直接在銀行端系統中交易，本公司不會留下您的信用卡資料，資料傳輸採用 SSL 2048bit 加密技術保護。
+                            </p>
+                          </div>
 
-                              {!sdkReady && (
-                                <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, marginTop: 10 }}>載入付款模組中…</p>
-                              )}
-                            </>
+                          {!sdkReady && (
+                            <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, marginTop: 10 }}>載入付款模組中…</p>
                           )}
                         </>
                       )}
-                    </div>
+                    </>
                   )}
                 </div>
-              )
-            })}
+              )}
+            </div>
+
+            {/* LINE Pay */}
+            <div>
+              <label
+                onClick={() => setPaymentMethod('LINE_PAY')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  background: lp ? C.light : '#fff',
+                  borderRadius: 14,
+                  border: `1.5px solid ${lp ? C.primary : 'rgba(0,0,0,0.07)'}`,
+                  padding: '14px 16px', cursor: 'pointer',
+                  transition: 'border-color 0.15s, background 0.15s',
+                }}
+              >
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  border: `2px solid ${lp ? C.primary : '#d1d5db'}`,
+                  background: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {lp && <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.primary }} />}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <LinePayIcon />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>LINE Pay</p>
+                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>使用 LINE Pay 付款</p>
+                </div>
+              </label>
+              {lp && (
+                <p style={{ fontSize: 12, color: '#f59e0b', margin: '8px 0 0 4px' }}>LINE Pay 即將推出，目前請改用信用卡付款</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -729,8 +847,8 @@ function CheckoutContent() {
           display: 'flex', flexDirection: 'column', gap: 8,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
-            <span>商品原價</span>
-            <span>NT${product.sellPrice.toLocaleString()}</span>
+            <span>{bundleMode ? `商品小計（${bundleQty} 張）` : '商品原價'}</span>
+            <span>NT${(bundleMode ? bundleSubtotal : product!.sellPrice).toLocaleString()}</span>
           </div>
           {discount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16a34a' }}>
@@ -767,7 +885,7 @@ function CheckoutContent() {
         <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 16 }}>
           <div>
             {discount > 0 && (
-              <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, textDecoration: 'line-through' }}>NT${product.sellPrice.toLocaleString()}</p>
+              <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, textDecoration: 'line-through' }}>NT${product!.sellPrice.toLocaleString()}</p>
             )}
             <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
               NT${displayPrice.toLocaleString()}
