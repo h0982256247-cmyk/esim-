@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/prisma'
-import { setRebateRate } from '@/lib/services/group'
 import { encrypt } from '@/lib/utils/crypto'
 
 // PATCH /api/groups/settings — 社群主更新讓利比例 / 基本設定

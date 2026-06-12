@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { OrderStatus, PaymentMethod } from '@prisma/client'
-import { validateCouponOwnership, validateCouponCombination, calculateFinalPrice, markCouponUsed } from './coupon'
+import { validateCouponOwnership, validateCouponCombination, calculateFinalPrice } from './coupon'
 import { getProductById } from './product'
 
 // ─── 訂單號生成 ───────────────────────────────────────────────────

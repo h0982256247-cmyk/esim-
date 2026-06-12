@@ -240,15 +240,6 @@ export async function validateCouponOwnership(
   }
 }
 
-// ─── 使用優惠券（結帳時呼叫，在 transaction 內）──────────────────
-
-export async function markCouponUsed(couponId: string, orderId: string) {
-  return prisma.coupon.update({
-    where: { id: couponId },
-    data: { usedAt: new Date(), usedOrderId: orderId },
-  })
-}
-
 // ─── Admin 發券 ───────────────────────────────────────────────────
 
 export interface BatchIssueCouponInput {

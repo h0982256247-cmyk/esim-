@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { prisma } from '@/lib/db/prisma'
 import { markOrderCompleted, markOrderEsimPending } from './order'
-import { notifyEsimReady, notifyEsimPending } from './notification'
+import { notifyEsimPending } from './notification'
 import { safeDecrypt } from '@/lib/utils/crypto'
 
 // ─── 世界移動 API 簽章 ────────────────────────────────────────────

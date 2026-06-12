@@ -131,17 +131,6 @@ export async function leaveGroup(userId: string): Promise<LeaveGroupResult> {
   return { ok: true, groupName: membership.group.name, expiredCoupons }
 }
 
-// ─── 社群主後台：設定讓利比例 ─────────────────────────────────────
-
-export async function setRebateRate(groupId: string, ownerId: string, rebateRate: number) {
-  if (rebateRate < 0 || rebateRate > 0.3) throw new Error('讓利比例須介於 0 ~ 0.30')
-
-  return prisma.group.update({
-    where: { id: groupId, ownerId }, // 確保只有群主可改
-    data: { rebateRate },
-  })
-}
-
 // ─── 平台後台管理員設定讓利（受 maxRebateRate 限制）─────────────────
 
 export async function adminSetRebateRate(

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
-import { getAllProductsAdmin, upsertProduct, batchCreateProducts, type CsvProductRow } from '@/lib/services/product'
+import { getAllProductsAdmin, upsertProduct } from '@/lib/services/product'
 
 // GET /api/admin/products?page=1&pageSize=100&q=日本
 export async function GET(req: NextRequest) {
