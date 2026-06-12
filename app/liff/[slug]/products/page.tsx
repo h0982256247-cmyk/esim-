@@ -48,14 +48,14 @@ function ProductsContent() {
   const [coupons, setCoupons] = useState<CouponItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Day filter state
-  const [dayFilter, setDayFilter] = useState<number>(0)  // 0 = inactive
-  const [pickerDays, setPickerDays] = useState<number>(1)
+  // Day filter state — 預設一律以 5 天為起點（無 5 天方案則 effect 內 fallback）
+  const [dayFilter, setDayFilter] = useState<number>(0)  // 0 = inactive，effect 內套用
+  const [pickerDays, setPickerDays] = useState<number>(0) // 0 = 待初始化
 
-  // Reset filter when country changes
+  // Reset filter when country changes，讓初始化 effect 重新依新國家挑 5（或最近值）
   useEffect(() => {
     setDayFilter(0)
-    setPickerDays(1)
+    setPickerDays(0)
   }, [selectedCountry])
 
   function dismissSetup() {
@@ -103,10 +103,17 @@ function ProductsContent() {
     return Array.from(set).sort((a, b) => a - b)
   }, [products])
 
-  // Initialize picker default to first available day after products load
+  // Initialize picker once products load: 預設 5 天，若該國無 5 天方案則 fallback 到最近值
   useEffect(() => {
-    if (availableDays.length > 0 && (pickerDays === 1 || !availableDays.includes(pickerDays))) {
-      setPickerDays(availableDays[0])
+    if (availableDays.length > 0 && pickerDays === 0) {
+      const DEFAULT_DAYS = 5
+      const chosen = availableDays.includes(DEFAULT_DAYS)
+        ? DEFAULT_DAYS
+        : [...availableDays].sort(
+            (a, b) => Math.abs(a - DEFAULT_DAYS) - Math.abs(b - DEFAULT_DAYS)
+          )[0]
+      setPickerDays(chosen)
+      setDayFilter(chosen)
     }
   }, [availableDays, pickerDays])
 
