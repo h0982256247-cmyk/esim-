@@ -201,9 +201,17 @@ function CheckoutContent() {
       try {
         const profile = liff ? await liff.getProfile().catch(() => null) : null
         const lineUid = profile?.userId ?? ''
-        const url = lineUid
-          ? `/api/liff/payment-config?lineUid=${encodeURIComponent(lineUid)}`
-          : '/api/liff/payment-config'
+        // 若走 /liff/<slug>/checkout 路由，從 pathname 抽出 slug 帶上，桌面測試
+        // （無 LINE 登入）也能讓後端 resolve 出正確 tenant 的 TapPay 設定。
+        const slugMatch = typeof window !== 'undefined'
+          ? window.location.pathname.match(/^\/liff\/([^/]+)/)
+          : null
+        const tenantSlug = slugMatch?.[1] ?? ''
+        const params = new URLSearchParams()
+        if (lineUid) params.set('lineUid', lineUid)
+        if (tenantSlug) params.set('tenantSlug', tenantSlug)
+        const qs = params.toString()
+        const url = qs ? `/api/liff/payment-config?${qs}` : '/api/liff/payment-config'
         const res = await fetch(url).then(r => r.json())
         tapPayConfigRef.current = res
       } catch { /* fallback handled server-side */ }

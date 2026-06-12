@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 import { safeDecrypt } from '@/lib/utils/crypto'
 import { SESSION_COOKIE } from '@/lib/auth/session'
 import { resolveTenantAdminIdFromToken } from '@/lib/auth/resolve-tenant'
+import { getTenantBySlug } from '@/lib/services/tenant'
 
 // GET /api/liff/payment-config[?lineUid=...]
 // Returns TapPay frontend SDK config for the user's tenant.
@@ -32,6 +33,16 @@ export async function GET(req: NextRequest) {
         select: { tenantAdminId: true },
       })
       tenantAdminId = user?.tenantAdminId ?? null
+    }
+  }
+
+  // 最後兜底：tenantSlug（桌面開發 / 未登入測試用，例如 /liff/bee/checkout
+  // 也能直接 resolve 出 Bee 的 TapPay 設定）
+  if (!tenantAdminId) {
+    const tenantSlug = req.nextUrl.searchParams.get('tenantSlug')
+    if (tenantSlug) {
+      const tenant = await getTenantBySlug(tenantSlug)
+      tenantAdminId = tenant?.id ?? null
     }
   }
 
