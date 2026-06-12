@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, Suspense } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useCachedData } from '@/hooks/useCachedData'
