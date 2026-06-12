@@ -106,15 +106,20 @@ async function getConfig(tenantAdminId?: string | null, gateway: string = 'tappa
   return { partnerKey, merchantId, baseUrl }
 }
 
-function build3dsBlock(resultUrl: TapPayChargeInput['resultUrl']) {
+// TapPay Pay by Prime 對 3DS 的正確 body 結構（官方 doc）：
+//   three_domain_secure: true        ← TOP-LEVEL boolean
+//   result_url: { frontend..., backend... }  ← TOP-LEVEL object
+// 過去寫成 nested three_domain_secure.{enabled, result_url} 是錯的，TapPay 回
+// 代碼 5「Wrong JSON format」，使用者看到「信用卡交易失敗」但其實是我們 body
+// 結構不對。https://docs.tappaysdk.com/tutorial/zh/back.html
+// export 出去讓 tests/tappay-3ds-body.test.ts 鎖死結構，避免下次又改回 nested。
+export function build3dsBlock(resultUrl: TapPayChargeInput['resultUrl']) {
   if (!resultUrl) return {}
   return {
-    three_domain_secure: {
-      enabled: true,
-      result_url: {
-        frontend_redirect_url: resultUrl.frontendRedirectUrl,
-        backend_notify_url: resultUrl.backendNotifyUrl,
-      },
+    three_domain_secure: true,
+    result_url: {
+      frontend_redirect_url: resultUrl.frontendRedirectUrl,
+      backend_notify_url: resultUrl.backendNotifyUrl,
     },
   }
 }
@@ -128,6 +133,7 @@ export async function tapPayCharge(input: TapPayChargeInput, tenantAdminId?: str
     merchant_id: merchantId,
     details: input.details,
     amount: input.amount,
+    currency: 'TWD',
     order_number: input.orderId,
     cardholder: input.cardholder,
     remember: input.remember ?? false,
