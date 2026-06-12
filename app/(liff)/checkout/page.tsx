@@ -1,12 +1,27 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Script from 'next/script'
 import { useTenantColors } from '@/components/liff/TenantContext'
+import { useLiff } from '@/components/liff/LiffProvider'
 import { findBestCouponCombo as _findBestCouponCombo } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import { useCart } from '@/components/liff/CartProvider'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
+
+declare global {
+  interface Window {
+    TPDirect: {
+      setupSDK: (appId: number, appKey: string, env: string) => void
+      card: {
+        setup: (config: object) => void
+        getPrime: (callback: (result: { status: number; card: { prime: string }; msg: string }) => void) => void
+        getTappayFieldsStatus: () => { canGetPrime: boolean }
+      }
+    }
+  }
+}
 
 type Product = {
   id: string
@@ -25,6 +40,13 @@ type Coupon = {
   type: string
   level: string
   discount: number
+  expiresAt: string | null
+}
+
+type SavedCard = {
+  lastFour: string
+  cardType: number
+  cardTypeLabel: string
   expiresAt: string | null
 }
 
@@ -65,6 +87,20 @@ function LinePayIcon() {
   )
 }
 
+function CardTypeBadge({ type }: { type: number }) {
+  const labels: Record<number, string> = { 1: 'VISA', 2: 'MC', 3: 'JCB', 4: 'UP', 5: 'AMEX' }
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: 36, height: 24, borderRadius: 4,
+      background: type === 1 ? '#1a1f71' : type === 2 ? '#eb001b' : '#006fba',
+      fontSize: 9, fontWeight: 800, color: '#fff', letterSpacing: '0.03em',
+    }}>
+      {labels[type] ?? 'CARD'}
+    </span>
+  )
+}
+
 export default function CheckoutPage() {
   return (
     <Suspense fallback={
@@ -84,6 +120,7 @@ function CheckoutContent() {
   const productId = searchParams.get('productId')
   const C = useTenantColors()
   const cart = useCart()
+  const { liff } = useLiff()
 
   const [product, setProduct] = useState<Product | null>(null)
   const [coupons, setCoupons] = useState<Coupon[]>([])
@@ -94,6 +131,17 @@ function CheckoutContent() {
   const [comboError, setComboError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // ── TapPay 信用卡（內嵌於本頁，按「確認付款」直接發動交易）──
+  const [savedCard, setSavedCard] = useState<SavedCard | null | undefined>(undefined)
+  const [useNewCard, setUseNewCard] = useState(false)
+  const [remember, setRemember] = useState(true)
+  const [sdkLoaded, setSdkLoaded] = useState(false)
+  const [sdkReady, setSdkReady] = useState(false)
+  const [canPay, setCanPay] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tapPayConfigRef = useRef<{ appId: number; appKey: string; env: string } | null>(null)
 
   useEffect(() => {
     if (!productId) return
@@ -117,6 +165,78 @@ function CheckoutContent() {
       }
     }).finally(() => setLoading(false))
   }, [productId])
+
+  // 載入已儲存卡片
+  useEffect(() => {
+    fetch('/api/payment/saved-card')
+      .then(r => r.json())
+      .then(d => setSavedCard(d.savedCard ?? null))
+      .catch(() => setSavedCard(null))
+  }, [])
+
+  // 沒有已儲存卡片 → 直接顯示輸入欄位
+  useEffect(() => {
+    if (savedCard === null) setUseNewCard(true)
+  }, [savedCard])
+
+  // 取得 TapPay 前端設定（app_id / app_key / env）
+  useEffect(() => {
+    async function fetchConfig() {
+      try {
+        const profile = liff ? await liff.getProfile().catch(() => null) : null
+        const lineUid = profile?.userId ?? ''
+        const url = lineUid
+          ? `/api/liff/payment-config?lineUid=${encodeURIComponent(lineUid)}`
+          : '/api/liff/payment-config'
+        const res = await fetch(url).then(r => r.json())
+        tapPayConfigRef.current = res
+      } catch { /* fallback handled server-side */ }
+    }
+    fetchConfig()
+  }, [liff])
+
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current)
+  }, [])
+
+  const showCardForm = useNewCard || savedCard === null
+
+  const initTapPay = () => {
+    const cfg = tapPayConfigRef.current
+    const appId = cfg?.appId ?? parseInt(process.env.NEXT_PUBLIC_TAPPAY_APP_ID ?? '0')
+    const appKey = cfg?.appKey ?? process.env.NEXT_PUBLIC_TAPPAY_APP_KEY ?? ''
+    const env = cfg?.env ?? (process.env.NEXT_PUBLIC_TAPPAY_ENV === 'production' ? 'production' : 'sandbox')
+
+    window.TPDirect.setupSDK(appId, appKey, env)
+    window.TPDirect.card.setup({
+      fields: {
+        number:         { element: '#card-number', placeholder: '**** **** **** ****' },
+        expirationDate: { element: '#card-expiry', placeholder: 'MM / YY' },
+        ccv:            { element: '#card-ccv',    placeholder: 'CVV' },
+      },
+      styles: {
+        input:    { color: '#374151', 'font-size': '16px' },
+        ':focus': { color: '#1a1a1a' },
+        '.valid':   { color: '#059669' },
+        '.invalid': { color: '#dc2626' },
+      },
+    })
+    setSdkReady(true)
+
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = setInterval(() => {
+      setCanPay(window.TPDirect.card.getTappayFieldsStatus().canGetPrime)
+    }, 500)
+  }
+
+  // SDK 載入完成 + 卡號欄位已渲染（在 DOM 中）時才初始化，避免 setup 找不到元素
+  useEffect(() => {
+    if (!sdkLoaded || loading || !product) return
+    if (paymentMethod !== 'CREDIT_CARD' || !showCardForm) return
+    if (sdkReady) return
+    initTapPay()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sdkLoaded, loading, product, paymentMethod, showCardForm, sdkReady])
 
   useEffect(() => {
     if (!product || selectedCouponIds.length === 0) {
@@ -145,30 +265,103 @@ function CheckoutContent() {
     )
   }
 
+  // 付款結果處理（3DS 導轉 / 成功 / 失敗共用）
+  const handlePayResult = (res: { requiresRedirect?: boolean; paymentUrl?: string; ok?: boolean; error?: string }, successHref: string) => {
+    if (res.requiresRedirect && res.paymentUrl) {
+      window.location.href = res.paymentUrl
+    } else if (res.ok) {
+      router.replace(successHref)
+    } else {
+      setErrorMsg(res.error ?? '付款失敗，請重試')
+      setSubmitting(false)
+    }
+  }
+
   const handleSubmit = async () => {
-    if (!product || !productId || comboError) return
+    if (!product || !productId || comboError || submitting) return
+    // 信用卡 + 新卡：必須 SDK 就緒且卡片資訊有效
+    if (paymentMethod === 'CREDIT_CARD' && useNewCard && (!canPay || !sdkReady)) return
+
     setSubmitting(true)
+    setErrorMsg(null)
 
-    const orderRes = await fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productId, couponIds: selectedCouponIds, paymentMethod }),
-    }).then(r => r.json())
+    // 1. 建立訂單
+    let orderRes: { ok?: boolean; orderId?: string; error?: string }
+    try {
+      orderRes = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, couponIds: selectedCouponIds, paymentMethod }),
+      }).then(r => r.json())
+    } catch {
+      setErrorMsg('網路錯誤，請重試')
+      setSubmitting(false)
+      return
+    }
 
-    if (!orderRes.ok) {
-      alert(orderRes.error ?? '建立訂單失敗')
+    if (!orderRes.ok || !orderRes.orderId) {
+      setErrorMsg(orderRes.error ?? '建立訂單失敗')
       setSubmitting(false)
       return
     }
 
     const orderId = orderRes.orderId
-    // Order placed → remove from cart so the user doesn't see it lingering after returning
+    // 訂單已建立 → 從購物車移除，避免返回後還看到
     cart.remove(productId)
-    if (paymentMethod === 'CREDIT_CARD') {
-      router.push(`/checkout/pay?orderId=${orderId}&amount=${finalPrice ?? product.sellPrice}`)
-    } else {
+
+    // 2. LINE Pay 仍走原本的付款頁流程
+    if (paymentMethod === 'LINE_PAY') {
       router.push(`/checkout/pay?orderId=${orderId}&amount=${finalPrice ?? product.sellPrice}&method=LINE_PAY`)
+      return
     }
+
+    // 3. 信用卡：直接呼叫 TapPay 發動交易
+    const successHref = `/orders/${orderId}`
+    const returnUrl = `${window.location.origin}${successHref}`
+
+    // 3a. 使用已儲存卡片（代扣）
+    if (!useNewCard && savedCard) {
+      try {
+        const res = await fetch('/api/payment/tappay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, useToken: true, returnUrl }),
+        }).then(r => r.json())
+        handlePayResult(res, successHref)
+      } catch {
+        setErrorMsg('網路錯誤，請重試')
+        setSubmitting(false)
+      }
+      return
+    }
+
+    // 3b. 新卡：取得 prime 後送出
+    window.TPDirect.card.getPrime(async result => {
+      if (result.status !== 0) {
+        setErrorMsg(result.msg ?? '取得卡片資訊失敗')
+        setSubmitting(false)
+        return
+      }
+      try {
+        const res = await fetch('/api/payment/tappay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, prime: result.card.prime, remember, returnUrl }),
+        }).then(r => r.json())
+        handlePayResult(res, successHref)
+      } catch {
+        setErrorMsg('網路錯誤，請重試')
+        setSubmitting(false)
+      }
+    })
+  }
+
+  const fieldStyle: React.CSSProperties = {
+    border: '1.5px solid rgba(0,0,0,0.1)',
+    borderRadius: 12,
+    padding: '14px 16px',
+    background: '#fafafa',
+    minHeight: 48,
   }
 
   if (loading || !product) {
@@ -188,8 +381,18 @@ function CheckoutContent() {
     { key: 'LINE_PAY' as const,   label: 'LINE Pay', sublabel: '使用 LINE Pay 付款', Icon: LinePayIcon },
   ]
 
+  // 按鈕可否點擊：信用卡新卡需 SDK 就緒且卡片有效；已儲存卡片或 LINE Pay 則直接可送出
+  const cardReady = paymentMethod !== 'CREDIT_CARD'
+    ? true
+    : (!useNewCard && savedCard)
+      ? true
+      : canPay && sdkReady
+  const canSubmit = !submitting && !comboError && cardReady
+
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 120 }}>
+      <Script src="https://js.tappaysdk.com/tappay.js" onReady={() => setSdkLoaded(true)} />
+
       {/* Header */}
       <div style={{ padding: '20px 20px 8px' }}>
         <button
@@ -373,6 +576,133 @@ function CheckoutContent() {
               )
             })}
           </div>
+
+          {/* 信用卡：內嵌 TapPay 刷卡欄位 */}
+          {paymentMethod === 'CREDIT_CARD' && (
+            <div style={{ marginTop: 10 }}>
+              {savedCard === undefined ? (
+                <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>載入付款模組中…</div>
+              ) : (
+                <>
+                  {/* 已儲存卡片 */}
+                  {savedCard && !useNewCard && (
+                    <div style={{
+                      background: '#fff', borderRadius: 14, border: `1.5px solid ${C.primary}`,
+                      padding: '14px 16px',
+                      boxShadow: `0 0 0 3px ${C.primary}18`,
+                      display: 'flex', alignItems: 'center', gap: 14,
+                    }}>
+                      <CardTypeBadge type={savedCard.cardType} />
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>
+                          {savedCard.cardTypeLabel} **** {savedCard.lastFour}
+                        </p>
+                        {savedCard.expiresAt && (
+                          <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>有效期限 {savedCard.expiresAt}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setUseNewCard(true)}
+                        style={{
+                          background: 'none', border: '1px solid rgba(0,0,0,0.07)',
+                          borderRadius: 8, padding: '6px 12px',
+                          fontSize: 12, fontWeight: 600, color: '#4b5563', cursor: 'pointer',
+                        }}
+                      >
+                        更換
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 新卡輸入 */}
+                  {showCardForm && (
+                    <>
+                      {savedCard && useNewCard && (
+                        <button
+                          onClick={() => setUseNewCard(false)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            background: 'none', border: 'none', padding: '0 0 10px',
+                            fontSize: 13, color: C.primary, cursor: 'pointer', fontWeight: 600,
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="15 18 9 12 15 6" />
+                          </svg>
+                          使用已儲存的卡片
+                        </button>
+                      )}
+
+                      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(0,0,0,0.07)', padding: '18px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>卡號</label>
+                          <div id="card-number" style={fieldStyle} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>有效期限</label>
+                            <div id="card-expiry" style={fieldStyle} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>安全碼（後三碼）</label>
+                            <div id="card-ccv" style={fieldStyle} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* TapPay 安全性聲明 */}
+                      <div style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 9,
+                        padding: '12px 14px', marginTop: 12,
+                        background: '#f8fafc', borderRadius: 12, border: '1px solid rgba(0,0,0,0.07)',
+                      }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden>
+                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                        <p style={{ fontSize: 11.5, lineHeight: 1.65, color: '#94a3b8', margin: 0 }}>
+                          本公司採用喬睿科技 TapPay 金流交易系統，消費者刷卡時直接在銀行端系統中交易，本公司不會留下您的信用卡資料，以保障你的權益，資料傳輸過程採用嚴密的 SSL 2048bit 加密技術保護。
+                        </p>
+                      </div>
+
+                      {/* 記住卡片 */}
+                      <label style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '12px 16px', marginTop: 12,
+                        background: '#fff', borderRadius: 12, border: '1px solid rgba(0,0,0,0.07)',
+                        cursor: 'pointer',
+                      }}>
+                        <div
+                          onClick={() => setRemember(r => !r)}
+                          style={{
+                            width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                            border: `2px solid ${remember ? C.primary : 'rgba(0,0,0,0.2)'}`,
+                            background: remember ? C.primary : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {remember && (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.onPrimary} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>記住此卡片</p>
+                          <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>下次付款可快速選用</p>
+                        </div>
+                      </label>
+
+                      {!sdkReady && (
+                        <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, marginTop: 10 }}>載入付款模組中…</p>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Price summary */}
@@ -401,6 +731,12 @@ function CheckoutContent() {
             <span style={{ color: C.primary, fontSize: 18, letterSpacing: '-0.02em' }}>NT${displayPrice.toLocaleString()}</span>
           </div>
         </div>
+
+        {errorMsg && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '12px 16px' }}>
+            <p style={{ fontSize: 13, color: '#dc2626', margin: 0 }}>{errorMsg}</p>
+          </div>
+        )}
       </div>
 
       {/* Sticky bottom bar */}
@@ -426,21 +762,21 @@ function CheckoutContent() {
           </div>
           <button
             onClick={handleSubmit}
-            disabled={submitting || !!comboError}
+            disabled={!canSubmit}
             style={{
               flex: 1,
-              background: submitting || comboError ? '#94a3b8' : C.primary,
+              background: !canSubmit ? '#94a3b8' : C.primary,
               color: C.onPrimary,
               border: 'none', borderRadius: 100,
               padding: '15px 24px',
               fontSize: 16, fontWeight: 800,
-              cursor: submitting || comboError ? 'not-allowed' : 'pointer',
+              cursor: !canSubmit ? 'not-allowed' : 'pointer',
               letterSpacing: '0.02em',
               transition: 'background 0.15s',
               whiteSpace: 'nowrap',
             }}
           >
-            {submitting ? '處理中…' : '確認付款 →'}
+            {submitting ? '付款中…' : '確認付款 →'}
           </button>
         </div>
       </div>
