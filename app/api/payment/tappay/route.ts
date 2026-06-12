@@ -13,6 +13,8 @@ import {
   isOrderExpired,
 } from '@/lib/services/order'
 import { tapPayCharge, tapPayChargeByToken, tapPayChargeLinePay } from '@/lib/services/tappay'
+import { buildLiffOrderUrl } from '@/lib/utils/liff-url'
+import { getTenantById } from '@/lib/services/tenant'
 import { triggerEsimActivation } from '@/lib/services/esim'
 import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
@@ -141,9 +143,19 @@ export async function POST(req: NextRequest) {
   }
 
   const origin = req.nextUrl.origin
-  const frontendRedirectUrl = returnUrl ?? (isBundle
-    ? `${origin}/orders?bundleId=${bundleId}`
-    : `${origin}/orders/${anchor.id}`)
+  // returnUrl 由前端拼好（含 /liff/<slug>）一律優先用；前端漏送時退回 server
+  // 端依該訂單 owner 的 tenantSlug 重新組路徑，避免落到已刪除的 (liff) 群組
+  // 舊 URL 變成 404。
+  let frontendRedirectUrl = returnUrl
+  if (!frontendRedirectUrl) {
+    const tenant = user.tenantAdminId ? await getTenantById(user.tenantAdminId) : null
+    frontendRedirectUrl = buildLiffOrderUrl({
+      origin,
+      tenantSlug: tenant?.slug ?? null,
+      orderIdOrBundleId: isBundle ? bundleId! : anchor.id,
+      isBundle,
+    })
+  }
   const backendNotifyUrl = `${origin}/api/payment/tappay/notify`
   const resultUrl = { frontendRedirectUrl, backendNotifyUrl }
 
