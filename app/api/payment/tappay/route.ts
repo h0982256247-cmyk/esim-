@@ -12,7 +12,7 @@ import {
   markOrderCancelled,
   isOrderExpired,
 } from '@/lib/services/order'
-import { tapPayCharge, tapPayChargeByToken } from '@/lib/services/tappay'
+import { tapPayCharge, tapPayChargeByToken, tapPayChargeLinePay } from '@/lib/services/tappay'
 import { triggerEsimActivation } from '@/lib/services/esim'
 import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
@@ -23,9 +23,10 @@ import { decrypt } from '@/lib/utils/crypto'
 import { OrderStatus } from '@prisma/client'
 
 // POST /api/payment/tappay
-// Body: { orderId?, bundleId?, prime?, useToken?, remember?, returnUrl? }
+// Body: { orderId?, bundleId?, prime?, useToken?, remember?, returnUrl?, method? }
 //   - Single order: pass orderId
 //   - Multi-item bundle: pass bundleId (charges sum of all bundle orders once)
+//   - method='LINE_PAY' + prime: LINE Pay 導轉付款（一律回傳 paymentUrl）
 export async function POST(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -36,14 +37,17 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { orderId, bundleId, prime, useToken, remember, returnUrl } = body as {
+  const { orderId, bundleId, prime, useToken, remember, returnUrl, method } = body as {
     orderId?: string
     bundleId?: string
     prime?: string
     useToken?: boolean
     remember?: boolean
     returnUrl?: string
+    method?: 'CREDIT_CARD' | 'LINE_PAY'
   }
+
+  const isLinePay = method === 'LINE_PAY'
 
   if (!orderId && !bundleId) {
     return NextResponse.json({ error: 'orderId 或 bundleId 必填' }, { status: 400 })
@@ -51,7 +55,9 @@ export async function POST(req: NextRequest) {
   if (orderId && bundleId) {
     return NextResponse.json({ error: 'orderId 與 bundleId 不能同時傳入' }, { status: 400 })
   }
-  if (!prime && !useToken) {
+  if (isLinePay) {
+    if (!prime) return NextResponse.json({ error: 'LINE Pay 需要 prime' }, { status: 400 })
+  } else if (!prime && !useToken) {
     return NextResponse.json({ error: 'prime 或 useToken 擇一必填' }, { status: 400 })
   }
 
@@ -143,7 +149,19 @@ export async function POST(req: NextRequest) {
     : anchor.productName
 
   let charge
-  if (useToken) {
+  if (isLinePay) {
+    charge = await tapPayChargeLinePay(
+      {
+        prime: prime!,
+        orderId: tapPayOrderId,
+        amount,
+        details: detailsLabel,
+        cardholder,
+        resultUrl,
+      },
+      user.tenantAdminId,
+    )
+  } else if (useToken) {
     const saved = await prisma.savedCard.findUnique({ where: { userId: session.userId } })
     if (!saved) {
       if (isBundle) await markBundleFailed(bundleId!)
@@ -183,7 +201,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: charge.message }, { status: 402 })
   }
 
-  // 3DS redirect — confirmation arrives via webhook
+  // 導轉型付款（信用卡 3DS / LINE Pay）— 付款結果由 webhook 非同步通知
   if (charge.paymentUrl) {
     return NextResponse.json({
       requiresRedirect: true,

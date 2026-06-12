@@ -57,7 +57,10 @@ async function getConfig(tenantAdminId?: string | null, gateway: string = 'tappa
   }
 
   const partnerKey = process.env.TAPPAY_PARTNER_KEY
-  const merchantId = process.env.TAPPAY_MERCHANT_ID
+  // LINE Pay 在 TapPay 後台通常是獨立的 merchant_id；未設定時退回信用卡用的 merchant_id
+  const merchantId = gateway === 'tappay_linepay'
+    ? (process.env.TAPPAY_LINEPAY_MERCHANT_ID ?? process.env.TAPPAY_MERCHANT_ID)
+    : process.env.TAPPAY_MERCHANT_ID
   const env = process.env.TAPPAY_ENV === 'production' ? 'production' : 'sandbox'
 
   if (!partnerKey || !merchantId) throw new Error('TapPay credentials not set')
@@ -205,6 +208,75 @@ export async function tapPayRefund(
 }
 
 // ─── LINE Pay ──────────────────────────────────────────────────────
-// TapPay LINE Pay 也是 Pay by Prime 流程，前端取得 prime 後同一支 API 收款
-// 差異：prime 由 LINE Pay SDK 產生，merchant_id 可能不同
-// 此處共用 tapPayCharge，merchant_id 由環境變數 TAPPAY_LINEPAY_MERCHANT_ID 覆蓋
+// TapPay LINE Pay 同樣走 Pay by Prime，但：
+//   1. prime 由前端 TPDirect.linePay.getPrime 產生
+//   2. result_url 放在「最外層」（與信用卡 3DS 的 three_domain_secure 包法不同）
+//   3. merchant_id 通常是 TapPay 後台另開的 LINE Pay 商店代號（gateway = tappay_linepay）
+//   4. 一定會回傳 payment_url，前端需導轉至該網址讓使用者於 LINE 完成授權，
+//      實際付款結果由 backend_notify_url（/api/payment/tappay/notify）非同步通知。
+
+export interface TapPayLinePayChargeInput {
+  prime: string
+  orderId: string
+  amount: number
+  details: string
+  cardholder: {
+    phone_number: string
+    name: string
+    email: string
+  }
+  resultUrl: {
+    frontendRedirectUrl: string
+    backendNotifyUrl: string
+  }
+}
+
+export async function tapPayChargeLinePay(
+  input: TapPayLinePayChargeInput,
+  tenantAdminId?: string | null,
+): Promise<TapPayChargeResult> {
+  const { partnerKey, merchantId, baseUrl } = await getConfig(tenantAdminId, 'tappay_linepay')
+
+  const body = {
+    prime: input.prime,
+    partner_key: partnerKey,
+    merchant_id: merchantId,
+    details: input.details,
+    amount: input.amount,
+    currency: 'TWD',
+    order_number: input.orderId,
+    cardholder: input.cardholder,
+    // LINE Pay 為導轉型付款，result_url 放最外層
+    result_url: {
+      frontend_redirect_url: input.resultUrl.frontendRedirectUrl,
+      backend_notify_url: input.resultUrl.backendNotifyUrl,
+    },
+  }
+
+  const res = await fetch(`${baseUrl}/payment/pay-by-prime`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': partnerKey,
+    },
+    body: JSON.stringify(body),
+  })
+
+  const data = await res.json()
+
+  if (data.status !== 0) {
+    return { ok: false, message: data.msg ?? 'LINE Pay 付款失敗' }
+  }
+
+  // LINE Pay 必定回傳 payment_url；若沒有代表設定有誤
+  if (!data.payment_url) {
+    return { ok: false, message: 'LINE Pay 未回傳付款連結，請確認商店設定' }
+  }
+
+  return {
+    ok: true,
+    recTradeId: data.rec_trade_id ?? '',
+    bankTransactionId: data.bank_transaction_id ?? '',
+    paymentUrl: data.payment_url as string,
+  }
+}

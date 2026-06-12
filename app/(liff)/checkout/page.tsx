@@ -19,6 +19,10 @@ declare global {
         getPrime: (callback: (result: { status: number; card: { prime: string }; msg: string }) => void) => void
         getTappayFieldsStatus: () => { canGetPrime: boolean }
       }
+      linePay: {
+        getPrime: (callback: (result: { status?: number; prime: string; msg?: string }) => void) => void
+      }
+      redirect: (url: string) => void
     }
   }
 }
@@ -150,6 +154,7 @@ function CheckoutContent() {
   const [canPay, setCanPay] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tapPayConfigRef = useRef<{ appId: number; appKey: string; env: string } | null>(null)
+  const setupDoneRef = useRef(false)
 
   // 單張：載入商品 + 優惠券；多張：直接用購物車內容，不需打 API
   useEffect(() => {
@@ -211,13 +216,19 @@ function CheckoutContent() {
 
   const showCardForm = useNewCard || savedCard === null
 
-  const initTapPay = () => {
+  // setupSDK 只需呼叫一次（信用卡與 LINE Pay 共用）
+  const ensureSetup = () => {
+    if (setupDoneRef.current) return
     const cfg = tapPayConfigRef.current
     const appId = cfg?.appId ?? parseInt(process.env.NEXT_PUBLIC_TAPPAY_APP_ID ?? '0')
     const appKey = cfg?.appKey ?? process.env.NEXT_PUBLIC_TAPPAY_APP_KEY ?? ''
     const env = cfg?.env ?? (process.env.NEXT_PUBLIC_TAPPAY_ENV === 'production' ? 'production' : 'sandbox')
-
     window.TPDirect.setupSDK(appId, appKey, env)
+    setupDoneRef.current = true
+  }
+
+  const initTapPay = () => {
+    ensureSetup()
     window.TPDirect.card.setup({
       fields: {
         number:         { element: '#card-number', placeholder: '**** **** **** ****' },
@@ -248,6 +259,13 @@ function CheckoutContent() {
     initTapPay()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sdkLoaded, bundleMode, cart.hydrated, loading, product, paymentMethod, showCardForm, sdkReady])
+
+  // LINE Pay：只需 setupSDK（不需 card.setup），備妥後即可取得 LINE Pay prime
+  useEffect(() => {
+    if (!sdkLoaded || paymentMethod !== 'LINE_PAY') return
+    ensureSetup()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sdkLoaded, paymentMethod])
 
   // 優惠券試算（僅單張模式）
   useEffect(() => {
@@ -292,12 +310,13 @@ function CheckoutContent() {
 
   const handleSubmit = async () => {
     if (submitting) return
-    if (paymentMethod === 'LINE_PAY') {
-      setErrorMsg('LINE Pay 即將推出，請改用信用卡付款')
+    // 信用卡 + 新卡：必須 SDK 就緒且卡片資訊有效
+    if (paymentMethod === 'CREDIT_CARD' && useNewCard && (!canPay || !sdkReady)) return
+    // LINE Pay：SDK 需已載入才能取得 prime
+    if (paymentMethod === 'LINE_PAY' && !sdkLoaded) {
+      setErrorMsg('付款模組載入中，請稍候再試')
       return
     }
-    // 信用卡 + 新卡：必須 SDK 就緒且卡片資訊有效
-    if (useNewCard && (!canPay || !sdkReady)) return
 
     setSubmitting(true)
     setErrorMsg(null)
@@ -314,7 +333,7 @@ function CheckoutContent() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            paymentMethod: 'CREDIT_CARD',
+            paymentMethod,
             lines: cart.items.map(i => ({ productId: i.productId, qty: i.qty })),
           }),
         })
@@ -340,7 +359,7 @@ function CheckoutContent() {
         orderRes = await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ productId, couponIds: selectedCouponIds, paymentMethod: 'CREDIT_CARD' }),
+          body: JSON.stringify({ productId, couponIds: selectedCouponIds, paymentMethod }),
         }).then(r => r.json())
       } catch {
         setErrorMsg('網路錯誤，請重試')
@@ -355,6 +374,36 @@ function CheckoutContent() {
       cart.remove(productId)
       successHref = `/orders/${orderRes.orderId}`
       chargeBody = { orderId: orderRes.orderId, returnUrl: `${window.location.origin}${successHref}` }
+    }
+
+    // ── LINE Pay：取得 LINE Pay prime → 後端建立交易 → 導轉至 LINE 授權頁 ──
+    if (paymentMethod === 'LINE_PAY') {
+      ensureSetup()
+      if (typeof window.TPDirect?.linePay?.getPrime !== 'function') {
+        setErrorMsg('LINE Pay 模組尚未就緒，請稍候再試')
+        setSubmitting(false)
+        return
+      }
+      window.TPDirect.linePay.getPrime(async result => {
+        if (!result?.prime) {
+          setErrorMsg(result?.msg ?? '取得 LINE Pay 付款資訊失敗')
+          setSubmitting(false)
+          return
+        }
+        try {
+          const res = await fetch('/api/payment/tappay', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...chargeBody, prime: result.prime, method: 'LINE_PAY' }),
+          }).then(r => r.json())
+          // LINE Pay 一律導轉（handlePayResult 會處理 requiresRedirect）
+          handlePayResult(res, successHref)
+        } catch {
+          setErrorMsg('網路錯誤，請重試')
+          setSubmitting(false)
+        }
+      })
+      return
     }
 
     // ── 呼叫 TapPay 發動交易（單張 / 多張共用）──
@@ -441,9 +490,12 @@ function CheckoutContent() {
   const cc = paymentMethod === 'CREDIT_CARD'
   const lp = paymentMethod === 'LINE_PAY'
 
-  // 按鈕可否點擊：信用卡新卡需 SDK 就緒且卡片有效；已儲存卡片可直接送出；LINE Pay 也可點（點了給提示）
-  const cardReady = !cc ? true : (!useNewCard && savedCard) ? true : (canPay && sdkReady)
-  const canSubmit = !submitting && (bundleMode ? true : !comboError) && cardReady
+  // 按鈕可否點擊：
+  //   信用卡新卡 → SDK 就緒且卡片有效；已儲存卡片 → 可直接送出；LINE Pay → SDK 已載入即可
+  const methodReady = cc
+    ? ((!useNewCard && savedCard) ? true : (canPay && sdkReady))
+    : (lp ? sdkLoaded : false)
+  const canSubmit = !submitting && (bundleMode ? true : !comboError) && methodReady
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 120 }}>
@@ -833,7 +885,9 @@ function CheckoutContent() {
                 </div>
               </label>
               {lp && (
-                <p style={{ fontSize: 12, color: '#f59e0b', margin: '8px 0 0 4px' }}>LINE Pay 即將推出，目前請改用信用卡付款</p>
+                <p style={{ fontSize: 12, color: '#94a3b8', margin: '8px 0 0 4px' }}>
+                  點「確認付款」後將導向 LINE Pay 完成授權
+                </p>
               )}
             </div>
           </div>
