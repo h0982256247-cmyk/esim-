@@ -28,6 +28,9 @@ type OrderDetail = {
   createdAt: string
   userId: string
   currentOwnerId: string
+  bundleId: string | null
+  failureReason: string | null
+  cancelReason: string | null
   esimRcode: string | null
   esimQrcode: string | null
   esimLpa: string | null
@@ -579,8 +582,37 @@ export default function OrderDetailPage() {
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 16, padding: '18px 20px', marginBottom: 12 }}>
           <p style={{ fontSize: 14, fontWeight: 700, color: '#475569', margin: '0 0 4px' }}>訂單已取消</p>
           <p style={{ fontSize: 13, color: '#94a3b8', margin: 0, lineHeight: 1.6 }}>
-            此訂單因超過 30 分鐘未完成付款，已自動取消。如需購買請重新下單。
+            {order.cancelReason ?? '此訂單已取消，如需購買請重新下單。'}
           </p>
+        </div>
+      )}
+
+      {/* 付款失敗（LINE Pay 取消、信用卡被拒、3DS 認證失敗等） */}
+      {order.status === 'FAILED' && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 16, padding: '18px 20px', marginBottom: 12 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#b91c1c', margin: '0 0 6px' }}>
+            付款未完成
+          </p>
+          <p style={{ fontSize: 13, color: '#dc2626', margin: '0 0 14px', lineHeight: 1.6 }}>
+            {order.failureReason ?? '此訂單付款失敗，請重新下單再試一次。'}
+          </p>
+          <button
+            onClick={() => router.push(`${base}/products`)}
+            style={{
+              width: '100%',
+              padding: '12px 0',
+              border: 'none',
+              borderRadius: 12,
+              background: C.primary,
+              color: C.onPrimary,
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'opacity 0.15s',
+            }}
+          >
+            重新下單
+          </button>
         </div>
       )}
 

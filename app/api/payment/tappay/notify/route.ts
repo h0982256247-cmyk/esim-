@@ -14,6 +14,7 @@ import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
 import { notifyOrderPaid } from '@/lib/services/notification'
 import { tapPayRefund } from '@/lib/services/tappay'
+import { mapTapPayFailureReason } from '@/lib/services/tappay-failure-reason'
 import { encrypt } from '@/lib/utils/crypto'
 import { OrderStatus } from '@prisma/client'
 
@@ -95,8 +96,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (status !== 0) {
-    if (bundleId) await markBundleFailed(bundleId)
-    else await markOrderFailed(order.id)
+    // 把 TapPay 回傳的 status/msg 翻成中文存進 Order.failureReason，
+    // 前端在訂單詳情頁顯示。LINE Pay 924 = 使用者主動取消，會顯示「您已取消付款」。
+    const reason = mapTapPayFailureReason({
+      status,
+      msg: (body.msg as string | undefined) ?? null,
+    })
+    if (bundleId) await markBundleFailed(bundleId, reason)
+    else await markOrderFailed(order.id, reason)
     return NextResponse.json({ message: 'Payment failed' })
   }
 

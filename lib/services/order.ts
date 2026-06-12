@@ -337,13 +337,16 @@ export async function markBundlePaid(bundleId: string, tapPayRecTradeId: string)
   return orders
 }
 
-export async function markOrderFailed(orderId: string) {
+export async function markOrderFailed(orderId: string, reason?: string) {
   // 一併歸還訂單創建時佔用的優惠券（usedAt/usedOrderId 還原）
   // 保留原 expiresAt，因為券「沒實際被消耗」，不需要寬限期
   return prisma.$transaction(async tx => {
     await tx.order.update({
       where: { id: orderId },
-      data: { status: OrderStatus.FAILED },
+      data: {
+        status: OrderStatus.FAILED,
+        ...(reason ? { failureReason: reason } : {}),
+      },
     })
     await tx.coupon.updateMany({
       where: { usedOrderId: orderId },
@@ -352,11 +355,14 @@ export async function markOrderFailed(orderId: string) {
   })
 }
 
-export async function markBundleFailed(bundleId: string) {
+export async function markBundleFailed(bundleId: string, reason?: string) {
   return prisma.$transaction(async tx => {
     await tx.order.updateMany({
       where: { bundleId, status: { in: [OrderStatus.PENDING, OrderStatus.PROCESSING] } },
-      data: { status: OrderStatus.FAILED },
+      data: {
+        status: OrderStatus.FAILED,
+        ...(reason ? { failureReason: reason } : {}),
+      },
     })
     // Bundle orders are coupon-less in v1, but keep this for forward compat.
     const orders = await tx.order.findMany({ where: { bundleId }, select: { id: true } })
@@ -367,11 +373,14 @@ export async function markBundleFailed(bundleId: string) {
   })
 }
 
-export async function markOrderCancelled(orderId: string) {
+export async function markOrderCancelled(orderId: string, reason?: string) {
   return prisma.$transaction(async tx => {
     await tx.order.update({
       where: { id: orderId },
-      data: { status: OrderStatus.CANCELLED },
+      data: {
+        status: OrderStatus.CANCELLED,
+        ...(reason ? { cancelReason: reason } : {}),
+      },
     })
     await tx.coupon.updateMany({
       where: { usedOrderId: orderId },
@@ -407,7 +416,7 @@ export async function cancelExpiredPendingOrders(): Promise<number> {
     const ids = expired.map(o => o.id)
     await tx.order.updateMany({
       where: { id: { in: ids } },
-      data: { status: OrderStatus.CANCELLED },
+      data: { status: OrderStatus.CANCELLED, cancelReason: '逾時自動取消（30 分鐘未完成付款）' },
     })
     await tx.coupon.updateMany({
       where: { usedOrderId: { in: ids } },
@@ -462,6 +471,9 @@ export async function getUserOrders(userId: string) {
       createdAt: true,
       userId: true,
       currentOwnerId: true,
+      bundleId: true,
+      failureReason: true,
+      cancelReason: true,
       esimRcode: true,
       esimQrcode: true,
       redeemedAt: true,
@@ -510,6 +522,9 @@ export async function getOrderByIdForUser(orderId: string, userId: string) {
       updatedAt: true,
       userId: true,
       currentOwnerId: true,
+      bundleId: true,
+      failureReason: true,
+      cancelReason: true,
       esimRcode: true,
       esimQrcode: true,
       esimLpa: true,

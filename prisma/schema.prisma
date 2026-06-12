@@ -274,6 +274,12 @@ model Order {
   retryCount      Int         @default(0) @map("retry_count")
   lastRetryAt     DateTime?   @map("last_retry_at")
 
+  // 失敗 / 取消原因（給前端顯示）
+  // - failureReason：FAILED 時的人類可讀說明，例如「您已取消付款」、「銀行拒絕（代碼 30040）」
+  // - cancelReason ：CANCELLED 時的說明，例如「逾時自動取消」、「使用者手動取消」
+  failureReason   String?     @map("failure_reason")
+  cancelReason    String?     @map("cancel_reason")
+
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 

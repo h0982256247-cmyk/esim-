@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useMemo, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { useTenantColors } from '@/components/liff/TenantContext'
@@ -19,6 +19,9 @@ type Order = {
   createdAt: string
   userId: string
   currentOwnerId: string
+  bundleId: string | null
+  failureReason: string | null
+  cancelReason: string | null
   esimRcode: string | null
   esimQrcode: string | null
   redeemedAt: string | null
@@ -99,6 +102,8 @@ export default function OrdersPage() {
   const base = useLiffBase()
   const C = useTenantColors()
   const { liff } = useLiff()
+  const searchParams = useSearchParams()
+  const bundleIdParam = searchParams.get('bundleId')
 
   const [actioning, setActioning] = useState<string | null>(null)   // 哪個 order 正在處理
   const [showHistory, setShowHistory] = useState(false)
@@ -138,6 +143,23 @@ export default function OrdersPage() {
   const now = new Date()
   const couponsAvailable = coupons.filter(c => !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now))
   const couponsHistory   = coupons.filter(c =>  c.usedAt || (c.expiresAt && new Date(c.expiresAt) <= now))
+
+  // 從結帳頁帶 ?bundleId=… 進來時，依該 bundle 的狀態做兩件事：
+  //   1. 自動切到正確的 tab（全失敗 → 歷史；其他 → 預設）
+  //   2. 全失敗顯示頂部紅色 banner + 重新下單 CTA
+  const bundleOrders = useMemo(
+    () => bundleIdParam ? orders.filter(o => o.bundleId === bundleIdParam) : [],
+    [orders, bundleIdParam],
+  )
+  const bundleAllFailed = bundleOrders.length > 0 && bundleOrders.every(
+    o => ['FAILED', 'CANCELLED', 'REFUNDED'].includes(o.status),
+  )
+  const bundleFirstFailureReason = bundleOrders.find(o => o.failureReason)?.failureReason ?? null
+
+  useEffect(() => {
+    // bundle 全失敗 → 自動展開「歷史」tab，使用者一進來就看到失敗的訂單而不必再點一下
+    if (bundleAllFailed) setShowHistory(true)
+  }, [bundleAllFailed])
 
   // ─── Handlers ────────────────────────────────────────────────
 
@@ -219,6 +241,35 @@ export default function OrdersPage() {
       <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: '0 0 20px', letterSpacing: '-0.02em' }}>
         我的 eSIM
       </h1>
+
+      {/* Bundle 結帳後若整組失敗 → 頂部紅 banner + 重新下單 CTA。
+          使用者從 LINE Pay 取消／3DS 失敗回來不必再點「歷史」找訂單。 */}
+      {bundleAllFailed && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 16, padding: '18px 20px', marginBottom: 20 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#b91c1c', margin: '0 0 6px' }}>
+            付款未完成
+          </p>
+          <p style={{ fontSize: 13, color: '#dc2626', margin: '0 0 14px', lineHeight: 1.6 }}>
+            {bundleFirstFailureReason ?? '本次結帳的訂單未完成付款，請重新下單再試一次。'}
+          </p>
+          <button
+            onClick={() => router.push(`${base}/products`)}
+            style={{
+              width: '100%',
+              padding: '12px 0',
+              border: 'none',
+              borderRadius: 12,
+              background: C.primary,
+              color: C.onPrimary,
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            重新下單
+          </button>
+        </div>
+      )}
 
       {!hasAnything && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '48px 0' }}>
