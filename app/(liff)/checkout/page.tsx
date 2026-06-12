@@ -214,6 +214,22 @@ function CheckoutContent() {
     if (pollRef.current) clearInterval(pollRef.current)
   }, [])
 
+  // next/script 的 onReady/onLoad 在 LINE webview（尤其腳本已被快取、元件重新掛載）
+  // 常常不觸發，導致 sdkLoaded 永遠是 false：信用卡欄位不初始化、LINE Pay 的
+  // 確認付款鈕也一直 disabled。改用輪詢直接偵測 window.TPDirect 是否就緒，
+  // 與 onReady 互為備援，先到者勝。
+  useEffect(() => {
+    if (sdkLoaded) return
+    if (typeof window !== 'undefined' && window.TPDirect) { setSdkLoaded(true); return }
+    const t = setInterval(() => {
+      if (typeof window !== 'undefined' && window.TPDirect) {
+        setSdkLoaded(true)
+        clearInterval(t)
+      }
+    }, 300)
+    return () => clearInterval(t)
+  }, [sdkLoaded])
+
   const showCardForm = useNewCard || savedCard === null
 
   // setupSDK 只需呼叫一次（信用卡與 LINE Pay 共用）
@@ -499,7 +515,12 @@ function CheckoutContent() {
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 120 }}>
-      <Script src="https://js.tappaysdk.com/tappay.js" onReady={() => setSdkLoaded(true)} />
+      <Script
+        src="https://js.tappaysdk.com/tappay.js"
+        strategy="afterInteractive"
+        onReady={() => setSdkLoaded(true)}
+        onLoad={() => setSdkLoaded(true)}
+      />
 
       {/* Header */}
       <div style={{ padding: '20px 20px 8px' }}>
