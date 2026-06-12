@@ -5,6 +5,10 @@ import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
 import { type CouponItem } from '@/lib/utils/coupon-combo'
+import { pickInitialDay } from '@/lib/utils/products-day-default'
+import { peekCache, setCache, productsCacheKey } from '@/hooks/useCachedData'
+
+type ProductsApiResponse = { countries?: Country[]; products?: Product[] }
 import { GlobeIllustration } from '@/components/liff/LiffIllustrations'
 import { PRODUCTS_TEMPLATES } from '@/components/liff/templates/registry'
 import SetupModal from '@/components/liff/SetupModal'
@@ -65,16 +69,27 @@ function ProductsContent() {
     router.replace(qs ? `?${qs}` : `/liff/${slug}/products`)
   }
 
-  // 只在初次 ready 時 fetch 一次，後續切國家純前端 filter
+  // 初次 ready 時抓資料，後續切國家純前端 filter；
+  // 跨頁共用 cache 已有 hit（主頁預熱寫入）就先 setState 立即顯示，背景刷新拿最新
   useEffect(() => {
     if (!isReady) return
     let cancelled = false
+
+    const cached = peekCache<ProductsApiResponse>(productsCacheKey())
+    if (cached) {
+      setCountries(cached.countries ?? [])
+      setAllProducts(cached.products ?? [])
+      setLoading(false)
+    }
+
     async function load() {
       const [prodData, couponData] = await Promise.all([
         fetch('/api/products').then(r => r.json()),
         fetch('/api/coupons').then(r => r.json()).catch(() => ({ coupons: [] })),
       ])
       if (cancelled) return
+      // 拿到最新 → 同時更新狀態與快取（用 setCache 強制覆蓋，prefetchCache 會跳過已存在的 key）
+      setCache(productsCacheKey(), prodData)
       setCountries(prodData.countries ?? [])
       setAllProducts(prodData.products ?? [])
       const now = new Date()
@@ -103,15 +118,11 @@ function ProductsContent() {
     return Array.from(set).sort((a, b) => a - b)
   }, [products])
 
-  // Initialize picker once products load: 預設 5 天，若該國無 5 天方案則 fallback 到最近值
+  // Initialize picker once products load — see pickInitialDay (預設 5、fallback 最近值)
   useEffect(() => {
-    if (availableDays.length > 0 && pickerDays === 0) {
-      const DEFAULT_DAYS = 5
-      const chosen = availableDays.includes(DEFAULT_DAYS)
-        ? DEFAULT_DAYS
-        : [...availableDays].sort(
-            (a, b) => Math.abs(a - DEFAULT_DAYS) - Math.abs(b - DEFAULT_DAYS)
-          )[0]
+    if (pickerDays !== 0) return
+    const chosen = pickInitialDay(availableDays)
+    if (chosen !== null) {
       setPickerDays(chosen)
       setDayFilter(chosen)
     }

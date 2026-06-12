@@ -35,7 +35,11 @@ export async function POST(req: NextRequest) {
 
   const { user, isNewUser } = await findOrCreateUser(lineInfo, tenantAdminId)
   const profileComplete = isProfileComplete(user)
-  const sessionToken = await createSession({ userId: user.id, lineUid: user.lineUid })
+  const sessionToken = await createSession({
+    userId: user.id,
+    lineUid: user.lineUid,
+    tenantAdminId: user.tenantAdminId,
+  })
 
   const res = NextResponse.json({
     user: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl, profileComplete },

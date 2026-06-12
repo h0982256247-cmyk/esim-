@@ -1,27 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getActiveProducts, getAvailableCountries } from '@/lib/services/product'
-import { prisma } from '@/lib/db/prisma'
-import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
+import { SESSION_COOKIE } from '@/lib/auth/session'
+import { resolveTenantAdminIdFromToken } from '@/lib/auth/resolve-tenant'
 
 // GET /api/products?country=JP
 export async function GET(req: NextRequest) {
   const countryCode = req.nextUrl.searchParams.get('country') ?? undefined
-
-  let tenantAdminId: string | null = null
-
   const token = req.cookies.get(SESSION_COOKIE)?.value
-  if (token) {
-    try {
-      const session = await verifySession(token)
-      const user = await prisma.user.findUnique({
-        where: { id: session.userId },
-        select: { tenantAdminId: true },
-      })
-      tenantAdminId = user?.tenantAdminId ?? null
-    } catch {
-      // unauthenticated — show all products
-    }
-  }
+  const tenantAdminId = await resolveTenantAdminIdFromToken(token)
 
   const [products, countries] = await Promise.all([
     getActiveProducts(countryCode, tenantAdminId),

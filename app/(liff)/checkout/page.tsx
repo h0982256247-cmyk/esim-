@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useTapPaySdkLoader } from '@/hooks/useTapPaySdkLoader'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { findBestCouponCombo as _findBestCouponCombo } from '@/lib/utils/coupon-combo'
@@ -148,7 +149,7 @@ function CheckoutContent() {
   const [savedCard, setSavedCard] = useState<SavedCard | null | undefined>(undefined)
   const [useNewCard, setUseNewCard] = useState(false)
   const [remember, setRemember] = useState(true)
-  const [sdkLoaded, setSdkLoaded] = useState(false)
+  const sdkLoaded = useTapPaySdkLoader()
   const [sdkReady, setSdkReady] = useState(false)
   const [canPay, setCanPay] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -211,36 +212,6 @@ function CheckoutContent() {
 
   useEffect(() => () => {
     if (pollRef.current) clearInterval(pollRef.current)
-  }, [])
-
-  // 在 LINE webview 用 next/script 經常吃掉 onLoad/onReady，且我們的 <Script>
-  // 寫在 !pageReady 的早退之後，使用者點進來時 script 還沒掛到 DOM。改成
-  // 元件一掛載就 imperatively 把 <script> 直接 append 到 document.head，
-  // 並用輪詢偵測 window.TPDirect，無論頁面是否在 spinner 都會載入。
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (window.TPDirect) { setSdkLoaded(true); return }
-
-    const SDK_SRC = 'https://js.tappaysdk.com/tappay.js'
-    let script = document.querySelector<HTMLScriptElement>('script[data-tappay-sdk="1"]')
-    if (!script) {
-      script = document.createElement('script')
-      script.src = SDK_SRC
-      script.async = true
-      script.dataset.tappaySdk = '1'
-      script.onload = () => {
-        if (window.TPDirect) setSdkLoaded(true)
-      }
-      document.head.appendChild(script)
-    }
-
-    const t = setInterval(() => {
-      if (window.TPDirect) {
-        setSdkLoaded(true)
-        clearInterval(t)
-      }
-    }, 300)
-    return () => clearInterval(t)
   }, [])
 
   const showCardForm = useNewCard || savedCard === null

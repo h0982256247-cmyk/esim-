@@ -6,6 +6,7 @@ import { useLiff } from '@/components/liff/LiffProvider'
 import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { hasSeenSplash, markSplashSeen } from '@/lib/utils/splash'
+import { prefetchCache, productsCacheKey } from '@/hooks/useCachedData'
 
 type Phase = 'splash' | 'modal' | 'redirecting'
 
@@ -31,6 +32,12 @@ export default function LiffHome() {
     }
 
     checkProfile()
+
+    // 背景預熱 /api/products，使用者下一步多半會點「商城」分頁；
+    // useCachedData 跨頁同 key 即可直接吃 cache，免再等網路。
+    prefetchCache(productsCacheKey(), () =>
+      fetch('/api/products').then(r => r.json())
+    )
   }, [isReady])
 
   // 2. 過場邏輯：首次進入最少顯示 0.5s；本 session 已看過則直接決策、跳過過場

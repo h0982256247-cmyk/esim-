@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
-import { useCachedData } from '@/hooks/useCachedData'
+import { useCachedData, productsCacheKey } from '@/hooks/useCachedData'
 import PageSkeleton from '@/components/liff/PageSkeleton'
 import { GlobeIllustration, BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
@@ -12,6 +12,7 @@ import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
 import { useCart } from '@/components/liff/CartProvider'
 import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR } from '@/lib/utils/product-display'
+import { pickInitialDay } from '@/lib/utils/products-day-default'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 
 type Country = {
@@ -177,7 +178,7 @@ function ProductsContent() {
   const tenant = useTenant()
 
   // isReady 前不抓；country 改變時 key 改變→自動重抓。切回看過的國家會直接顯示快取。
-  const productKey = isReady ? `products:${selectedCountry ?? ''}` : null
+  const productKey = isReady ? productsCacheKey(selectedCountry) : null
   const { data, loading } = useCachedData(productKey, async () => {
     const qs = selectedCountry ? `?country=${encodeURIComponent(selectedCountry)}` : ''
     const [prodData, couponData] = await Promise.all([
@@ -328,15 +329,11 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
   const [dayFilter, setDayFilter] = useState<number>(0)
   const [pickerDays, setPickerDays] = useState<number>(0)
 
-  // Init picker once products load: default to 5 days, fallback to nearest available
+  // Init picker once products load: default to 5 days (fallback nearest) — see pickInitialDay
   useEffect(() => {
-    if (availableDays.length > 0 && pickerDays === 0) {
-      const DEFAULT_DAYS = 5
-      const chosen = availableDays.includes(DEFAULT_DAYS)
-        ? DEFAULT_DAYS
-        : [...availableDays].sort(
-            (a, b) => Math.abs(a - DEFAULT_DAYS) - Math.abs(b - DEFAULT_DAYS)
-          )[0]
+    if (pickerDays !== 0) return
+    const chosen = pickInitialDay(availableDays)
+    if (chosen !== null) {
       setPickerDays(chosen)
       setDayFilter(chosen)
     }

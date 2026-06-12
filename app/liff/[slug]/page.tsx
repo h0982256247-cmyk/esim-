@@ -8,6 +8,7 @@ import { HOME_TEMPLATES } from '@/components/liff/templates/registry'
 import SetupModal from '@/components/liff/SetupModal'
 import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { hasSeenSplash, markSplashSeen } from '@/lib/utils/splash'
+import { setCache, productsCacheKey } from '@/hooks/useCachedData'
 import type { HomeCountry } from '@/components/liff/templates/home/types'
 
 type Product = { countryCode: string; sellPrice: number }
@@ -53,6 +54,8 @@ export default function LiffHomePage() {
       } catch {}
       try {
         const data = await fetch('/api/products').then(r => r.json())
+        // 寫入跨頁共用 cache，slug products 頁掛載時可直接吃這份、不必再打 API
+        setCache(productsCacheKey(), data)
         const products: Product[] = data.products ?? []
         const minMap: Record<string, number> = {}
         for (const p of products) {

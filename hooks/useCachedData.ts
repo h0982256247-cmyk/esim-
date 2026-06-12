@@ -16,6 +16,36 @@ export function invalidateCache(key: string) {
   cache.delete(key)
 }
 
+// 同步讀取某 key 的快取（不會觸發任何抓取）。給尚未轉成 useCachedData
+// 但仍想在跨頁時避免重打 API 的 component 用：自己的 useEffect 內先
+// peek，有 hit 直接 setState 並 skip fetch。
+export function peekCache<T>(key: string): T | undefined {
+  return cache.get(key)?.data as T | undefined
+}
+
+// 同步把資料寫進快取（覆蓋既有 entry）。給拿到新版資料、想讓其他頁面
+// 立刻吃到的場景用。prefetchCache 會 skip 已有 entry，不適合用來「更新」。
+export function setCache<T>(key: string, data: T): void {
+  cache.set(key, { data, ts: Date.now() })
+}
+
+// 在使用者尚未進入需要該資料的頁面前，背景把 loader 跑一次寫進快取。
+// 用途：主頁掛載時預熱 /api/products，使用者按下「商城」時 useCachedData
+// 立刻有 cached entry 可顯示，不必等網路往返。重複呼叫（已有 cache）會 skip。
+// 失敗靜默忽略，下一次真正的 useCachedData 會自己重抓。
+export function prefetchCache<T>(key: string, loader: () => Promise<T>): void {
+  if (cache.has(key)) return
+  loader()
+    .then(result => { cache.set(key, { data: result, ts: Date.now() }) })
+    .catch(() => { /* swallow — the real consumer will retry */ })
+}
+
+// 共用 cache key。主頁預熱與 products 頁取讀都引用同一個常數，避免 key 漂移。
+export const PRODUCTS_CACHE_KEY_PREFIX = 'products:'
+export function productsCacheKey(countryCode?: string | null): string {
+  return `${PRODUCTS_CACHE_KEY_PREFIX}${countryCode ?? ''}`
+}
+
 export interface CachedDataResult<T> {
   data: T | undefined
   loading: boolean       // 首次載入、且無快取可顯示時為 true（此時顯示骨架）

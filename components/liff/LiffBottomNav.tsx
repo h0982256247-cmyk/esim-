@@ -102,6 +102,20 @@ export default function LiffBottomNav() {
       borderTop: '1px solid rgba(0,0,0,0.08)',
       boxShadow: '0 -2px 12px rgba(0,0,0,0.06)',
     }}>
+      {/* 純 CSS 的 :active 回饋：iOS LINE webview tap 後立刻看到縮放/變色，
+          補上 next/router 路由切換之間那 100~300ms 的「按了沒反應」感。
+          touch-action: manipulation 順便砍掉 iOS 預設 300ms tap delay。 */}
+      <style>{`
+        .liff-nav-tab {
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+          transition: transform 120ms ease, opacity 120ms ease;
+        }
+        .liff-nav-tab:active {
+          transform: scale(0.92);
+          opacity: 0.65;
+        }
+      `}</style>
       <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {tabs.map(({ path, label, Icon, isRoot }) => {
           const href = isRoot ? (base || '/') : `${base}/${path}`
@@ -113,6 +127,7 @@ export default function LiffBottomNav() {
             <Link
               key={path}
               href={href}
+              className="liff-nav-tab"
               style={{
                 flex: 1,
                 display: 'flex',
