@@ -12,7 +12,7 @@ import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
 import { useCart } from '@/components/liff/CartProvider'
 import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR } from '@/lib/utils/product-display'
-import { pickInitialDay } from '@/lib/utils/products-day-default'
+import { pickInitialDay, PRODUCTS_DEFAULT_DAYS } from '@/lib/utils/products-day-default'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 
 type Country = {
@@ -325,13 +325,14 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
   const minDay = availableDays[0] ?? 1
   const maxDay = availableDays[availableDays.length - 1] ?? 30
 
-  // 0 = no filter (show all)
-  const [dayFilter, setDayFilter] = useState<number>(0)
-  const [pickerDays, setPickerDays] = useState<number>(0)
+  // 初始直接給 5 — 第一個 paint 就是篩選後狀態，避免「340 → 17」閃爍
+  const [dayFilter, setDayFilter] = useState<number>(PRODUCTS_DEFAULT_DAYS)
+  const [pickerDays, setPickerDays] = useState<number>(PRODUCTS_DEFAULT_DAYS)
 
-  // Init picker once products load: default to 5 days (fallback nearest) — see pickInitialDay
+  // Fallback：該國家沒有 5 天方案時，改抓最接近 5 的可用天數
   useEffect(() => {
-    if (pickerDays !== 0) return
+    if (availableDays.length === 0) return
+    if (availableDays.includes(pickerDays)) return
     const chosen = pickInitialDay(availableDays)
     if (chosen !== null) {
       setPickerDays(chosen)

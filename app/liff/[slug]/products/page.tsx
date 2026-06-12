@@ -5,7 +5,7 @@ import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
 import { type CouponItem } from '@/lib/utils/coupon-combo'
-import { pickInitialDay } from '@/lib/utils/products-day-default'
+import { pickInitialDay, PRODUCTS_DEFAULT_DAYS } from '@/lib/utils/products-day-default'
 import { peekCache, setCache, productsCacheKey } from '@/hooks/useCachedData'
 
 type ProductsApiResponse = { countries?: Country[]; products?: Product[] }
@@ -52,14 +52,14 @@ function ProductsContent() {
   const [coupons, setCoupons] = useState<CouponItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Day filter state — 預設一律以 5 天為起點（無 5 天方案則 effect 內 fallback）
-  const [dayFilter, setDayFilter] = useState<number>(0)  // 0 = inactive，effect 內套用
-  const [pickerDays, setPickerDays] = useState<number>(0) // 0 = 待初始化
+  // Day filter state — 初始直接給 5，避免「340 → 17」閃爍（從 0 跳到 5 那一瞬間）
+  const [dayFilter, setDayFilter] = useState<number>(PRODUCTS_DEFAULT_DAYS)
+  const [pickerDays, setPickerDays] = useState<number>(PRODUCTS_DEFAULT_DAYS)
 
-  // Reset filter when country changes，讓初始化 effect 重新依新國家挑 5（或最近值）
+  // 切國家時重設回 5（不重置成 0，避免又出現一次閃爍）
   useEffect(() => {
-    setDayFilter(0)
-    setPickerDays(0)
+    setDayFilter(PRODUCTS_DEFAULT_DAYS)
+    setPickerDays(PRODUCTS_DEFAULT_DAYS)
   }, [selectedCountry])
 
   function dismissSetup() {
@@ -118,9 +118,10 @@ function ProductsContent() {
     return Array.from(set).sort((a, b) => a - b)
   }, [products])
 
-  // Initialize picker once products load — see pickInitialDay (預設 5、fallback 最近值)
+  // Fallback：該國家沒有 5 天方案時，改抓最接近 5 的可用天數
   useEffect(() => {
-    if (pickerDays !== 0) return
+    if (availableDays.length === 0) return
+    if (availableDays.includes(pickerDays)) return
     const chosen = pickInitialDay(availableDays)
     if (chosen !== null) {
       setPickerDays(chosen)
