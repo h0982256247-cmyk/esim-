@@ -9,13 +9,23 @@
 // 舊版 (liff) 已整批移除，所有 LIFF 流程都走 /liff/<slug>/...，
 // middleware 會把 /products /orders 之類沒帶 slug 的舊深連結 302 到這裡。
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
+// Next.js 16 要求 useSearchParams() 被 Suspense 包起來，否則 prerender 會炸。
+// 包一層讓 ?from=<舊路徑> 在 fallback 時也能正確 hydrate。
 export default function HomeLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <HomeLoginInner />
+    </Suspense>
+  )
+}
+
+function HomeLoginInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  // middleware redirect 後會帶 ?from=<舊路徑>，方便我們顯示「您剛被導離 /xxx」
+  // proxy redirect 後會帶 ?from=<舊路徑>，方便我們顯示「您剛被導離 /xxx」
   const from = searchParams.get('from')
 
   const [email, setEmail]         = useState('')

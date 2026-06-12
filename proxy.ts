@@ -23,11 +23,38 @@ const PUBLIC_API = [
 const isPlatformRoute = (p: string) =>
   p.startsWith('/api/platform/') || p.startsWith('/api/admin/')
 
-export async function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl
+// 舊版 (liff) 群組路徑（已刪除）的 deep link 全部 302 redirect 到主網域
+// 登入頁，附 ?from=<原路徑> 顯示「您剛從 X 被導離」提示。LIFF 一律走
+// /liff/<slug>/...，所有租戶設定（金流、發票、eSIM）跟著 slug。group-admin
+// 也已搬到 /liff/<slug>/group-admin，舊 bookmark 走這條 redirect。
+const OLD_LIFF_PATHS = [
+  '/products',
+  '/orders',
+  '/checkout',
+  '/profile',
+  '/coupons',
+  '/group',
+  '/support',
+  '/gift',
+  '/group-admin',
+]
 
-  // 只保護 /api/* 路由（LIFF 頁面由 client 端處理）
-  if (!pathname.startsWith('/api/')) return NextResponse.next()
+export async function proxy(req: NextRequest) {
+  const { pathname, search } = req.nextUrl
+
+  // 1) 非 API 路徑 → 檢查是否為舊 LIFF deep link，命中就 redirect 到登入頁
+  if (!pathname.startsWith('/api/')) {
+    const hit = OLD_LIFF_PATHS.some(
+      p => pathname === p || pathname.startsWith(`${p}/`)
+    )
+    if (hit) {
+      const url = req.nextUrl.clone()
+      url.pathname = '/'
+      url.searchParams.set('from', pathname + (search ?? ''))
+      return NextResponse.redirect(url, 302)
+    }
+    return NextResponse.next()
+  }
 
   // 白名單放行
   if (PUBLIC_API.some(p => pathname.startsWith(p))) return NextResponse.next()
@@ -60,5 +87,10 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*'],
+  // 兩個職責：API auth gate + 舊 LIFF URL redirect。
+  // 排除 _next 內部、靜態資源、liff、platform 路徑；其餘讓 proxy 跑、
+  // function 內部依 pathname.startsWith('/api/') 分流。
+  matcher: [
+    '/((?!_next/|liff/|platform/|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)).*)',
+  ],
 }
