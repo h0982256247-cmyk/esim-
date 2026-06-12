@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useTenantColors } from '@/components/liff/TenantContext'
+import PageSkeleton from '@/components/liff/PageSkeleton'
 
 type GroupInfo  = { id: string; name: string; description: string | null; status: string; inviteCode: string }
 type Membership = { group: { id: string; name: string; description: string | null }; joinedAt: string }
@@ -165,12 +166,7 @@ export default function GroupPage() {
     else setApplyMsg({ ok: false, text: r.error })
   }
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  )
+  if (loading) return <PageSkeleton rows={4} />
 
   const inputStyle: React.CSSProperties = {
     width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 14,

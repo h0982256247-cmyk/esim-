@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { CouponIllustration } from '@/components/liff/LiffIllustrations'
 import { useTenantColors } from '@/components/liff/TenantContext'
+import { useCachedData } from '@/hooks/useCachedData'
+import PageSkeleton from '@/components/liff/PageSkeleton'
 
 type Coupon = {
   id: string
@@ -44,28 +46,20 @@ function discountFold(d: number) {
 
 export default function CouponsPage() {
   const C = useTenantColors()
-  const [coupons, setCoupons] = useState<Coupon[]>([])
-  const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'available' | 'used'>('available')
 
-  useEffect(() => {
-    fetch('/api/coupons')
-      .then(r => r.json())
-      .then(d => setCoupons(d.coupons ?? []))
-      .finally(() => setLoading(false))
-  }, [])
+  const { data, loading } = useCachedData('coupons', async () => {
+    const d = await fetch('/api/coupons').then(r => r.json())
+    return { coupons: (d.coupons ?? []) as Coupon[] }
+  })
+  const coupons = data?.coupons ?? []
 
   const now = new Date()
   const available = coupons.filter(c => !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now))
   const used = coupons.filter(c => c.usedAt || (c.expiresAt && new Date(c.expiresAt) <= now))
   const list = tab === 'available' ? available : used
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  )
+  if (loading) return <PageSkeleton rows={4} />
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96 }}>

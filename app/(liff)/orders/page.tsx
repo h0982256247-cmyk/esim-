@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { useTenantColors } from '@/components/liff/TenantContext'
+import { useCachedData } from '@/hooks/useCachedData'
+import PageSkeleton from '@/components/liff/PageSkeleton'
 import { EmptyOrdersIllustration, CouponIllustration } from '@/components/liff/LiffIllustrations'
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -98,23 +100,18 @@ export default function OrdersPage() {
   const C = useTenantColors()
   const { liff } = useLiff()
 
-  const [orders, setOrders] = useState<Order[]>([])
-  const [coupons, setCoupons] = useState<Coupon[]>([])
-  const [loading, setLoading] = useState(true)
   const [actioning, setActioning] = useState<string | null>(null)   // 哪個 order 正在處理
   const [showHistory, setShowHistory] = useState(false)
 
-  const load = () => {
-    return Promise.all([
+  const { data, loading, refresh } = useCachedData('orders', async () => {
+    const [o, c] = await Promise.all([
       fetch('/api/orders').then(r => r.json()),
       fetch('/api/coupons').then(r => r.json()),
-    ]).then(([o, c]) => {
-      setOrders(o.orders ?? [])
-      setCoupons(c.coupons ?? [])
-    })
-  }
-
-  useEffect(() => { load().finally(() => setLoading(false)) }, [])
+    ])
+    return { orders: (o.orders ?? []) as Order[], coupons: (c.coupons ?? []) as Coupon[] }
+  })
+  const orders = data?.orders ?? []
+  const coupons = data?.coupons ?? []
 
   // 分桶
   const buckets = useMemo(() => {
@@ -204,7 +201,7 @@ export default function OrdersPage() {
       }
 
       await liff.shareTargetPicker([flex])
-      await load()
+      await refresh()
     } catch (err) {
       alert(err instanceof Error ? err.message : '分享失敗')
     }
@@ -213,12 +210,7 @@ export default function OrdersPage() {
 
   // ─── Render ──────────────────────────────────────────────────
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  )
+  if (loading) return <PageSkeleton rows={4} />
 
   const hasAnything = orders.length > 0 || coupons.length > 0
 

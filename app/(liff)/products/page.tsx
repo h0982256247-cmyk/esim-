@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState, Suspense } from 'react'
+import { useMemo, useState, Suspense } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
+import { useCachedData } from '@/hooks/useCachedData'
+import PageSkeleton from '@/components/liff/PageSkeleton'
 import { GlobeIllustration, BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
 import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
@@ -170,14 +172,32 @@ function ProductsContent() {
   const slug = params?.slug ?? ''
   const selectedCountry = searchParams.get('country')
   const showSetup = searchParams.get('setup') === '1'
-  const { liff, isReady } = useLiff()
+  const { isReady } = useLiff()
   const C = useTenantColors()
   const tenant = useTenant()
 
-  const [countries, setCountries] = useState<Country[]>([])
-  const [products, setProducts] = useState<Product[]>([])
-  const [coupons, setCoupons] = useState<CouponItem[]>([])
-  const [loading, setLoading] = useState(true)
+  // isReady 前不抓；country 改變時 key 改變→自動重抓。切回看過的國家會直接顯示快取。
+  const productKey = isReady ? `products:${selectedCountry ?? ''}` : null
+  const { data, loading } = useCachedData(productKey, async () => {
+    const qs = selectedCountry ? `?country=${encodeURIComponent(selectedCountry)}` : ''
+    const [prodData, couponData] = await Promise.all([
+      fetch(`/api/products${qs}`).then(r => r.json()),
+      fetch('/api/coupons').then(r => r.json()).catch(() => ({ coupons: [] })),
+    ])
+    return {
+      countries: (prodData.countries ?? []) as Country[],
+      products: (prodData.products ?? []) as Product[],
+      couponsRaw: (couponData.coupons ?? []) as (CouponItem & { usedAt?: string | null; expiresAt?: string | null })[],
+    }
+  })
+  const countries = data?.countries ?? []
+  const products = data?.products ?? []
+  const coupons = useMemo<CouponItem[]>(() => {
+    const now = new Date()
+    return (data?.couponsRaw ?? [])
+      .filter(c => !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now))
+      .map(c => ({ id: c.id, discount: c.discount }))
+  }, [data])
 
   function dismissSetup() {
     const next = new URLSearchParams(searchParams.toString())
@@ -186,34 +206,7 @@ function ProductsContent() {
     router.replace(qs ? `?${qs}` : (slug ? `/liff/${slug}/products` : '/products'))
   }
 
-  useEffect(() => {
-    if (!isReady) return
-    async function load() {
-      let lineUid: string | undefined
-      try { if (liff) lineUid = (await liff.getProfile()).userId } catch {}
-      const params = new URLSearchParams()
-      if (selectedCountry) params.set('country', selectedCountry)
-      if (lineUid) params.set('lineUid', lineUid)
-      const [prodData, couponData] = await Promise.all([
-        fetch(`/api/products${params.toString() ? `?${params}` : ''}`).then(r => r.json()),
-        fetch('/api/coupons').then(r => r.json()).catch(() => ({ coupons: [] })),
-      ])
-      setCountries(prodData.countries ?? [])
-      setProducts(prodData.products ?? [])
-      const now = new Date()
-      setCoupons(
-        (couponData.coupons ?? [])
-          .filter((c: CouponItem & { usedAt?: string | null; expiresAt?: string | null }) =>
-            !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now)
-          )
-          .map((c: CouponItem) => ({ id: c.id, discount: c.discount }))
-      )
-      setLoading(false)
-    }
-    load()
-  }, [selectedCountry, isReady, liff])
-
-  if (loading) return <Spinner />
+  if (loading) return <PageSkeleton rows={5} />
 
   // ── 國家選擇畫面 (Step 1) ──
   if (!selectedCountry) {

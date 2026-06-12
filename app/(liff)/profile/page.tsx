@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { useTenantColors } from '@/components/liff/TenantContext'
+import { useCachedData } from '@/hooks/useCachedData'
+import PageSkeleton from '@/components/liff/PageSkeleton'
 
 type UserInfo = {
   id: string
@@ -68,24 +69,15 @@ export default function ProfilePage() {
   const router = useRouter()
   const base = useLiffBase()
   const C = useTenantColors()
-  const [user, setUser] = useState<UserInfo | null>(null)
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d?.user) setUser({ ...d.user, ownedGroup: d.ownedGroup ?? null, membership: d.membership ?? null })
-      })
-      .finally(() => setLoading(false))
-  }, [])
+  const { data, loading } = useCachedData('profile', async () => {
+    const d = await fetch('/api/auth/me').then(r => r.ok ? r.json() : null)
+    if (!d?.user) return { user: null as UserInfo | null }
+    return { user: { ...d.user, ownedGroup: d.ownedGroup ?? null, membership: d.membership ?? null } as UserInfo }
+  })
+  const user = data?.user ?? null
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-      <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  )
+  if (loading) return <PageSkeleton rows={4} />
   if (!user) return null
 
   const isGroupOwner = user.ownedGroup?.status === 'APPROVED'
