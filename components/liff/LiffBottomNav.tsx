@@ -55,6 +55,10 @@ function IconAdmin({ size = 20 }: { size?: number }) {
 
 const ADMIN_PATH = 'group-admin'
 
+// 這些頁面有自己的底部操作列（確認付款／送出等），底部分頁導覽會疊在按鈕上、
+// 把按鈕蓋住（看起來像破圖／按不到），所以在這些流程中隱藏分頁導覽。
+const HIDE_ON = ['/checkout', '/profile/setup', '/login', '/gift/']
+
 type TabDef = { path: string; label: string; Icon: React.FC<{ size?: number }>; ownerOnly?: boolean; isRoot?: boolean }
 
 const TABS: TabDef[] = [
@@ -87,6 +91,9 @@ export default function LiffBottomNav() {
   }, [])
 
   const tabs = isGroupOwner ? [...TABS, ADMIN_TAB] : TABS
+
+  // 結帳／付款等流程隱藏底部分頁導覽，避免蓋住頁面自己的操作按鈕
+  if (HIDE_ON.some(p => pathname.includes(p))) return null
 
   return (
     <div style={{
