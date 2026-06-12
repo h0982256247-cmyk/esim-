@@ -82,6 +82,37 @@ export default function UserDetailPage() {
 
   useEffect(() => { load() }, [load])
 
+  // 後台一鍵升級為社群主：跳過自助申請流程，直接建出 APPROVED 狀態的社群、
+  // 發 GROUP_OWNER 7 折券、推 LINE 通知。
+  const [promoting, setPromoting] = useState(false)
+  const promoteToOwner = async () => {
+    if (!user || promoting) return
+    const name = window.prompt(`請輸入社群名稱（將作為 ${user.displayName} 的社群名）：`)
+    if (!name || !name.trim()) return
+    if (!window.confirm(
+      `確認將「${user.displayName}」升級為社群主？\n\n` +
+      `將建立社群「${name.trim()}」並核准、發 7 折社群主券、推 LINE 通知。`
+    )) return
+    setPromoting(true)
+    try {
+      const r = await fetch(`/api/platform/users/${id}/promote-to-owner`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      }).then(x => x.json())
+      if (!r.ok) {
+        alert(r.error ?? '升級失敗')
+        return
+      }
+      alert(`✅ 已升級為社群主\n邀請碼：${r.group.inviteCode}`)
+      await load()
+    } catch {
+      alert('網路錯誤，請稍候再試')
+    } finally {
+      setPromoting(false)
+    }
+  }
+
   if (loading) return (
     <div className="flex justify-center py-16">
       <div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -111,6 +142,16 @@ export default function UserDetailPage() {
         )}
         {!profileComplete && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-500 font-semibold">資料未填</span>
+        )}
+        {/* 一鍵升級按鈕：只在非社群主時顯示 */}
+        {!isOwner && (
+          <button
+            onClick={promoteToOwner}
+            disabled={promoting}
+            className="ml-auto text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-60"
+          >
+            {promoting ? '升級中…' : '⬆️ 升級為社群主'}
+          </button>
         )}
       </div>
 

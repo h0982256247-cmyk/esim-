@@ -32,6 +32,57 @@ export async function applyGroup(input: ApplyGroupInput) {
   })
 }
 
+// 後台一鍵升級：跳過自助申請與審核兩步，直接從會員建出 APPROVED 狀態
+// 的社群、並 fan-out 跟 approveGroup 一樣的副作用（發 GROUP_OWNER 7 折券、
+// 推 LINE 通知）。
+//
+// 拋錯：
+//   - 該 user 已有社群（任何 status）→ 不可重複；先到 /platform/groups
+//     處理現有那筆
+//   - user 不存在 → 拋
+export interface PromoteUserToOwnerInput {
+  userId: string
+  name: string
+  description?: string
+  tenantAdminId?: string | null   // 給 SUPER_ADMIN 用；PLATFORM_ADMIN 走自己的
+}
+export async function promoteUserToOwner(input: PromoteUserToOwnerInput) {
+  const existing = await prisma.group.findUnique({ where: { ownerId: input.userId } })
+  if (existing) throw new Error('該會員已擁有社群，無法重複升級')
+
+  const owner = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { id: true, lineUid: true },
+  })
+  if (!owner) throw new Error('會員不存在')
+
+  const group = await prisma.group.create({
+    data: {
+      ownerId: input.userId,
+      name: input.name,
+      description: input.description,
+      status: GroupStatus.APPROVED,
+      approvedAt: new Date(),
+      inviteCode: randomBytes(4).toString('hex').toUpperCase(),
+      tenantAdminId: input.tenantAdminId ?? null,
+    },
+    select: { id: true, name: true, tenantAdminId: true, inviteCode: true },
+  })
+
+  // 與 approveGroup 一致：發 7 折 GROUP_OWNER 券、推 LINE 通知
+  await issueCoupon({
+    ownerId: owner.id,
+    ownerUid: owner.lineUid,
+    type: 'GROUP_OWNER',
+    discount: 0.7,
+    isOfficial: false,
+    sourceGroupId: group.id,
+  })
+  notifyGroupApproved(owner.id, group.name, group.tenantAdminId).catch(() => {})
+
+  return group
+}
+
 // ─── 加入社群 ─────────────────────────────────────────────────────
 
 export type JoinGroupResult =
