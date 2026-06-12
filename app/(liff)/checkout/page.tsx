@@ -80,10 +80,16 @@ function CreditCardIcon() {
 }
 
 function LinePayIcon() {
+  // LINE 綠底白色對話框 Logo
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: 26, height: 26, borderRadius: 7, background: '#06C755', flexShrink: 0,
+    }}>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff" aria-label="LINE Pay">
+        <path d="M12 2.5C6.2 2.5 1.5 6.27 1.5 10.9c0 4.15 3.73 7.62 8.77 8.28.34.07.8.22.92.51.1.26.07.67.03.94l-.14.85c-.05.26-.21 1.03.9.56 1.11-.47 5.98-3.52 8.16-6.03 1.5-1.65 2.22-3.32 2.22-5.16 0-4.63-4.7-8.4-10.36-8.4zM8.05 13.2H6.1a.26.26 0 0 1-.26-.26V9.06a.26.26 0 0 1 .52 0v3.62h1.69a.26.26 0 0 1 0 .52zm1.02-.26a.26.26 0 0 1-.52 0V9.06a.26.26 0 0 1 .52 0v3.88zm4.3 0a.26.26 0 0 1-.18.25h-.08a.26.26 0 0 1-.21-.1l-1.99-2.71v2.56a.26.26 0 0 1-.52 0V9.06a.26.26 0 0 1 .47-.15l2 2.71V9.06a.26.26 0 0 1 .52 0v3.88zm2.65-2.2a.26.26 0 0 1 0 .52h-1.69v1.16h1.69a.26.26 0 0 1 0 .52h-1.95a.26.26 0 0 1-.26-.26V9.06a.26.26 0 0 1 .26-.26h1.95a.26.26 0 0 1 0 .52h-1.69v1.16h1.69z"/>
+      </svg>
+    </span>
   )
 }
 
@@ -356,12 +362,28 @@ function CheckoutContent() {
     })
   }
 
+  // iOS 玻璃透明風輸入欄位
   const fieldStyle: React.CSSProperties = {
-    border: '1.5px solid rgba(0,0,0,0.1)',
+    border: '1px solid rgba(255,255,255,0.7)',
     borderRadius: 12,
-    padding: '14px 16px',
-    background: '#fafafa',
+    padding: '13px 15px',
+    background: 'rgba(255,255,255,0.45)',
+    backdropFilter: 'blur(12px) saturate(180%)',
+    WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.6), 0 1px 2px rgba(0,0,0,0.03)',
     minHeight: 48,
+  }
+
+  // 卡片表單外框（毛玻璃）
+  const glassBox: React.CSSProperties = {
+    borderRadius: 18,
+    padding: '18px',
+    background: 'linear-gradient(135deg, rgba(255,255,255,0.72), rgba(243,244,250,0.5))',
+    backdropFilter: 'blur(24px) saturate(180%)',
+    WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+    border: '1px solid rgba(255,255,255,0.8)',
+    boxShadow: '0 8px 28px rgba(0,0,0,0.07)',
+    display: 'flex', flexDirection: 'column', gap: 14,
   }
 
   if (loading || !product) {
@@ -541,168 +563,162 @@ function CheckoutContent() {
             {paymentOptions.map(({ key, label, sublabel, Icon }) => {
               const active = paymentMethod === key
               return (
-                <label
-                  key={key}
-                  onClick={() => setPaymentMethod(key)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 14,
-                    background: active ? C.light : '#fff',
-                    borderRadius: 12,
-                    border: `1.5px solid ${active ? C.primary : 'rgba(0,0,0,0.07)'}`,
-                    padding: '14px 16px', cursor: 'pointer',
-                    transition: 'border-color 0.15s, background 0.15s',
-                  }}
-                >
-                  {/* Custom radio */}
-                  <div style={{
-                    width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                    border: `2px solid ${active ? C.primary : '#d1d5db'}`,
-                    background: '#fff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'border-color 0.15s',
-                  }}>
-                    {active && (
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.primary }} />
-                    )}
-                  </div>
-                  <div style={{ color: active ? C.primary : '#4b5563', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                    <Icon />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>{label}</p>
-                    <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>{sublabel}</p>
-                  </div>
-                </label>
+                <div key={key}>
+                  <label
+                    onClick={() => setPaymentMethod(key)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      background: active ? C.light : '#fff',
+                      borderRadius: 14,
+                      border: `1.5px solid ${active ? C.primary : 'rgba(0,0,0,0.07)'}`,
+                      padding: '14px 16px', cursor: 'pointer',
+                      transition: 'border-color 0.15s, background 0.15s',
+                    }}
+                  >
+                    {/* Custom radio */}
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                      border: `2px solid ${active ? C.primary : '#d1d5db'}`,
+                      background: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'border-color 0.15s',
+                    }}>
+                      {active && (
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.primary }} />
+                      )}
+                    </div>
+                    <div style={{ color: active ? C.primary : '#4b5563', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                      <Icon />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>{label}</p>
+                      <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>{sublabel}</p>
+                    </div>
+                  </label>
+
+                  {/* 信用卡刷卡欄位：緊接在「信用卡」選項正下方 */}
+                  {key === 'CREDIT_CARD' && active && (
+                    <div style={{ marginTop: 10 }}>
+                      {savedCard === undefined ? (
+                        <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>載入付款模組中…</div>
+                      ) : (
+                        <>
+                          {/* 已儲存卡片 */}
+                          {savedCard && !useNewCard && (
+                            <div style={{
+                              background: '#fff', borderRadius: 14, border: `1.5px solid ${C.primary}`,
+                              padding: '14px 16px',
+                              boxShadow: `0 0 0 3px ${C.primary}18`,
+                              display: 'flex', alignItems: 'center', gap: 14,
+                            }}>
+                              <CardTypeBadge type={savedCard.cardType} />
+                              <div style={{ flex: 1 }}>
+                                <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>
+                                  {savedCard.cardTypeLabel} **** {savedCard.lastFour}
+                                </p>
+                                {savedCard.expiresAt && (
+                                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>有效期限 {savedCard.expiresAt}</p>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => setUseNewCard(true)}
+                                style={{
+                                  background: 'none', border: '1px solid rgba(0,0,0,0.07)',
+                                  borderRadius: 8, padding: '6px 12px',
+                                  fontSize: 12, fontWeight: 600, color: '#4b5563', cursor: 'pointer',
+                                }}
+                              >
+                                更換
+                              </button>
+                            </div>
+                          )}
+
+                          {/* 新卡輸入（iOS 玻璃透明風） */}
+                          {showCardForm && (
+                            <>
+                              {savedCard && useNewCard && (
+                                <button
+                                  onClick={() => setUseNewCard(false)}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 4,
+                                    background: 'none', border: 'none', padding: '0 0 10px',
+                                    fontSize: 13, color: C.primary, cursor: 'pointer', fontWeight: 600,
+                                  }}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="15 18 9 12 15 6" />
+                                  </svg>
+                                  使用已儲存的卡片
+                                </button>
+                              )}
+
+                              <div style={glassBox}>
+                                <div>
+                                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6b7280', marginBottom: 6 }}>卡號</label>
+                                  <div id="card-number" style={fieldStyle} />
+                                </div>
+                                <div style={{ display: 'flex', gap: 12 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6b7280', marginBottom: 6 }}>有效期限</label>
+                                    <div id="card-expiry" style={fieldStyle} />
+                                  </div>
+                                  <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6b7280', marginBottom: 6 }}>安全碼</label>
+                                    <div id="card-ccv" style={fieldStyle} />
+                                  </div>
+                                </div>
+
+                                {/* 記住此卡片：與卡號同框、壓成一行 */}
+                                <label
+                                  onClick={() => setRemember(r => !r)}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 10,
+                                    borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14, marginTop: 2,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <div style={{
+                                    width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                                    border: `2px solid ${remember ? C.primary : 'rgba(0,0,0,0.2)'}`,
+                                    background: remember ? C.primary : 'transparent',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    transition: 'all 0.15s',
+                                  }}>
+                                    {remember && (
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.onPrimary} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                  <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>記住此卡片</span>
+                                  <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 'auto' }}>下次快速付款</span>
+                                </label>
+                              </div>
+
+                              {/* TapPay 安全性聲明 */}
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '0 4px', marginTop: 12 }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }} aria-hidden>
+                                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                </svg>
+                                <p style={{ fontSize: 11, lineHeight: 1.6, color: '#9ca3af', margin: 0 }}>
+                                  本公司採用喬睿科技 TapPay 金流交易系統，消費者刷卡時直接在銀行端系統中交易，本公司不會留下您的信用卡資料，資料傳輸採用 SSL 2048bit 加密技術保護。
+                                </p>
+                              </div>
+
+                              {!sdkReady && (
+                                <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, marginTop: 10 }}>載入付款模組中…</p>
+                              )}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
-
-          {/* 信用卡：內嵌 TapPay 刷卡欄位 */}
-          {paymentMethod === 'CREDIT_CARD' && (
-            <div style={{ marginTop: 10 }}>
-              {savedCard === undefined ? (
-                <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>載入付款模組中…</div>
-              ) : (
-                <>
-                  {/* 已儲存卡片 */}
-                  {savedCard && !useNewCard && (
-                    <div style={{
-                      background: '#fff', borderRadius: 14, border: `1.5px solid ${C.primary}`,
-                      padding: '14px 16px',
-                      boxShadow: `0 0 0 3px ${C.primary}18`,
-                      display: 'flex', alignItems: 'center', gap: 14,
-                    }}>
-                      <CardTypeBadge type={savedCard.cardType} />
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>
-                          {savedCard.cardTypeLabel} **** {savedCard.lastFour}
-                        </p>
-                        {savedCard.expiresAt && (
-                          <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>有效期限 {savedCard.expiresAt}</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => setUseNewCard(true)}
-                        style={{
-                          background: 'none', border: '1px solid rgba(0,0,0,0.07)',
-                          borderRadius: 8, padding: '6px 12px',
-                          fontSize: 12, fontWeight: 600, color: '#4b5563', cursor: 'pointer',
-                        }}
-                      >
-                        更換
-                      </button>
-                    </div>
-                  )}
-
-                  {/* 新卡輸入 */}
-                  {showCardForm && (
-                    <>
-                      {savedCard && useNewCard && (
-                        <button
-                          onClick={() => setUseNewCard(false)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 4,
-                            background: 'none', border: 'none', padding: '0 0 10px',
-                            fontSize: 13, color: C.primary, cursor: 'pointer', fontWeight: 600,
-                          }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="15 18 9 12 15 6" />
-                          </svg>
-                          使用已儲存的卡片
-                        </button>
-                      )}
-
-                      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(0,0,0,0.07)', padding: '18px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>卡號</label>
-                          <div id="card-number" style={fieldStyle} />
-                        </div>
-                        <div style={{ display: 'flex', gap: 12 }}>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>有效期限</label>
-                            <div id="card-expiry" style={fieldStyle} />
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>安全碼（後三碼）</label>
-                            <div id="card-ccv" style={fieldStyle} />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* TapPay 安全性聲明 */}
-                      <div style={{
-                        display: 'flex', alignItems: 'flex-start', gap: 9,
-                        padding: '12px 14px', marginTop: 12,
-                        background: '#f8fafc', borderRadius: 12, border: '1px solid rgba(0,0,0,0.07)',
-                      }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden>
-                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                        </svg>
-                        <p style={{ fontSize: 11.5, lineHeight: 1.65, color: '#94a3b8', margin: 0 }}>
-                          本公司採用喬睿科技 TapPay 金流交易系統，消費者刷卡時直接在銀行端系統中交易，本公司不會留下您的信用卡資料，以保障你的權益，資料傳輸過程採用嚴密的 SSL 2048bit 加密技術保護。
-                        </p>
-                      </div>
-
-                      {/* 記住卡片 */}
-                      <label style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '12px 16px', marginTop: 12,
-                        background: '#fff', borderRadius: 12, border: '1px solid rgba(0,0,0,0.07)',
-                        cursor: 'pointer',
-                      }}>
-                        <div
-                          onClick={() => setRemember(r => !r)}
-                          style={{
-                            width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                            border: `2px solid ${remember ? C.primary : 'rgba(0,0,0,0.2)'}`,
-                            background: remember ? C.primary : 'transparent',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            transition: 'all 0.15s',
-                          }}
-                        >
-                          {remember && (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.onPrimary} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          )}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>記住此卡片</p>
-                          <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>下次付款可快速選用</p>
-                        </div>
-                      </label>
-
-                      {!sdkReady && (
-                        <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, marginTop: 10 }}>載入付款模組中…</p>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Price summary */}
