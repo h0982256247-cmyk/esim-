@@ -328,10 +328,17 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
   const [dayFilter, setDayFilter] = useState<number>(0)
   const [pickerDays, setPickerDays] = useState<number>(0)
 
-  // Init picker once products load
+  // Init picker once products load: default to 5 days, fallback to nearest available
   useEffect(() => {
     if (availableDays.length > 0 && pickerDays === 0) {
-      setPickerDays(availableDays[0])
+      const DEFAULT_DAYS = 5
+      const chosen = availableDays.includes(DEFAULT_DAYS)
+        ? DEFAULT_DAYS
+        : [...availableDays].sort(
+            (a, b) => Math.abs(a - DEFAULT_DAYS) - Math.abs(b - DEFAULT_DAYS)
+          )[0]
+      setPickerDays(chosen)
+      setDayFilter(chosen)
     }
   }, [availableDays, pickerDays])
 
