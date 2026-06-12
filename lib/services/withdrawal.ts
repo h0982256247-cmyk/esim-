@@ -14,21 +14,24 @@ import { safeDecrypt } from '@/lib/utils/crypto'
 //   改為 CANCELLED，settled 總額即下降。若該金額已撥款給社群主（在 paid 內），
 //   raw 可能變負數。available 對外顯示 clamp 為 0，pendingAdjustment 揭露
 //   需從未來 commission 扣回的金額。
-export async function getWithdrawalBalance(groupId: string) {
+export async function getWithdrawalBalance(
+  groupId: string,
+  client: Prisma.TransactionClient = prisma,
+) {
   const [settledAgg, lockedAgg, paidAgg, pendingAgg] = await Promise.all([
-    prisma.commission.aggregate({
+    client.commission.aggregate({
       where: { groupId, status: CommissionStatus.SETTLED },
       _sum: { commissionAmount: true },
     }),
-    prisma.withdrawal.aggregate({
+    client.withdrawal.aggregate({
       where: { groupId, status: { in: [WithdrawalStatus.APPROVED, WithdrawalStatus.PAID] } },
       _sum: { amount: true },
     }),
-    prisma.withdrawal.aggregate({
+    client.withdrawal.aggregate({
       where: { groupId, status: WithdrawalStatus.PAID },
       _sum: { amount: true },
     }),
-    prisma.withdrawal.aggregate({
+    client.withdrawal.aggregate({
       where: { groupId, status: WithdrawalStatus.PENDING },
       _sum: { amount: true },
     }),
@@ -73,27 +76,38 @@ export async function requestWithdrawal(
     return { ok: false, reason: '請先到社群主後台補齊銀行資訊' }
   }
 
-  const balance = await getWithdrawalBalance(group.id)
-  if (amount > balance.available) {
-    return { ok: false, reason: `超過可提領金額（最多 NT$${balance.available.toLocaleString()}）` }
-  }
+  // 餘額檢查 + 建立提領在同一交易內完成，並以社群為粒度上交易級 advisory lock。
+  // 沒這層鎖時：同一社群兩筆並發申請各自讀到相同 available，可能都通過檢查而
+  // 雙重建立、合計超過可提領餘額（餘額是即時 aggregate 算出來的，沒有可鎖的單列）。
+  // pg_advisory_xact_lock 在 COMMIT/ROLLBACK 自動釋放，與 PgBouncer transaction
+  // pooling 相容；序列化後第二筆會看到第一筆已 commit 的 PENDING，餘額即正確扣減。
+  const result = await prisma.$transaction<RequestWithdrawalResult>(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${group.id}))`
 
-  // 解密後寫入 snapshot（admin 撥款時需要看明文）
-  const w = await prisma.withdrawal.create({
-    data: {
-      groupId: group.id,
-      amount,
-      status: WithdrawalStatus.PENDING,
-      bankInfoSnapshot: {
-        bankName:       group.bankName,
-        bankAccount:    safeDecrypt(group.bankAccount),
-        bankBranch:     group.bankBranch ? safeDecrypt(group.bankBranch) : '',
-        bankHolderName: safeDecrypt(group.bankHolderName),
-      } satisfies Prisma.InputJsonValue,
-    },
+    const balance = await getWithdrawalBalance(group.id, tx)
+    if (amount > balance.available) {
+      return { ok: false, reason: `超過可提領金額（最多 NT$${balance.available.toLocaleString()}）` }
+    }
+
+    // 解密後寫入 snapshot（admin 撥款時需要看明文）
+    const w = await tx.withdrawal.create({
+      data: {
+        groupId: group.id,
+        amount,
+        status: WithdrawalStatus.PENDING,
+        bankInfoSnapshot: {
+          bankName:       group.bankName,
+          bankAccount:    safeDecrypt(group.bankAccount),
+          bankBranch:     group.bankBranch ? safeDecrypt(group.bankBranch) : '',
+          bankHolderName: safeDecrypt(group.bankHolderName),
+        } satisfies Prisma.InputJsonValue,
+      },
+    })
+
+    return { ok: true, withdrawalId: w.id }
   })
 
-  return { ok: true, withdrawalId: w.id }
+  return result
 }
 
 // ─── Admin：審核 / 標記已撥款 / 拒絕 ─────────────────────────────

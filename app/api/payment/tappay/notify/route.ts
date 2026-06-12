@@ -128,7 +128,12 @@ export async function POST(req: NextRequest) {
     if (existing) {
       await prisma.savedCard.update({ where: { userId: order.userId }, data: cardData })
     } else {
-      await prisma.savedCard.create({ data: { userId: order.userId, ...cardData } })
+      try {
+        await prisma.savedCard.create({ data: { userId: order.userId, ...cardData } })
+      } catch {
+        // 並發：同一用戶另一筆 webhook 已搶先建立（userId 唯一）→ 改為更新
+        await prisma.savedCard.update({ where: { userId: order.userId }, data: cardData })
+      }
     }
   }
 
