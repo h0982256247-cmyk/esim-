@@ -60,12 +60,20 @@ function normalizeHeader(h: string): string {
   return h.trim().toLowerCase().replace(/[\s()（）]/g, '')
 }
 
-function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
-  const lines = text.trim().split(/\r?\n/)
-  if (lines.length < 2) return { rows: [], errors: ['CSV 檔案缺少資料列'] }
+// 單一儲存格 → 去頭尾空白的字串。xlsx 的數值/布林儲存格在此被安全字串化，
+// 整數 ID 不會被轉成科學記號（String(1234567890123) === '1234567890123'）。
+function cell(v: unknown): string {
+  if (v == null) return ''
+  return String(v).trim()
+}
+
+// 直接讀「二維矩陣」而非把 Excel 轉成 CSV 文字再用逗號切——商品名稱本身常含逗號
+// （例「紐澳, 10天,1GB/天」），逐字元切會錯位。矩陣由儲存格直接取值，徹底避開此問題。
+function parseMatrix(matrix: unknown[][]): { rows: CsvProductRow[]; errors: string[] } {
+  if (matrix.length < 2) return { rows: [], errors: ['檔案缺少資料列'] }
 
   // Parse headers with alias mapping
-  const rawHeaders = lines[0].split(',').map(h => h.trim().replace(/^["'﻿]+|["']+$/g, ''))
+  const rawHeaders = (matrix[0] ?? []).map(h => cell(h).replace(/^["'﻿]+|["']+$/g, ''))
   const headers = rawHeaders.map(h => {
     const normalized = normalizeHeader(h)
     return HEADER_ALIAS[normalized] ?? HEADER_ALIAS[h] ?? normalized
@@ -80,22 +88,16 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
   const rows: CsvProductRow[] = []
   const errors: string[] = []
 
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (!line) continue
+  for (let i = 1; i < matrix.length; i++) {
+    const values = matrix[i] ?? []
+    // 跳過全空白列（i 仍前進，故「第 N 行」與來源列號保持對齊）
+    if (values.every(v => cell(v) === '')) continue
 
-    // Handle quoted values
-    const values: string[] = []
-    let current = ''
-    let inQuote = false
-    for (const ch of line) {
-      if (ch === '"') { inQuote = !inQuote; continue }
-      if (ch === ',' && !inQuote) { values.push(current.trim()); current = ''; continue }
-      current += ch
+    const get = (key: string) => {
+      const idx = headers.indexOf(key)
+      if (idx < 0) return ''
+      return cell(values[idx]).replace(/^["']+|["']+$/g, '')
     }
-    values.push(current.trim())
-
-    const get = (key: string) => values[headers.indexOf(key)]?.trim().replace(/^["']+|["']+$/g, '') ?? ''
 
     const supplierSkuId = get('supplierSkuId')
     const productName   = get('productName')
@@ -147,13 +149,14 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
     const sortOrder = parseInt(get('sortOrder')) || 0
     const description = get('description') || undefined
 
-    // Validation
+    // Validation（以「本列」是否新增錯誤判斷，而非全域 errors.length）
+    const before = errors.length
     if (!supplierSkuId) errors.push(`第 ${i + 1} 行：供應商方案ID（supplierSkuId）不可為空`)
     if (isNaN(displayDays) || displayDays <= 0) errors.push(`第 ${i + 1} 行：無法判斷天數（請填 displayDays 欄或在商品名稱中包含如「3天」）`)
     if (isNaN(sellPrice) || sellPrice <= 0) errors.push(`第 ${i + 1} 行：售價必須為正整數`)
     if (isNaN(costPrice) || costPrice <= 0) errors.push(`第 ${i + 1} 行：成本價必須為正整數`)
 
-    if (errors.length === 0) {
+    if (errors.length === before) {
       rows.push({
         supplierSkuId,
         planCode: planCode || undefined,
@@ -178,19 +181,52 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
   return { rows, errors }
 }
 
-// 將 Excel 檔（xlsx/xls）的第一張 sheet 轉成 CSV 文字，重用 parseCsv 的欄位映射邏輯
-async function xlsxToCsvText(file: File): Promise<string> {
+// 將 Excel 檔（xlsx/xls）的第一張 sheet 讀成二維矩陣（每列一個陣列）。
+// raw: true → 取儲存格原始值（數值仍是數值），避免長數字 ID 被格式化成科學記號；
+// 以文字格式存的前導零（"007"）也會保留。
+// （注意：若來源檔把 ID 欄存成「數值」型別，前導零在存檔當下即遺失，無法於此復原——
+//  匯入端建議將 ID 欄位設為「文字」格式。）
+// blankrows: true → 保留空白列，使「第 N 行」與 Excel 列號對齊。
+async function xlsxToMatrix(file: File): Promise<unknown[][]> {
   const buf = await file.arrayBuffer()
   const workbook = XLSX.read(buf, { type: 'array' })
   const sheetName = workbook.SheetNames[0]
   if (!sheetName) throw new Error('Excel 檔案沒有任何 sheet')
   const sheet = workbook.Sheets[sheetName]
-  // rawNumbers: true → 輸出儲存格的原始數值，而非「格式化顯示字串」。
-  // 供應商方案ID 常為長數字字串；若用格式化字串，長數字會被 Excel 顯示成科學記號
-  // （1.23457E+12）而毀損。原始值可避免此問題；以文字格式存的前導零（"007"）也會保留。
-  // （注意：若來源檔把 ID 存成「數值」型別，前導零在存檔當下就已遺失，無法於此復原——
-  //  匯入端建議將 ID 欄位設為「文字」格式。）
-  return XLSX.utils.sheet_to_csv(sheet, { strip: false, rawNumbers: true })
+  return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: '', blankrows: true })
+}
+
+// 解析 CSV 文字 → 二維矩陣。支援雙引號包夾欄位（內含逗號、換行）與 "" 跳脫引號。
+function csvToMatrix(text: string): string[][] {
+  const t = text.replace(/^﻿/, '')  // 去 BOM
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuote = false
+
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i]
+    if (inQuote) {
+      if (ch === '"') {
+        if (t[i + 1] === '"') { field += '"'; i++ }  // "" → 字面引號
+        else inQuote = false
+      } else {
+        field += ch
+      }
+    } else if (ch === '"') {
+      inQuote = true
+    } else if (ch === ',') {
+      row.push(field); field = ''
+    } else if (ch === '\n') {
+      row.push(field); field = ''; rows.push(row); row = []
+    } else if (ch !== '\r') {
+      field += ch
+    }
+  }
+  // flush 最後一欄/列（無結尾換行時）
+  if (field !== '' || row.length > 0) { row.push(field); rows.push(row) }
+
+  return rows
 }
 
 // POST /api/admin/products/import  (multipart/form-data, field: "file")
@@ -209,15 +245,15 @@ export async function POST(req: NextRequest) {
   const f = file as File
   const isExcel = /\.(xlsx|xls)$/i.test(f.name)
 
-  let text: string
+  let matrix: unknown[][]
   try {
-    text = isExcel ? await xlsxToCsvText(f) : await f.text()
+    matrix = isExcel ? await xlsxToMatrix(f) : csvToMatrix(await f.text())
   } catch (err) {
     const msg = err instanceof Error ? err.message : '檔案解析失敗'
     return NextResponse.json({ error: `無法解析檔案：${msg}` }, { status: 400 })
   }
 
-  const { rows, errors } = parseCsv(text)
+  const { rows, errors } = parseMatrix(matrix)
 
   if (errors.length > 0) {
     return NextResponse.json({ error: '驗證失敗，整批未寫入', details: errors }, { status: 422 })
