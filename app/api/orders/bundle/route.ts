@@ -3,6 +3,11 @@ import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 import { createBundleOrders, type BundleCartLine } from '@/lib/services/order'
 import { PaymentMethod } from '@prisma/client'
 
+// 多品項結帳要逐筆寫入 N 張訂單，走 PgBouncer 的遠端連線一多就超過 Vercel
+// 預設 10 秒 function timeout（拋例外 → 回傳 500 HTML → 前端 .json() 解析失敗
+// → 顯示「網路錯誤，請重試」）。比照 CSV 匯入拉到 60 秒。
+export const maxDuration = 60
+
 // POST /api/orders/bundle — 多品項一次結帳
 // Body: { lines: [{ productId, qty }], paymentMethod }
 export async function POST(req: NextRequest) {
@@ -14,8 +19,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
 
-  const body = await req.json()
-  const { lines, paymentMethod } = body as { lines?: BundleCartLine[]; paymentMethod?: PaymentMethod }
+  let body: { lines?: BundleCartLine[]; paymentMethod?: PaymentMethod }
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: '請求格式錯誤' }, { status: 400 })
+  }
+  const { lines, paymentMethod } = body
 
   if (!Array.isArray(lines) || lines.length === 0) {
     return NextResponse.json({ error: 'lines 必填' }, { status: 400 })
@@ -33,16 +43,24 @@ export async function POST(req: NextRequest) {
     cleaned.push({ productId: l.productId, qty: Math.max(1, Math.min(9, Math.floor(Number(l.qty) || 1))) })
   }
 
-  const result = await createBundleOrders({
-    userId: session.userId,
-    lineUid: session.lineUid,
-    lines: cleaned,
-    paymentMethod,
-  })
+  // Wrap the service call so an unexpected DB/transaction throw still returns
+  // JSON (not a 500 HTML page). A non-JSON 500 makes the client's .json()
+  // throw and surfaces a misleading「網路錯誤，請重試」.
+  try {
+    const result = await createBundleOrders({
+      userId: session.userId,
+      lineUid: session.lineUid,
+      lines: cleaned,
+      paymentMethod,
+    })
 
-  if (!result.ok) {
-    return NextResponse.json({ error: result.reason }, { status: 422 })
+    if (!result.ok) {
+      return NextResponse.json({ error: result.reason }, { status: 422 })
+    }
+
+    return NextResponse.json(result, { status: 201 })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '建立訂單失敗，請稍後再試'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  return NextResponse.json(result, { status: 201 })
 }

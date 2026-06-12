@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { useLiffBase } from '@/hooks/useLiffBase'
+import { hasSeenSplash, markSplashSeen } from '@/lib/utils/splash'
 
 type Phase = 'splash' | 'modal' | 'redirecting'
 
@@ -15,6 +16,8 @@ export default function LiffHome() {
   const [phase, setPhase] = useState<Phase>('splash')
   const [splashOut, setSplashOut] = useState(false)
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
+  // 只有本次 session 首次進入才播放過場；之後回到首頁直接走決策（不再延遲、不再淡出動畫）
+  const seenSplash = hasSeenSplash()
 
   // 1. 進場後即開始 fetch 資料
   useEffect(() => {
@@ -30,24 +33,35 @@ export default function LiffHome() {
     checkProfile()
   }, [isReady])
 
-  // 2. 過場邏輯：最少顯示 0.5s
+  // 2. 過場邏輯：首次進入最少顯示 0.5s；本 session 已看過則直接決策、跳過過場
   useEffect(() => {
     if (profileComplete === null) return
 
+    const decide = () => {
+      if (profileComplete) {
+        setPhase('redirecting')
+        router.replace(`${base}/products`)
+      } else {
+        setPhase('modal')
+      }
+    }
+
+    // 回訪（同一 session）：略過過場動畫，立即決策
+    if (seenSplash) {
+      setSplashOut(true)
+      decide()
+      return
+    }
+
+    // 首次進入：播放 0.5s 過場後再決策，並記錄已看過
+    markSplashSeen()
     const splashTimer = setTimeout(() => {
       setSplashOut(true)
-      setTimeout(() => {
-        if (profileComplete) {
-          setPhase('redirecting')
-          router.replace(`${base}/products`)
-        } else {
-          setPhase('modal')
-        }
-      }, 350) // fade-out 時間
+      setTimeout(decide, 350) // fade-out 時間
     }, 500)
 
     return () => clearTimeout(splashTimer)
-  }, [profileComplete, router])
+  }, [profileComplete, router, base, seenSplash])
 
   if (error) {
     return (

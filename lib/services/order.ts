@@ -178,44 +178,69 @@ export async function createBundleOrders(input: CreateBundleOrdersInput): Promis
   const totalPaid = subtotal   // no coupons in v1
   const bundleId = generateBundleId()
 
-  const orderIds = await prisma.$transaction(async tx => {
-    const ids: string[] = []
-    for (let i = 0; i < slots.length; i++) {
-      const p = productMap.get(slots[i].productId)!
-      let orderNumber = generateOrderNumber()
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const exists = await tx.order.findUnique({ where: { orderNumber } })
-        if (!exists) break
-        orderNumber = generateOrderNumber()
-      }
-      const o = await tx.order.create({
-        data: {
-          userId: input.userId,
-          currentOwnerId: input.userId,
-          orderNumber,
-          bundleId,
-          bundleSeq: i + 1,
-          status: OrderStatus.PENDING,
-          subtotal: p.sellPrice,
-          discountAmount: 0,
-          totalPaid: p.sellPrice,
-          taxAmount: 0,
-          paymentMethod: input.paymentMethod,
-          orderItems: {
-            create: {
-              productId: p.id,
-              productName: `${p.countryNameZh} ${p.displayDays}天`,
-              qty: 1,
-              unitPrice: p.sellPrice,
-              unitCost: p.costPrice,
+  // Pre-generate unique order numbers OUTSIDE the transaction. The uniqueness
+  // probe (findUnique) is the slow part — running it inside the interactive
+  // transaction keeps a DB connection pinned for the whole batch, which on a
+  // remote DB behind PgBouncer easily blows past Prisma's 5s transaction
+  // timeout (→ P2028 throw → 500 → frontend shows「網路錯誤」). Generating the
+  // numbers up front means the transaction only does the N inserts.
+  const usedNumbers = new Set<string>()
+  const orderNumbers: string[] = []
+  for (let i = 0; i < slots.length; i++) {
+    let orderNumber = generateOrderNumber()
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const collides = usedNumbers.has(orderNumber)
+        || (await prisma.order.findUnique({ where: { orderNumber }, select: { id: true } })) !== null
+      if (!collides) break
+      orderNumber = generateOrderNumber()
+    }
+    usedNumbers.add(orderNumber)
+    orderNumbers.push(orderNumber)
+  }
+
+  let orderIds: string[]
+  try {
+    orderIds = await prisma.$transaction(async tx => {
+      const ids: string[] = []
+      for (let i = 0; i < slots.length; i++) {
+        const p = productMap.get(slots[i].productId)!
+        const o = await tx.order.create({
+          data: {
+            userId: input.userId,
+            currentOwnerId: input.userId,
+            orderNumber: orderNumbers[i],
+            bundleId,
+            bundleSeq: i + 1,
+            status: OrderStatus.PENDING,
+            subtotal: p.sellPrice,
+            discountAmount: 0,
+            totalPaid: p.sellPrice,
+            taxAmount: 0,
+            paymentMethod: input.paymentMethod,
+            orderItems: {
+              create: {
+                productId: p.id,
+                productName: `${p.countryNameZh} ${p.displayDays}天`,
+                qty: 1,
+                unitPrice: p.sellPrice,
+                unitCost: p.costPrice,
+              },
             },
           },
-        },
-      })
-      ids.push(o.id)
-    }
-    return ids
-  })
+        })
+        ids.push(o.id)
+      }
+      return ids
+    }, {
+      // N sequential inserts over a remote/pooled connection need headroom
+      // beyond Prisma's 5s default; otherwise large carts throw P2028.
+      timeout: 20_000,
+      maxWait: 10_000,
+    })
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : '建立訂單失敗'
+    return { ok: false, reason: `建立訂單失敗：${reason}` }
+  }
 
   return {
     ok: true,

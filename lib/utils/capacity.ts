@@ -10,7 +10,12 @@ const HSD_RE = /(?<![A-Za-z])HSD(?![A-Za-z])/i
 const MAX_RE = /(?<![A-Za-z])MAX(?![A-Za-z])/i
 
 // 數字流量：500MB / 1GB / 1GB/天 / 1.5GB/day
-const SIZE_RE = /(\d+(?:\.\d+)?)\s*(MB|GB|TB)(\/天|\/日|\/day)?/i
+const SIZE_RE = /(\d+(?:\.\d+)?)\s*(MB|GB|TB)(\s*\/\s*(?:天|日|day))?/i
+
+// 「每日」標記可能出現在數字前後，或以後綴 /天 /日 /day 呈現。
+// 例：「每日500MB」「500MB每天」「500MB / 天」「1GB/day」「daily 1GB」。
+// 注意：必須帶「每」或「/」，純「5天」「3日」是天數而非每日量，不可誤判。
+const PER_DAY_RE = /每\s*[天日]|\/\s*(?:天|日|day)|per[\s-]*day|daily/i
 
 export function parseCapacityFromName(name: string): string | null {
   if (!name) return null
@@ -27,5 +32,8 @@ export function parseCapacityFromName(name: string): string | null {
 
   const m = name.match(SIZE_RE)
   if (!m) return null
-  return m[3] ? `${m[1]}${m[2].toUpperCase()}${m[3]}` : `${m[1]}${m[2].toUpperCase()}`
+  const size = `${m[1]}${m[2].toUpperCase()}`
+  // 後綴直接命中，或整串名稱含「每日」類標記，都視為每日量
+  const isPerDay = Boolean(m[3]) || PER_DAY_RE.test(name)
+  return isPerDay ? `${size}/天` : size
 }

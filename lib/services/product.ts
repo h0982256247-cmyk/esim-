@@ -444,7 +444,10 @@ export async function recomputeMetaFromSupplier(
 
     // 2. 重算 dataCapacity：依序試 supplier name → planCode → wmProductId。
     //    第一個有結果的勝出；都沒有就保留原值。
+    //    防降級：若既有值已是「每日量」(／天) 而新解析來源沒帶 per-day 標記，
+    //    別用較不精確的總量值覆寫掉它（供應商名稱常省略「/天」）。
     let nextCapacity: string | null = p.dataCapacity
+    const isPerDay = (s: string | null | undefined) => /\/\s*(?:天|日|day)/i.test(s ?? '')
     const sources: (string | null | undefined)[] = [
       name,
       p.planCode,
@@ -453,7 +456,10 @@ export async function recomputeMetaFromSupplier(
     for (const src of sources) {
       if (!src) continue
       const c = parseCapacityFromName(src)
-      if (c) { nextCapacity = c; break }
+      if (!c) continue
+      if (isPerDay(p.dataCapacity) && !isPerDay(c)) break
+      nextCapacity = c
+      break
     }
 
     const countryDelta =

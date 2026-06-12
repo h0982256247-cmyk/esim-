@@ -28,6 +28,27 @@ function getAccent(code: string) {
   return DEST_PALETTE[Math.abs(h) % DEST_PALETTE.length]
 }
 
+// GB 數字精簡格式：<1GB 顯示 MB，否則最多一位小數
+function fmtGB(gb: number): string {
+  if (gb <= 0) return ''
+  if (gb < 1) return `${Math.round(gb * 1024)}MB`
+  const v = gb < 10 ? Math.round(gb * 10) / 10 : Math.round(gb)
+  return `${v}GB`
+}
+
+// 把 dataCapacity 拆成「主要數字 + 計量方式 + 總量」，讓每日／總量方案一眼可辨
+function describeCapacity(d: { plan: { dataCapacity: string | null }; isPerDay: boolean; isUnlimited: boolean; totalGB: number }) {
+  const raw = (d.plan.dataCapacity ?? '').trim()
+  const amount = raw.replace(/\s*\/\s*(天|日|day)\s*/i, '').trim()
+  if (d.isUnlimited) {
+    return { kind: 'unlimited' as const, amount: amount || '吃到飽', meterLabel: '不限流量', sub: '' }
+  }
+  if (d.isPerDay) {
+    return { kind: 'perday' as const, amount: amount || '—', meterLabel: '每日', sub: d.totalGB > 0 ? `共 ${fmtGB(d.totalGB)}` : '' }
+  }
+  return { kind: 'total' as const, amount: amount || '—', meterLabel: '總用量', sub: '' }
+}
+
 function BackArrow() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -263,6 +284,49 @@ export default function ClassicShop({
         </div>
       </div>
 
+      {/* 國家識別 hero：一眼確認「現在看的是哪國方案」 */}
+      {country && (
+        <div style={{ padding: '16px 16px 0' }}>
+          <div style={{
+            position: 'relative', overflow: 'hidden',
+            borderRadius: 20, padding: '18px 20px',
+            background: `linear-gradient(135deg, ${countryAccent.accent} 0%, ${countryAccent.accent}cc 60%, ${countryAccent.accent}99 100%)`,
+            boxShadow: `0 10px 24px ${countryAccent.accent}33`,
+            display: 'flex', alignItems: 'center', gap: 14,
+          }}>
+            <svg width="180" height="120" viewBox="0 0 180 120" style={{ position: 'absolute', right: -20, top: -8, opacity: 0.16 }}>
+              <g fill="#fff">
+                {Array.from({ length: 48 }).map((_, idx) => (
+                  <circle key={idx} cx={(idx * 41) % 180} cy={(idx * 57) % 120} r={((idx * 5) % 3) + 1} />
+                ))}
+              </g>
+            </svg>
+            <div style={{
+              width: 60, height: 60, borderRadius: '50%', flexShrink: 0,
+              background: 'rgba(255,255,255,0.92)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.16)',
+              position: 'relative', zIndex: 1,
+            }}>
+              <CountryFlag code={country.countryCode} fallbackEmoji={country.countryFlag} size={40} />
+            </div>
+            <div style={{ position: 'relative', zIndex: 1, minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                <h2 style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: 0, letterSpacing: '-0.025em', textShadow: '0 1px 3px rgba(0,0,0,0.18)' }}>
+                  {country.countryNameZh}
+                </h2>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.85)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  {country.countryNameEn}
+                </span>
+              </div>
+              <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.92)', margin: '5px 0 0', fontWeight: 600, letterSpacing: '0.02em' }}>
+                {filter.totalCount > 0 ? `${filter.totalCount} 個 eSIM 方案 · 即買即用` : '即插即用 eSIM'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Day picker */}
       {filter.availableDays.length > 0 && (
         <div style={{ padding: '16px 16px 4px' }}>
@@ -310,100 +374,116 @@ export default function ClassicShop({
           const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
           const inCart = cart.has(p.id)
           const tier = TIER_COLOR[d.tier]
+          const cap = describeCapacity(d)
           return (
             <div
               key={p.id}
               style={{
                 position: 'relative',
-                width: '100%', background: S.white, borderRadius: 20,
-                border: `1px solid ${inCart ? `${C.primary}40` : 'rgba(15,23,42,0.06)'}`,
+                width: '100%', background: S.white, borderRadius: 18,
+                border: `1px solid ${inCart ? `${C.primary}59` : 'rgba(15,23,42,0.07)'}`,
                 boxShadow: inCart
-                  ? `0 2px 6px rgba(15,23,42,0.04), 0 0 0 2px ${C.primary}25, 0 12px 28px ${C.primary}1a`
-                  : '0 1px 2px rgba(15,23,42,0.04), 0 10px 24px rgba(15,23,42,0.05)',
-                overflow: 'hidden',
+                  ? `0 0 0 2px ${C.primary}22, 0 8px 20px ${C.primary}14`
+                  : '0 1px 2px rgba(15,23,42,0.04), 0 6px 16px rgba(15,23,42,0.05)',
                 transition: 'box-shadow 0.2s, border 0.2s',
               }}
             >
-              {/* Best value ribbon */}
-              {d.recommended && (
-                <div style={{
-                  position: 'absolute', top: 0, left: 0,
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                  color: '#fff',
-                  fontSize: 10, fontWeight: 800,
-                  padding: '4px 12px 4px 12px',
-                  borderTopLeftRadius: 20, borderBottomRightRadius: 12,
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  letterSpacing: '0.1em',
-                  zIndex: 1,
-                  boxShadow: '0 4px 10px rgba(217,119,6,0.3)',
-                }}>
-                  <CrownIcon size={11} /> 最划算
-                </div>
-              )}
-
-              <div style={{ display: 'flex', alignItems: 'stretch', position: 'relative' }}>
+              <div style={{ display: 'flex', alignItems: 'stretch', padding: 14, gap: 12 }}>
+                {/* 左側可點 → 進入詳情 */}
                 <button
                   type="button"
                   onClick={() => onSelectProduct(p.id)}
                   className="cs-plan-tap"
                   style={{
                     flex: 1, background: 'transparent', border: 'none',
-                    padding: d.recommended ? '28px 18px 18px' : '18px',
+                    padding: 0, margin: 0,
                     cursor: 'pointer', textAlign: 'left',
                     WebkitTapHighlightColor: 'transparent',
                     touchAction: 'manipulation',
-                    display: 'flex', alignItems: 'center', gap: 14,
-                    minWidth: 0,
-                    transition: 'background 0.15s',
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    minWidth: 0, borderRadius: 12,
                   }}
                 >
-                  {/* Day badge：護照戳章式圓徽，搭配 tier 配色 + 光暈 */}
+                  {/* Day badge */}
                   <div style={{
-                    position: 'relative',
-                    width: 66, height: 66, borderRadius: 18, flexShrink: 0,
+                    width: 60, height: 60, borderRadius: 16, flexShrink: 0,
                     background: tier.bg, color: tier.fg,
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: `inset 0 0 0 1.5px ${tier.accent}1a, 0 4px 10px ${tier.accent}1a`,
+                    boxShadow: `inset 0 0 0 1.5px ${tier.accent}1a`,
                   }}>
-                    <span style={{ fontSize: 24, fontWeight: 900, lineHeight: 1, letterSpacing: '-0.03em' }}>{p.displayDays}</span>
-                    <span style={{ fontSize: 10, fontWeight: 800, marginTop: 2, letterSpacing: '0.14em' }}>DAYS</span>
+                    <span style={{ fontSize: 23, fontWeight: 900, lineHeight: 1, letterSpacing: '-0.03em' }}>{p.displayDays}</span>
+                    <span style={{ fontSize: 9.5, fontWeight: 800, marginTop: 2, letterSpacing: '0.12em' }}>天</span>
                   </div>
 
-                  {/* Mid info */}
+                  {/* Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                    {/* tier + 計量方式 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                       <span style={{
-                        fontSize: 10.5, fontWeight: 800, color: tier.accent,
-                        background: tier.bg, borderRadius: 100, padding: '3px 9px',
-                        letterSpacing: '0.06em',
+                        fontSize: 10, fontWeight: 800, color: tier.accent,
+                        background: tier.bg, borderRadius: 100, padding: '2px 8px',
+                        letterSpacing: '0.04em',
                       }}>{TIER_LABEL[d.tier]}</span>
-                      {p.dataCapacity && (
-                        <span style={{ fontSize: 13, fontWeight: 800, color: S.ink, letterSpacing: '-0.01em' }}>
-                          {p.dataCapacity}
-                        </span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 800,
+                        color: cap.kind === 'perday' ? '#0369a1' : S.faint,
+                        background: cap.kind === 'perday' ? '#e0f2fe' : 'transparent',
+                        borderRadius: 100, padding: cap.kind === 'perday' ? '2px 8px' : '2px 0',
+                        letterSpacing: '0.04em',
+                      }}>{cap.meterLabel}</span>
+                    </div>
+                    {/* 主要流量，per-day 與 total 明顯區隔 */}
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 19, fontWeight: 900, color: S.ink, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+                        {cap.amount}
+                      </span>
+                      {cap.kind === 'perday' && (
+                        <span style={{ fontSize: 12, fontWeight: 700, color: S.faint }}>/ 天</span>
+                      )}
+                      {cap.sub && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: S.faint }}>{cap.sub}</span>
                       )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
                       <NetworkBadge networkType={p.networkType} />
                       <NativeSimBadge isNative={p.isNativeSim} />
                     </div>
-                    {d.totalGB > 0 && !d.isUnlimited && d.isPerDay && (
-                      <p style={{ fontSize: 11, color: S.faint, margin: 0, fontWeight: 600 }}>
-                        共 {Math.round(d.totalGB)} GB
+                    {p.description && (
+                      <p style={{
+                        fontSize: 11, color: S.muted, margin: '6px 0 0', fontWeight: 500,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {p.description}
                       </p>
                     )}
                   </div>
+                </button>
 
-                  {/* Price */}
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                {/* 右側：價格 + 加入按鈕（乾淨卡片，非票根樣式） */}
+                <div style={{
+                  flexShrink: 0, display: 'flex', flexDirection: 'column',
+                  alignItems: 'flex-end', justifyContent: 'center', gap: 8,
+                  paddingLeft: 12, borderLeft: '1px solid rgba(15,23,42,0.07)',
+                }}>
+                  <div style={{ textAlign: 'right' }}>
+                    {d.recommended && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff',
+                        fontSize: 9.5, fontWeight: 800, padding: '2px 7px', borderRadius: 100,
+                        letterSpacing: '0.06em', marginBottom: 4,
+                        boxShadow: '0 2px 6px rgba(217,119,6,0.28)',
+                      }}>
+                        <CrownIcon size={9} /> 最划算
+                      </span>
+                    )}
                     {hasDiscount && (
                       <p style={{ fontSize: 11, color: S.faint, margin: 0, textDecoration: 'line-through' }}>
                         NT${p.sellPrice.toLocaleString()}
                       </p>
                     )}
-                    <p style={{ fontSize: 21, fontWeight: 900, color: C.primary, margin: 0, letterSpacing: '-0.035em', lineHeight: 1.1 }}>
-                      NT${bestPrice.toLocaleString()}
+                    <p style={{ fontSize: 22, fontWeight: 900, color: C.primary, margin: 0, letterSpacing: '-0.035em', lineHeight: 1.1 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700 }}>NT$</span>{bestPrice.toLocaleString()}
                     </p>
                     {hasDiscount && (
                       <p style={{
@@ -414,50 +494,28 @@ export default function ClassicShop({
                       </p>
                     )}
                   </div>
-                </button>
-
-                {/* 票根撕邊：兩個半圓凹槽 + 虛線 */}
-                <span aria-hidden style={{
-                  position: 'absolute', top: -7, right: 51,
-                  width: 14, height: 14, borderRadius: '50%',
-                  background: S.bg,
-                  border: '1px solid rgba(15,23,42,0.06)',
-                  borderBottom: 'none', borderRight: 'none',
-                }} />
-                <span aria-hidden style={{
-                  position: 'absolute', bottom: -7, right: 51,
-                  width: 14, height: 14, borderRadius: '50%',
-                  background: S.bg,
-                  border: '1px solid rgba(15,23,42,0.06)',
-                  borderTop: 'none', borderLeft: 'none',
-                }} />
-
-                {/* Add to cart（票根區） */}
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); cart.toggle(p) }}
-                  aria-label={inCart ? '從購物車移除' : '加入購物車'}
-                  className="cs-cart-tap"
-                  style={{
-                    width: 52, flexShrink: 0,
-                    background: inCart ? C.primary : `${C.primary}0c`,
-                    color: inCart ? C.onPrimary : C.primary,
-                    border: 'none',
-                    borderLeft: inCart ? `1px dashed ${C.primary}` : `1px dashed ${C.primary}55`,
-                    cursor: 'pointer',
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
-                    gap: 3,
-                    transition: 'background 0.18s, color 0.18s',
-                    WebkitTapHighlightColor: 'transparent',
-                    touchAction: 'manipulation',
-                  }}
-                >
-                  {inCart ? <CartCheckIcon /> : <CartPlusIcon />}
-                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.08em' }}>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); cart.toggle(p) }}
+                    aria-label={inCart ? '從購物車移除' : '加入購物車'}
+                    className="cs-cart-tap"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      padding: '8px 14px', borderRadius: 100,
+                      background: inCart ? C.primary : `${C.primary}10`,
+                      color: inCart ? C.onPrimary : C.primary,
+                      border: inCart ? 'none' : `1.5px solid ${C.primary}33`,
+                      cursor: 'pointer',
+                      fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                      transition: 'background 0.18s, color 0.18s',
+                      WebkitTapHighlightColor: 'transparent',
+                      touchAction: 'manipulation',
+                    }}
+                  >
+                    {inCart ? <CartCheckIcon /> : <CartPlusIcon />}
                     {inCart ? '已加入' : '加入'}
-                  </span>
-                </button>
+                  </button>
+                </div>
               </div>
             </div>
           )

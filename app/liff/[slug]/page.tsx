@@ -7,6 +7,7 @@ import { useTenant, useTenantColors } from '@/components/liff/TenantContext'
 import { HOME_TEMPLATES } from '@/components/liff/templates/registry'
 import SetupModal from '@/components/liff/SetupModal'
 import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
+import { hasSeenSplash, markSplashSeen } from '@/lib/utils/splash'
 import type { HomeCountry } from '@/components/liff/templates/home/types'
 
 type Product = { countryCode: string; sellPrice: number }
@@ -22,17 +23,22 @@ export default function LiffHomePage() {
   const brandName = tenant?.brandName ?? 'eSIM'
   const primary   = tenant?.primaryColor ?? '#0284c7'
 
-  // ── 過場：每次 mount 都跑，與資料抓取無關 ──
+  // ── 過場：只有「本次 session 第一次」進入才播放 ──
+  // 用 sessionStorage 記錄已看過；之後在 App 內回到主頁直接略過過場，
+  // 只有重新點擊網址（開新分頁／新 session）才會再看到。
+  // 用 lazy initializer 同步讀取，避免回訪時閃一下白色過場畫面。
   const [splashOut, setSplashOut] = useState(false)
-  const [splashDone, setSplashDone] = useState(false)
+  const [splashDone, setSplashDone] = useState<boolean>(hasSeenSplash)
 
   useEffect(() => {
-    setSplashOut(false)
-    setSplashDone(false)
+    if (splashDone) return  // 本 session 已看過 → 不再播放
+    markSplashSeen()
     const t1 = setTimeout(() => setSplashOut(true), 700)
     const t2 = setTimeout(() => setSplashDone(true), 1060)  // 700 + 360 fade
     return () => { clearTimeout(t1); clearTimeout(t2) }
-  }, []) // 每次 mount 都重新計時
+    // 僅在首次 mount 評估一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── 資料抓取 ──
   const [countries, setCountries] = useState<HomeCountry[]>([])

@@ -310,10 +310,25 @@ function PayContent() {
                   <div id="card-expiry" style={fieldStyle} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: S.muted, marginBottom: 6 }}>安全碼</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: S.muted, marginBottom: 6 }}>安全碼（後三碼）</label>
                   <div id="card-ccv" style={fieldStyle} />
                 </div>
               </div>
+            </div>
+
+            {/* TapPay 安全性聲明 */}
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 9,
+              padding: '12px 14px', marginBottom: 14,
+              background: '#f8fafc', borderRadius: 12, border: `1px solid ${S.line}`,
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <p style={{ fontSize: 11.5, lineHeight: 1.65, color: S.faint, margin: 0 }}>
+                本公司採用喬睿科技 TapPay 金流交易系統，消費者刷卡時直接在銀行端系統中交易，本公司不會留下您的信用卡資料，以保障你的權益，資料傳輸過程採用嚴密的 SSL 2048bit 加密技術保護。
+              </p>
             </div>
 
             {/* Remember card toggle */}

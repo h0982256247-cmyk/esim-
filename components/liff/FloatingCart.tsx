@@ -112,17 +112,22 @@ export default function FloatingCart() {
     setSubmitting(true)
     setErrorMsg(null)
     try {
-      const res = await fetch('/api/orders/bundle', {
+      const r = await fetch('/api/orders/bundle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           paymentMethod: 'CREDIT_CARD',
           lines: items.map(i => ({ productId: i.productId, qty: i.qty })),
         }),
-      }).then(r => r.json())
+      })
 
-      if (!res.ok) {
-        setErrorMsg(res.error ?? '建立訂單失敗，請稍後再試')
+      // Parse defensively: a 500 may return an HTML error page, in which case
+      // r.json() throws — fall back to the HTTP status so we never hide the
+      // real failure behind a generic「網路錯誤」.
+      const res = await r.json().catch(() => null)
+
+      if (!r.ok || !res || !res.ok) {
+        setErrorMsg(res?.error ?? `建立訂單失敗（${r.status}），請稍後再試`)
         setSubmitting(false)
         return
       }

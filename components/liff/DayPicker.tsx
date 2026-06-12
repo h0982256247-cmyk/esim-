@@ -213,14 +213,11 @@ export default function DayPicker({
       {presets.length > 0 && (
         <div style={{
           marginTop: 14,
-          display: 'flex',
+          display: 'grid',
+          gridTemplateColumns: `repeat(${Math.min(presets.length, 6)}, 1fr)`,
           gap: 6,
-          overflowX: 'auto',
-          paddingBottom: 2,
-          msOverflowStyle: 'none',
-          scrollbarWidth: 'none',
         }}>
-          {presets.map(p => {
+          {presets.slice(0, 6).map(p => {
             const active = value === p
             const disabled = p < min || p > max
             return (
@@ -230,8 +227,7 @@ export default function DayPicker({
                 disabled={disabled}
                 onClick={() => { onChange(clamp(p)); haptic() }}
                 style={{
-                  flex: '0 0 auto',
-                  padding: '7px 14px',
+                  padding: '8px 0',
                   borderRadius: 100,
                   border: active ? `1.5px solid ${C.primary}` : '1.5px solid rgba(0,0,0,0.08)',
                   background: active ? C.primary : '#fff',
@@ -240,6 +236,7 @@ export default function DayPicker({
                   fontWeight: active ? 700 : 600,
                   cursor: disabled ? 'not-allowed' : 'pointer',
                   whiteSpace: 'nowrap',
+                  textAlign: 'center',
                   transition: 'background 0.12s, color 0.12s, border-color 0.12s',
                   WebkitTapHighlightColor: 'transparent',
                 }}
