@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useLiffBase } from '@/hooks/useLiffBase'
 
 type GroupData = {
   id: string
@@ -15,6 +16,7 @@ type GroupData = {
 
 export default function GroupAdminDashboard() {
   const router = useRouter()
+  const base = useLiffBase()
   const [group, setGroup] = useState<GroupData | null>(null)
   const [pendingBalance, setPendingBalance] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -40,7 +42,7 @@ export default function GroupAdminDashboard() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <p className="text-gray-500">尚未取得社群主權限</p>
-        <button onClick={() => router.push('/group')} className="text-blue-600 text-sm underline">前往申請</button>
+        <button onClick={() => router.push(`${base}/group`)} className="text-blue-600 text-sm underline">前往申請</button>
       </div>
     )
   }
