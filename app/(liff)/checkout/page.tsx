@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTapPaySdkLoader } from '@/hooks/useTapPaySdkLoader'
+import { useLiffBase } from '@/hooks/useLiffBase'
 import { redirectToPaymentUrl } from '@/lib/utils/payment-redirect'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { useLiff } from '@/components/liff/LiffProvider'
@@ -132,6 +133,10 @@ function CheckoutContent() {
   // 沒有 productId → 多張（購物車）結帳模式
   const bundleMode = !productId
   const C = useTenantColors()
+  // /liff/<slug>/... 進來的話 base = '/liff/<slug>'；舊版 (liff) 直接是 ''。
+  // returnUrl 給 TapPay 一定要帶 base，不然 3DS / LINE Pay 完成後跳轉會掉
+  // 掉 slug 前綴，使用者回到的訂單頁不在他原本的租戶介面下。
+  const base = useLiffBase()
   const cart = useCart()
   const { liff } = useLiff()
 
@@ -416,7 +421,7 @@ function CheckoutContent() {
         setSubmitting(false)
         return
       }
-      successHref = `/orders?bundleId=${res.bundleId}`
+      successHref = `${base}/orders?bundleId=${res.bundleId}`
       chargeBody = { bundleId: res.bundleId, returnUrl: `${window.location.origin}${successHref}` }
     } else {
       // ── 單張：建立單筆訂單 ──
@@ -445,7 +450,7 @@ function CheckoutContent() {
         setSubmitting(false)
         return
       }
-      successHref = `/orders/${orderRes.orderId}`
+      successHref = `${base}/orders/${orderRes.orderId}`
       chargeBody = { orderId: orderRes.orderId, returnUrl: `${window.location.origin}${successHref}` }
     }
     dbg('order created', { successHref })

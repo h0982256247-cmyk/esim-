@@ -623,8 +623,32 @@ export default function OrderDetailPage() {
             <div style={{ width: 18, height: 18, border: '2.5px solid #fde68a', borderTopColor: '#d97706', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
             <p style={{ fontSize: 14, fontWeight: 700, color: '#a16207', margin: 0 }}>待付款</p>
           </div>
-          <p style={{ fontSize: 13, color: '#92400e', margin: 0, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 13, color: '#92400e', margin: '0 0 12px', lineHeight: 1.6 }}>
             正在等待銀行確認付款結果，通常在幾秒內完成。請勿關閉此頁面。
+          </p>
+          <p style={{ fontSize: 12, color: '#a16207', margin: 0, lineHeight: 1.6 }}>
+            若您剛在 LINE Pay 或銀行頁面取消了付款，可
+            <button
+              onClick={async () => {
+                if (!window.confirm('確定要取消這筆訂單嗎？\n\n若您剛取消了付款，按確定可立即釋出此訂單，不必等候系統自動處理。')) return
+                try {
+                  const r = await fetch(`/api/orders/${order.id}/cancel`, { method: 'POST' }).then(x => x.json())
+                  if (!r.ok) { alert(r.error ?? '取消失敗，請稍候再試'); return }
+                  // 立即重抓一次訂單，UI 就會切到 CANCELLED banner
+                  await fetch(`/api/orders/${order.id}`).then(r => r.json()).then(d => d.order && setOrder(d.order))
+                } catch {
+                  alert('網路錯誤，請稍候再試')
+                }
+              }}
+              style={{
+                background: 'none', border: 'none', padding: 0,
+                color: '#b45309', fontWeight: 700, fontSize: 12,
+                textDecoration: 'underline', cursor: 'pointer',
+              }}
+            >
+              按此標記訂單為已取消
+            </button>
+            。
           </p>
         </div>
       )}
