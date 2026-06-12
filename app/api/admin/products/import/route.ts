@@ -69,7 +69,7 @@ function cell(v: unknown): string {
 
 // 直接讀「二維矩陣」而非把 Excel 轉成 CSV 文字再用逗號切——商品名稱本身常含逗號
 // （例「紐澳, 10天,1GB/天」），逐字元切會錯位。矩陣由儲存格直接取值，徹底避開此問題。
-function parseMatrix(matrix: unknown[][]): { rows: CsvProductRow[]; errors: string[] } {
+function parseMatrix(matrix: unknown[][]): { rows: CsvProductRow[]; errors: string[]; notProduct?: boolean } {
   if (matrix.length < 2) return { rows: [], errors: ['檔案缺少資料列'] }
 
   // Parse headers with alias mapping
@@ -81,6 +81,12 @@ function parseMatrix(matrix: unknown[][]): { rows: CsvProductRow[]; errors: stri
 
   // Check required fields
   const missing = REQUIRED.filter(r => !headers.includes(r))
+  // 完全沒有任何必要欄位 → 此分頁不是商品資料（封面/說明頁等），回報 notProduct
+  // 讓呼叫端可略過而非讓整批失敗（多分頁匯入時常見）。
+  if (missing.length === REQUIRED.length) {
+    return { rows: [], errors: [], notProduct: true }
+  }
+  // 有部分必要欄位但缺其一 → 視為商品分頁的格式錯誤，照常回報。
   if (missing.length > 0) {
     return { rows: [], errors: [`缺少必要欄位：${missing.join(', ')}（支援中文欄位名）`] }
   }
@@ -181,19 +187,24 @@ function parseMatrix(matrix: unknown[][]): { rows: CsvProductRow[]; errors: stri
   return { rows, errors }
 }
 
-// 將 Excel 檔（xlsx/xls）的第一張 sheet 讀成二維矩陣（每列一個陣列）。
+// 將 Excel 檔（xlsx/xls）的「每一張」sheet 都讀成二維矩陣（每列一個陣列），
+// 回傳 [{ name, matrix }, ...]。先前只讀 SheetNames[0]，導致多分頁活頁簿僅匯入
+// 第一個分頁；此處改為全部分頁都讀，由呼叫端逐一解析後合併。
 // raw: true → 取儲存格原始值（數值仍是數值），避免長數字 ID 被格式化成科學記號；
 // 以文字格式存的前導零（"007"）也會保留。
 // （注意：若來源檔把 ID 欄存成「數值」型別，前導零在存檔當下即遺失，無法於此復原——
 //  匯入端建議將 ID 欄位設為「文字」格式。）
 // blankrows: true → 保留空白列，使「第 N 行」與 Excel 列號對齊。
-async function xlsxToMatrix(file: File): Promise<unknown[][]> {
+async function xlsxToSheets(file: File): Promise<{ name: string; matrix: unknown[][] }[]> {
   const buf = await file.arrayBuffer()
   const workbook = XLSX.read(buf, { type: 'array' })
-  const sheetName = workbook.SheetNames[0]
-  if (!sheetName) throw new Error('Excel 檔案沒有任何 sheet')
-  const sheet = workbook.Sheets[sheetName]
-  return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: '', blankrows: true })
+  if (workbook.SheetNames.length === 0) throw new Error('Excel 檔案沒有任何 sheet')
+  return workbook.SheetNames.map(name => ({
+    name,
+    matrix: XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name], {
+      header: 1, raw: true, defval: '', blankrows: true,
+    }),
+  }))
 }
 
 // 解析 CSV 文字 → 二維矩陣。支援雙引號包夾欄位（內含逗號、換行）與 "" 跳脫引號。
@@ -245,22 +256,50 @@ export async function POST(req: NextRequest) {
   const f = file as File
   const isExcel = /\.(xlsx|xls)$/i.test(f.name)
 
-  let matrix: unknown[][]
+  // Excel：讀入「所有分頁」；CSV：單一分頁。每個分頁各自有表頭，獨立解析後合併。
+  let sheets: { name: string; matrix: unknown[][] }[]
   try {
-    matrix = isExcel ? await xlsxToMatrix(f) : csvToMatrix(await f.text())
+    sheets = isExcel
+      ? await xlsxToSheets(f)
+      : [{ name: '', matrix: csvToMatrix(await f.text()) }]
   } catch (err) {
     const msg = err instanceof Error ? err.message : '檔案解析失敗'
     return NextResponse.json({ error: `無法解析檔案：${msg}` }, { status: 400 })
   }
 
-  const { rows, errors } = parseMatrix(matrix)
+  const rows: CsvProductRow[] = []
+  const errors: string[] = []
+  const skippedSheets: string[] = []   // 有資料但非商品格式（封面/說明頁）
+  const importedSheets: string[] = []  // 實際匯入的分頁
+  const multiSheet = sheets.length > 1
+
+  for (const { name, matrix } of sheets) {
+    // 完全空白的分頁直接略過（不視為錯誤、也不列入「略過清單」）
+    const hasData = matrix.slice(1).some(r => (r ?? []).some(c => cell(c) !== ''))
+    if (matrix.length < 2 || !hasData) continue
+
+    const parsed = parseMatrix(matrix)
+    if (parsed.notProduct) {
+      if (name) skippedSheets.push(name)
+      continue
+    }
+
+    // 多分頁時，把「第 N 行」前面加上分頁名稱，方便定位是哪個分頁出錯。
+    const tag = multiSheet && name ? `[${name}] ` : ''
+    for (const e of parsed.errors) errors.push(tag + e)
+    if (parsed.rows.length > 0) {
+      rows.push(...parsed.rows)
+      if (name) importedSheets.push(name)
+    }
+  }
 
   if (errors.length > 0) {
     return NextResponse.json({ error: '驗證失敗，整批未寫入', details: errors }, { status: 422 })
   }
 
   if (rows.length === 0) {
-    return NextResponse.json({ error: 'CSV 沒有有效資料列' }, { status: 400 })
+    const hint = skippedSheets.length > 0 ? `（略過非商品分頁：${skippedSheets.join('、')}）` : ''
+    return NextResponse.json({ error: `找不到有效商品資料列${hint}` }, { status: 400 })
   }
 
   // ── 供應商 API 驗證（非阻斷）：一次取回全部清單，批次比對 ──
@@ -306,14 +345,17 @@ export async function POST(req: NextRequest) {
     const warns: string[] = []
     if (notFound      > 0) warns.push(`供應商查無 ${notFound} 筆`)
     if (priceMismatch > 0) warns.push(`成本價不符 ${priceMismatch} 筆`)
+    if (skippedSheets.length > 0) warns.push(`略過非商品分頁：${skippedSheets.join('、')}`)
 
     const parts: string[] = []
     if (result.created > 0) parts.push(`新增 ${result.created} 筆`)
     if (result.updated > 0) parts.push(`更新 ${result.updated} 筆`)
     const summary = parts.length > 0 ? parts.join('、') : `處理 ${result.count} 筆`
+    // 多分頁時附上實際匯入的分頁數，讓使用者確認全部分頁都吃到。
+    const sheetNote = multiSheet && importedSheets.length > 0 ? `；共 ${importedSheets.length} 個分頁` : ''
 
     return NextResponse.json({
-      message:  `匯入完成（${summary}）`,
+      message:  `匯入完成（${summary}${sheetNote}）`,
       warnings: warns.length > 0 ? warns : undefined,
     })
   } catch (err: unknown) {
