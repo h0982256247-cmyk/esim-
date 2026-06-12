@@ -5,12 +5,13 @@ import { cancelExpiredPendingOrders } from '@/lib/services/order'
 // 每 5 分鐘由 Vercel Cron 呼叫，取消超過 30 分鐘的 PENDING 訂單
 // 驗證方式：Vercel 自動帶 Authorization: Bearer {CRON_SECRET}
 export async function GET(req: NextRequest) {
-  // 若設定了 CRON_SECRET 則驗證，未設定時僅允許本機呼叫
-  if (process.env.CRON_SECRET) {
-    const auth = req.headers.get('authorization')
-    if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  // Fail-closed：未設定 CRON_SECRET 一律拒絕（先前未設定時端點完全公開，任何人可觸發）
+  const secret = process.env.CRON_SECRET
+  if (!secret) {
+    return NextResponse.json({ error: 'CRON_SECRET 未設定，拒絕執行' }, { status: 503 })
+  }
+  if (req.headers.get('authorization') !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const cancelled = await cancelExpiredPendingOrders()

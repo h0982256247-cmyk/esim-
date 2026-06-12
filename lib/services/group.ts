@@ -149,6 +149,13 @@ export async function adminSetRebateRate(
   rebateRate: number,
   tenantAdminId: string | null,
 ) {
+  // 租戶隔離：非平台級（tenantAdminId 非 null）只能改自己租戶的社群。
+  // 少了這層，A 租戶管理員可改 B 租戶社群的讓利率，影響其分潤。比照 approve/suspend/reject。
+  if (tenantAdminId != null) {
+    const existing = await prisma.group.findUnique({ where: { id: groupId }, select: { tenantAdminId: true } })
+    if (!existing || existing.tenantAdminId !== tenantAdminId) throw new Error('無權操作此社群')
+  }
+
   // 取得該 Platform Admin 的讓利上限
   let ceiling = 0.30
   if (tenantAdminId) {

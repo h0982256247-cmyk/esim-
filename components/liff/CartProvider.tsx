@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useLiff } from './LiffProvider'
 
 export type CartItem = {
   productId: string
@@ -39,17 +40,25 @@ const STORAGE_KEY = 'esim_cart_v1'
 const MAX_LINES = 20
 const MAX_QTY_PER_LINE = 9
 
-function readStorage(): CartItem[] {
-  if (typeof window === 'undefined') return []
+// 購物車連同「擁有者 LINE userId」一起持久化。共用瀏覽器時，換另一個 LINE 帳號
+// 登入就不會看到前一位使用者的購物車（見 reconcile effect）。
+type StoredCart = { ownerId: string | null; items: CartItem[] }
+
+function readStorage(): StoredCart {
+  if (typeof window === 'undefined') return { ownerId: null, items: [] }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
+    if (!raw) return { ownerId: null, items: [] }
     const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
+    // 兼容舊格式（純陣列）→ 視為匿名購物車
+    const arr = Array.isArray(parsed) ? parsed : parsed?.items
+    const ownerId = !Array.isArray(parsed) && typeof parsed?.ownerId === 'string' ? parsed.ownerId : null
+    if (!Array.isArray(arr)) return { ownerId: null, items: [] }
     // Backfill qty for items saved before the qty field existed (v1 carts)
-    return parsed.filter(isValidItem).map(it => ({ ...it, qty: typeof it.qty === 'number' && it.qty > 0 ? it.qty : 1 }))
+    const items = arr.filter(isValidItem).map(it => ({ ...it, qty: typeof it.qty === 'number' && it.qty > 0 ? it.qty : 1 }))
+    return { ownerId, items }
   } catch {
-    return []
+    return { ownerId: null, items: [] }
   }
 }
 
@@ -68,26 +77,55 @@ function clampQty(n: number): number {
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
+  const { liff, isLoggedIn } = useLiff()
   const [items, setItems] = useState<CartItem[]>([])
+  const [ownerId, setOwnerId] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(false)
 
   // Hydrate from localStorage on mount
   useEffect(() => {
-    setItems(readStorage())
+    const s = readStorage()
+    setItems(s.items)
+    setOwnerId(s.ownerId)
     setHydrated(true)
   }, [])
+
+  // 解析目前登入的 LINE userId（LIFF 就緒後）
+  useEffect(() => {
+    let cancelled = false
+    if (liff && isLoggedIn) {
+      liff.getProfile().then(p => { if (!cancelled) setCurrentUserId(p.userId) }).catch(() => {})
+    }
+    return () => { cancelled = true }
+  }, [liff, isLoggedIn])
+
+  // Reconcile：得知目前使用者後，匿名車綁定到本人；若車主是別人 → 清空（避免跨使用者外洩）
+  useEffect(() => {
+    if (!hydrated || !currentUserId) return
+    if (ownerId === null) {
+      setOwnerId(currentUserId)
+    } else if (ownerId !== currentUserId) {
+      setItems([])
+      setOwnerId(currentUserId)
+    }
+  }, [hydrated, currentUserId, ownerId])
 
   // Persist on change
   useEffect(() => {
     if (!hydrated || typeof window === 'undefined') return
-    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items)) } catch {}
-  }, [items, hydrated])
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ownerId, items })) } catch {}
+  }, [items, ownerId, hydrated])
 
   // Sync across tabs
   useEffect(() => {
     if (typeof window === 'undefined') return
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) setItems(readStorage())
+      if (e.key === STORAGE_KEY) {
+        const s = readStorage()
+        setItems(s.items)
+        setOwnerId(s.ownerId)
+      }
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)

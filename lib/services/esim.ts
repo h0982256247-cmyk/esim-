@@ -235,6 +235,7 @@ export async function triggerEsimActivation(orderId: string): Promise<void> {
     where: { id: orderId },
     select: {
       userId: true,
+      wmOrderId: true,
       orderItems: { select: { productName: true } },
       user: {
         select: {
@@ -244,6 +245,10 @@ export async function triggerEsimActivation(orderId: string): Promise<void> {
       },
     },
   })
+  // 冪等守門：已下過供應商單（wmOrderId 已存在）就直接略過，避免並發 webhook /
+  // webhook 重送對世界移動重複下單（重複成本、重複發卡）。wmOrderId 為 null 才是
+  // 「尚未下單或前次下單失敗」，允許（重）試。
+  if (orderInfo?.wmOrderId) return
   const userId = orderInfo?.userId ?? ''
   const productName = orderInfo?.orderItems[0]?.productName ?? 'eSIM'
   const tenantAdminId = orderInfo?.user?.groupMembership?.group?.tenantAdminId

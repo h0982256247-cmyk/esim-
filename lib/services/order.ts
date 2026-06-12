@@ -61,46 +61,57 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     orderNumber = generateOrderNumber()
   }
 
-  const order = await prisma.$transaction(async tx => {
-    const o = await tx.order.create({
-      data: {
-        userId: input.userId,
-        currentOwnerId: input.userId,   // 預設買家就是擁有者；轉贈後會改成接收者
-        orderNumber,
-        status: OrderStatus.PENDING,
-        subtotal,
-        discountAmount,
-        totalPaid,
-        taxAmount: 0,
-        paymentMethod: input.paymentMethod,
-        orderItems: {
-          create: {
-            productId: input.productId,
-            productName: `${product.countryNameZh} ${product.displayDays}天`,
-            qty: 1,
-            unitPrice: subtotal,
-            unitCost: product.costPrice,   // 鎖死成本快照，後續供應商改價不影響歷史訂單
+  let order
+  try {
+    order = await prisma.$transaction(async tx => {
+      const o = await tx.order.create({
+        data: {
+          userId: input.userId,
+          currentOwnerId: input.userId,   // 預設買家就是擁有者；轉贈後會改成接收者
+          orderNumber,
+          status: OrderStatus.PENDING,
+          subtotal,
+          discountAmount,
+          totalPaid,
+          taxAmount: 0,
+          paymentMethod: input.paymentMethod,
+          orderItems: {
+            create: {
+              productId: input.productId,
+              productName: `${product.countryNameZh} ${product.displayDays}天`,
+              qty: 1,
+              unitPrice: subtotal,
+              unitCost: product.costPrice,   // 鎖死成本快照，後續供應商改價不影響歷史訂單
+            },
+          },
+          orderCoupons: {
+            create: validatedCoupons.map(c => ({
+              couponId: c.id,
+              discountApplied: c.discount,
+            })),
           },
         },
-        orderCoupons: {
-          create: validatedCoupons.map(c => ({
-            couponId: c.id,
-            discountApplied: c.discount,
-          })),
-        },
-      },
-    })
-
-    // 標記優惠券已使用
-    for (const c of validatedCoupons) {
-      await tx.coupon.update({
-        where: { id: c.id },
-        data: { usedAt: new Date(), usedOrderId: o.id },
       })
-    }
 
-    return o
-  })
+      // 標記優惠券已使用：條件式 updateMany（usedAt 必須仍為 null）。
+      // 兩筆並發結帳用同一張券時，只有一筆會 count===1，另一筆 throw → 整筆 rollback，
+      // 避免同券雙花。
+      for (const c of validatedCoupons) {
+        const r = await tx.coupon.updateMany({
+          where: { id: c.id, usedAt: null },
+          data: { usedAt: new Date(), usedOrderId: o.id },
+        })
+        if (r.count !== 1) throw new Error('COUPON_ALREADY_USED')
+      }
+
+      return o
+    })
+  } catch (err) {
+    if (err instanceof Error && err.message === 'COUPON_ALREADY_USED') {
+      return { ok: false, reason: '優惠券已被使用，請重新整理後再試' }
+    }
+    throw err
+  }
 
   return {
     ok: true,
@@ -271,24 +282,30 @@ export function isOrderExpired(createdAt: Date): boolean {
 
 // ─── 訂單狀態更新 ─────────────────────────────────────────────────
 
-export async function markOrderProcessing(orderId: string, tapPayOrderId: string) {
-  return prisma.order.update({
-    where: { id: orderId },
+// 只把 PENDING → PROCESSING（條件式 updateMany）。回傳是否真的取得鎖：
+// 兩個並發付款請求只有一個會 count===1，另一個 count===0 → 呼叫端中止，避免重複扣款。
+export async function markOrderProcessing(orderId: string, tapPayOrderId: string): Promise<boolean> {
+  const r = await prisma.order.updateMany({
+    where: { id: orderId, status: OrderStatus.PENDING },
     data: { status: OrderStatus.PROCESSING, tapPayOrderId },
   })
+  return r.count === 1
 }
 
-export async function markBundleOrdersProcessing(bundleId: string, anchorOrderId: string, tapPayOrderId: string) {
+export async function markBundleOrdersProcessing(bundleId: string, anchorOrderId: string, tapPayOrderId: string): Promise<boolean> {
   // Only the anchor carries the unique tapPayOrderId; the rest just flip status.
+  // 以 anchor 的條件式更新當作整組的鎖：搶不到 anchor 就整組中止。
   return prisma.$transaction(async tx => {
-    await tx.order.update({
-      where: { id: anchorOrderId },
+    const anchor = await tx.order.updateMany({
+      where: { id: anchorOrderId, status: OrderStatus.PENDING },
       data: { status: OrderStatus.PROCESSING, tapPayOrderId },
     })
+    if (anchor.count !== 1) return false
     await tx.order.updateMany({
-      where: { bundleId, id: { not: anchorOrderId } },
+      where: { bundleId, id: { not: anchorOrderId }, status: OrderStatus.PENDING },
       data: { status: OrderStatus.PROCESSING },
     })
+    return true
   })
 }
 

@@ -83,8 +83,13 @@ export async function calculateAndSaveCommission(orderId: string): Promise<void>
 export async function settleCommissions(groupId: string, period: string): Promise<void> {
   // period = "YYYY-MM"
   const [year, month] = period.split('-').map(Number)
-  const start = new Date(year, month - 1, 1)
-  const end = new Date(year, month, 1)
+  // 用 Asia/Taipei（UTC+8，無 DST）的月界，而非伺服器本機時區。
+  // 先前用 new Date(year, month-1, 1) 會以執行環境時區計算：Vercel 跑 UTC 時，
+  // 月初／月末 8 小時內付款（paidAt 以 UTC 儲存）的訂單會被歸到錯誤月份。
+  // Date.UTC 取絕對時間，再減 8h 對齊台北 00:00，結果與伺服器時區無關。
+  const TZ_OFFSET_MS = 8 * 60 * 60 * 1000
+  const start = new Date(Date.UTC(year, month - 1, 1) - TZ_OFFSET_MS)
+  const end = new Date(Date.UTC(year, month, 1) - TZ_OFFSET_MS)
 
   const commissions = await prisma.commission.findMany({
     where: {

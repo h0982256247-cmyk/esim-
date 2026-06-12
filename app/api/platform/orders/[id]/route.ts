@@ -22,8 +22,11 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (auth instanceof NextResponse) return auth
 
   const { id } = await params
-  const order = await prisma.order.findUnique({
-    where: { id },
+  // 租戶隔離：非 SUPER_ADMIN（tenantAdminId 為 null 才是平台級）只能存取自己租戶的訂單，
+  // 否則可用訂單 id 直接讀其他租戶客戶的 PII。
+  const tenantWhere = auth.tenantAdminId ? { user: { tenantAdminId: auth.tenantAdminId } } : {}
+  const order = await prisma.order.findFirst({
+    where: { id, ...tenantWhere },
     include: {
       user: { select: { displayName: true, lineUid: true, phone: true, email: true } },
       orderItems: true,
@@ -44,8 +47,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params
   const { action } = await req.json()
 
+  // 租戶隔離：非 SUPER_ADMIN 只能操作自己租戶的訂單（補發 / 退款都會動到金流與供應商）。
+  const tenantWhere = auth.tenantAdminId ? { user: { tenantAdminId: auth.tenantAdminId } } : {}
+
   if (action === 'retry_esim') {
-    const order = await prisma.order.findUnique({ where: { id }, select: { status: true } })
+    const order = await prisma.order.findFirst({ where: { id, ...tenantWhere }, select: { status: true } })
     if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
     if (order.status !== OrderStatus.ESIM_PENDING) {
       return NextResponse.json({ error: '只有 ESIM_PENDING 狀態可補發' }, { status: 409 })
@@ -56,8 +62,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   if (action === 'refund') {
     // 1. 撈訂單資料 + tappayRecTradeId（退款必須）
-    const order = await prisma.order.findUnique({
-      where: { id },
+    const order = await prisma.order.findFirst({
+      where: { id, ...tenantWhere },
       select: {
         status: true,
         totalPaid: true,

@@ -21,6 +21,11 @@ export async function POST(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
 
+  // 只有 SUPER_ADMIN / PLATFORM_ADMIN 可建立帳號；SUB_ADMIN 不得建立任何管理員
+  if (auth.role !== PlatformAdminRole.SUPER_ADMIN && auth.role !== PlatformAdminRole.PLATFORM_ADMIN) {
+    return NextResponse.json({ error: '權限不足' }, { status: 403 })
+  }
+
   const { email, password, name, role, modules, parentId: bodyParentId, tenantSlug, brandName, liffId, primaryColor } = await req.json()
 
   if (!email || !password || !name || !role) {

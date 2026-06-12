@@ -66,6 +66,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   const { id } = await params
+
+  // 租戶隔離：非 SUPER_ADMIN 只能操作自己本人或自己建立的下線（parentId === 自己）。
+  // 少了這層檢查，任何 Platform Admin 都能改別租戶管理員的密碼／停權／品牌設定 → 跨租戶接管。
+  if (auth.role !== PlatformAdminRole.SUPER_ADMIN) {
+    const target = await prisma.platformAdmin.findUnique({
+      where: { id },
+      select: { parentId: true },
+    })
+    if (!target) return NextResponse.json({ error: '帳號不存在' }, { status: 404 })
+    if (id !== auth.adminId && target.parentId !== auth.adminId) {
+      return NextResponse.json({ error: '無權操作此帳號' }, { status: 403 })
+    }
+  }
+
   const body = await req.json()
 
   if (typeof body.isActive === 'boolean') {

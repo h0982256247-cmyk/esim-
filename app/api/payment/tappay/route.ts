@@ -125,10 +125,13 @@ export async function POST(req: NextRequest) {
   const tapPayOrderId = anchor.orderNumber ?? `ESM-${anchor.id.slice(-8).toUpperCase()}`
 
   // ─── Lock state before charging ─────────────────────────────────────
-  if (isBundle) {
-    await markBundleOrdersProcessing(bundleId!, anchor.id, tapPayOrderId)
-  } else {
-    await markOrderProcessing(anchor.id, tapPayOrderId)
+  // 條件式 PENDING→PROCESSING：搶不到鎖代表已有並發請求在處理（或已非待付款），
+  // 直接 409 中止，避免同一張訂單被刷兩次。
+  const locked = isBundle
+    ? await markBundleOrdersProcessing(bundleId!, anchor.id, tapPayOrderId)
+    : await markOrderProcessing(anchor.id, tapPayOrderId)
+  if (!locked) {
+    return NextResponse.json({ error: '訂單已在處理中或已不在待付款狀態，請勿重複付款' }, { status: 409 })
   }
 
   const cardholder = {

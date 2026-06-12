@@ -7,11 +7,14 @@ import { GroupStatus } from '@prisma/client'
 // 每月 1 號由 Vercel Cron 呼叫，對所有 APPROVED 社群結算「上個月」
 // 驗證方式：Vercel 自動帶 Authorization: Bearer {CRON_SECRET}
 export async function GET(req: NextRequest) {
-  if (process.env.CRON_SECRET) {
-    const auth = req.headers.get('authorization')
-    if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  // Fail-closed：未設定 CRON_SECRET 一律拒絕。此端點會觸發全社群月結（動到金流），
+  // 先前未設定時完全公開，任何人都能呼叫提前 / 重複觸發結算。
+  const secret = process.env.CRON_SECRET
+  if (!secret) {
+    return NextResponse.json({ error: 'CRON_SECRET 未設定，拒絕執行' }, { status: 503 })
+  }
+  if (req.headers.get('authorization') !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   // 結算「上個月」（this 月 1 號跑時，結算上月）

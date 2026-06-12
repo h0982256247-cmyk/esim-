@@ -185,8 +185,12 @@ async function xlsxToCsvText(file: File): Promise<string> {
   const sheetName = workbook.SheetNames[0]
   if (!sheetName) throw new Error('Excel 檔案沒有任何 sheet')
   const sheet = workbook.Sheets[sheetName]
-  // FS='&'（field separator）保留 default 逗號；忽略 raw 數值，全部轉字串
-  return XLSX.utils.sheet_to_csv(sheet, { strip: false })
+  // rawNumbers: true → 輸出儲存格的原始數值，而非「格式化顯示字串」。
+  // 供應商方案ID 常為長數字字串；若用格式化字串，長數字會被 Excel 顯示成科學記號
+  // （1.23457E+12）而毀損。原始值可避免此問題；以文字格式存的前導零（"007"）也會保留。
+  // （注意：若來源檔把 ID 存成「數值」型別，前導零在存檔當下就已遺失，無法於此復原——
+  //  匯入端建議將 ID 欄位設為「文字」格式。）
+  return XLSX.utils.sheet_to_csv(sheet, { strip: false, rawNumbers: true })
 }
 
 // POST /api/admin/products/import  (multipart/form-data, field: "file")
