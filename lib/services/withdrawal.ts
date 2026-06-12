@@ -76,15 +76,24 @@ export async function requestWithdrawal(
     return { ok: false, reason: '請先到社群主後台補齊銀行資訊' }
   }
 
+  // 在外層作用域先固定已驗證非空的銀行欄位。$transaction 的 async 閉包不會保留
+  // 對 group.bankName 等「屬性」的非空收斂（閉包可能延後執行），直接在閉包內存取
+  // 會還原成 string|null，導致 satisfies Prisma.InputJsonValue 型別錯誤。
+  const groupId        = group.id
+  const bankName       = group.bankName
+  const bankAccount    = group.bankAccount
+  const bankBranch     = group.bankBranch
+  const bankHolderName = group.bankHolderName
+
   // 餘額檢查 + 建立提領在同一交易內完成，並以社群為粒度上交易級 advisory lock。
   // 沒這層鎖時：同一社群兩筆並發申請各自讀到相同 available，可能都通過檢查而
   // 雙重建立、合計超過可提領餘額（餘額是即時 aggregate 算出來的，沒有可鎖的單列）。
   // pg_advisory_xact_lock 在 COMMIT/ROLLBACK 自動釋放，與 PgBouncer transaction
   // pooling 相容；序列化後第二筆會看到第一筆已 commit 的 PENDING，餘額即正確扣減。
   const result = await prisma.$transaction<RequestWithdrawalResult>(async tx => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${group.id}))`
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${groupId}))`
 
-    const balance = await getWithdrawalBalance(group.id, tx)
+    const balance = await getWithdrawalBalance(groupId, tx)
     if (amount > balance.available) {
       return { ok: false, reason: `超過可提領金額（最多 NT$${balance.available.toLocaleString()}）` }
     }
@@ -92,14 +101,14 @@ export async function requestWithdrawal(
     // 解密後寫入 snapshot（admin 撥款時需要看明文）
     const w = await tx.withdrawal.create({
       data: {
-        groupId: group.id,
+        groupId,
         amount,
         status: WithdrawalStatus.PENDING,
         bankInfoSnapshot: {
-          bankName:       group.bankName,
-          bankAccount:    safeDecrypt(group.bankAccount),
-          bankBranch:     group.bankBranch ? safeDecrypt(group.bankBranch) : '',
-          bankHolderName: safeDecrypt(group.bankHolderName),
+          bankName,
+          bankAccount:    safeDecrypt(bankAccount),
+          bankBranch:     bankBranch ? safeDecrypt(bankBranch) : '',
+          bankHolderName: safeDecrypt(bankHolderName),
         } satisfies Prisma.InputJsonValue,
       },
     })
