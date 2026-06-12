@@ -316,6 +316,8 @@ function CheckoutContent() {
     else if (productId) cart.remove(productId)
   }
   const handlePayResult = (res: { requiresRedirect?: boolean; paymentUrl?: string; ok?: boolean; error?: string }, successHref: string) => {
+    // eslint-disable-next-line no-console
+    console.log('[checkout] tappay response', { requiresRedirect: res.requiresRedirect, paymentUrl: res.paymentUrl ? `${res.paymentUrl.slice(0,40)}...` : null, ok: res.ok, error: res.error })
     if (res.requiresRedirect && res.paymentUrl) {
       clearCartAfterCommit()
       // LINE Pay / 3DS：用 TPDirect.redirect（LINE webview 不吞）；helper 內部會
@@ -343,14 +345,37 @@ function CheckoutContent() {
     setSubmitting(true)
     setErrorMsg(null)
 
+    // 診斷：把每一步驟印到 console。卡在「付款中」時打開 Safari Remote
+    // Inspector 就能直接看到流程停在哪。最後一個成功的 log 就是卡點。
+    const dbg = (msg: string, data?: unknown) => {
+      // eslint-disable-next-line no-console
+      console.log(`[checkout] ${msg}`, data ?? '')
+    }
+    dbg('start', { paymentMethod, useNewCard, bundleMode, hasSavedCard: !!savedCard })
+
+    // Watchdog：30 秒沒任何結果（無 redirect、無 success navigation、無錯誤）
+    // 就強制解除 submitting 並提示使用者，避免 UI 永久卡死。
+    let watchdogFired = false
+    const watchdog = setTimeout(() => {
+      watchdogFired = true
+      // eslint-disable-next-line no-console
+      console.error('[checkout] watchdog fired — no response within 30s')
+      setErrorMsg('付款處理逾時（30 秒未回應）。請檢查網路後再試一次，或改用其他付款方式。')
+      setSubmitting(false)
+    }, 30_000)
+    const stopWatchdog = () => {
+      if (!watchdogFired) clearTimeout(watchdog)
+    }
+
     let chargeBody: Record<string, unknown>
     let successHref: string
 
     if (bundleMode) {
       // ── 多張：建立 bundle 訂單 ──
-      if (cart.items.length === 0) { setErrorMsg('購物車是空的'); setSubmitting(false); return }
+      if (cart.items.length === 0) { stopWatchdog(); setErrorMsg('購物車是空的'); setSubmitting(false); return }
       let res: { ok?: boolean; bundleId?: string; error?: string } | null
       try {
+        dbg('POST /api/orders/bundle ...')
         const r = await fetch('/api/orders/bundle', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -359,13 +384,18 @@ function CheckoutContent() {
             lines: cart.items.map(i => ({ productId: i.productId, qty: i.qty })),
           }),
         })
+        dbg('bundle order HTTP', r.status)
         res = await r.json().catch(() => null)
         if (!r.ok || !res || !res.ok || !res.bundleId) {
+          stopWatchdog()
           setErrorMsg(res?.error ?? `建立訂單失敗（${r.status}），請稍後再試`)
           setSubmitting(false)
           return
         }
-      } catch {
+      } catch (e) {
+        stopWatchdog()
+        // eslint-disable-next-line no-console
+        console.error('[checkout] bundle order failed', e)
         setErrorMsg('網路錯誤，請重試')
         setSubmitting(false)
         return
@@ -374,20 +404,27 @@ function CheckoutContent() {
       chargeBody = { bundleId: res.bundleId, returnUrl: `${window.location.origin}${successHref}` }
     } else {
       // ── 單張：建立單筆訂單 ──
-      if (!product || !productId || comboError) { setSubmitting(false); return }
+      if (!product || !productId || comboError) { stopWatchdog(); setSubmitting(false); return }
       let orderRes: { ok?: boolean; orderId?: string; error?: string }
       try {
-        orderRes = await fetch('/api/orders', {
+        dbg('POST /api/orders ...', { productId })
+        const r = await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ productId, couponIds: selectedCouponIds, paymentMethod }),
-        }).then(r => r.json())
-      } catch {
+        })
+        dbg('order HTTP', r.status)
+        orderRes = await r.json()
+      } catch (e) {
+        stopWatchdog()
+        // eslint-disable-next-line no-console
+        console.error('[checkout] single order failed', e)
         setErrorMsg('網路錯誤，請重試')
         setSubmitting(false)
         return
       }
       if (!orderRes.ok || !orderRes.orderId) {
+        stopWatchdog()
         setErrorMsg(orderRes.error ?? '建立訂單失敗')
         setSubmitting(false)
         return
@@ -395,30 +432,42 @@ function CheckoutContent() {
       successHref = `/orders/${orderRes.orderId}`
       chargeBody = { orderId: orderRes.orderId, returnUrl: `${window.location.origin}${successHref}` }
     }
+    dbg('order created', { successHref })
 
     // ── LINE Pay：取得 LINE Pay prime → 後端建立交易 → 導轉至 LINE 授權頁 ──
     if (paymentMethod === 'LINE_PAY') {
       ensureSetup()
       if (typeof window.TPDirect?.linePay?.getPrime !== 'function') {
+        stopWatchdog()
         setErrorMsg('LINE Pay 模組尚未就緒，請稍候再試')
         setSubmitting(false)
         return
       }
+      dbg('TPDirect.linePay.getPrime ...')
       window.TPDirect.linePay.getPrime(async result => {
+        dbg('linePay.getPrime result', { prime: result?.prime ? `${result.prime.slice(0,8)}...` : null, status: result?.status, msg: result?.msg })
         if (!result?.prime) {
+          stopWatchdog()
           setErrorMsg(result?.msg ?? '取得 LINE Pay 付款資訊失敗')
           setSubmitting(false)
           return
         }
         try {
-          const res = await fetch('/api/payment/tappay', {
+          dbg('POST /api/payment/tappay (LINE_PAY) ...')
+          const r = await fetch('/api/payment/tappay', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...chargeBody, prime: result.prime, method: 'LINE_PAY' }),
-          }).then(r => r.json())
+          })
+          dbg('tappay HTTP', r.status)
+          const res = await r.json()
+          stopWatchdog()
           // LINE Pay 一律導轉（handlePayResult 會處理 requiresRedirect）
           handlePayResult(res, successHref)
-        } catch {
+        } catch (e) {
+          stopWatchdog()
+          // eslint-disable-next-line no-console
+          console.error('[checkout] LINE Pay tappay call failed', e)
           setErrorMsg('網路錯誤，請重試')
           setSubmitting(false)
         }
@@ -430,13 +479,20 @@ function CheckoutContent() {
     // 使用已儲存卡片（代扣）
     if (!useNewCard && savedCard) {
       try {
-        const res = await fetch('/api/payment/tappay', {
+        dbg('POST /api/payment/tappay (saved card) ...')
+        const r = await fetch('/api/payment/tappay', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...chargeBody, useToken: true }),
-        }).then(r => r.json())
+        })
+        dbg('tappay HTTP', r.status)
+        const res = await r.json()
+        stopWatchdog()
         handlePayResult(res, successHref)
-      } catch {
+      } catch (e) {
+        stopWatchdog()
+        // eslint-disable-next-line no-console
+        console.error('[checkout] saved-card tappay call failed', e)
         setErrorMsg('網路錯誤，請重試')
         setSubmitting(false)
       }
@@ -444,20 +500,30 @@ function CheckoutContent() {
     }
 
     // 新卡：取得 prime 後送出
+    dbg('TPDirect.card.getPrime ...')
     window.TPDirect.card.getPrime(async result => {
+      dbg('card.getPrime result', { status: result.status, msg: result.msg, prime: result?.card?.prime ? `${result.card.prime.slice(0,8)}...` : null })
       if (result.status !== 0) {
+        stopWatchdog()
         setErrorMsg(result.msg ?? '取得卡片資訊失敗')
         setSubmitting(false)
         return
       }
       try {
-        const res = await fetch('/api/payment/tappay', {
+        dbg('POST /api/payment/tappay (new card) ...')
+        const r = await fetch('/api/payment/tappay', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...chargeBody, prime: result.card.prime, remember }),
-        }).then(r => r.json())
+        })
+        dbg('tappay HTTP', r.status)
+        const res = await r.json()
+        stopWatchdog()
         handlePayResult(res, successHref)
-      } catch {
+      } catch (e) {
+        stopWatchdog()
+        // eslint-disable-next-line no-console
+        console.error('[checkout] new-card tappay call failed', e)
         setErrorMsg('網路錯誤，請重試')
         setSubmitting(false)
       }

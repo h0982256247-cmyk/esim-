@@ -14,9 +14,22 @@ interface TPDirectLike {
 
 export function redirectToPaymentUrl(url: string): void {
   if (typeof window === 'undefined') return
+  // eslint-disable-next-line no-console
+  console.log('[payment-redirect]', url)
   const tp = (window as unknown as { TPDirect?: TPDirectLike }).TPDirect
   if (tp && typeof tp.redirect === 'function') {
     tp.redirect(url)
+    // TPDirect.redirect 內部如果 URL validation 失敗（xe(t) 回 false）會 console.error
+    // 後直接 return，不會 navigate。為了避免使用者卡在「付款中」，掛一個 200ms 的
+    // 保險：若到時 window.location 沒換過，直接強制 window.location.href 跳過去。
+    const before = window.location.href
+    setTimeout(() => {
+      if (window.location.href === before) {
+        // eslint-disable-next-line no-console
+        console.warn('[payment-redirect] TPDirect.redirect did not navigate, forcing window.location.href')
+        window.location.href = url
+      }
+    }, 200)
     return
   }
   // SDK 沒載入或不支援時 fallback。
