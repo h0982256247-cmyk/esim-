@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { useLiffBase } from '@/hooks/useLiffBase'
 import { SignalIllustration } from '@/components/liff/LiffIllustrations'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
@@ -51,6 +52,7 @@ function CheckIcon({ color }: { color: string }) {
 export default function ProductDetailPage() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
+  const base = useLiffBase()
   const C = useTenantColors()
   const cart = useCart()
   const [product, setProduct] = useState<Product | null>(null)
@@ -266,7 +268,7 @@ export default function ProductDetailPage() {
           })()}
 
           <button
-            onClick={() => router.push(`/checkout?productId=${product.id}`)}
+            onClick={() => router.push(`${base}/checkout?productId=${product.id}`)}
             style={{
               flex: 1,
               background: C.primary,

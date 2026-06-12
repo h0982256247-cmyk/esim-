@@ -235,7 +235,7 @@ function ProductsContent() {
               {countries.map(c => (
                 <button
                   key={c.countryCode}
-                  onClick={() => router.push(`/products?country=${c.countryCode}`)}
+                  onClick={() => router.push(`${slug ? `/liff/${slug}` : ''}/products?country=${c.countryCode}`)}
                   style={{
                     background: S.white,
                     border: `1px solid ${S.line}`,
@@ -390,7 +390,7 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
           gap: 10,
         }}>
           <button
-            onClick={() => router.push('/products')}
+            onClick={() => router.push(slug ? `/liff/${slug}/products` : '/products')}
             style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', color: S.muted, display: 'flex', alignItems: 'center' }}
           >
             <BackArrow />
@@ -503,7 +503,7 @@ function PlansView({ countries, products, coupons, selectedCountry, slug, showSe
                 <div style={{ display: 'flex', alignItems: 'stretch' }}>
                   <button
                     type="button"
-                    onClick={() => router.push(`/products/${p.id}`)}
+                    onClick={() => router.push(`${slug ? `/liff/${slug}` : ''}/products/${p.id}`)}
                     style={{
                       flex: 1, textAlign: 'left',
                       background: 'transparent', border: 'none',
