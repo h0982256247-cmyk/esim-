@@ -4,7 +4,7 @@ import { requirePlatformAuth } from '@/lib/auth/platform'
 import { batchCreateProducts, type CsvProductRow } from '@/lib/services/product'
 import { fetchSupplierProductMap } from '@/lib/services/esim'
 import { resolveCountry, parseProductNameSegments } from '@/lib/utils/country'
-import { parseCapacityFromName } from '@/lib/utils/capacity'
+import { parseCapacityFromName, normalizeCapacity } from '@/lib/utils/capacity'
 
 // Vercel 預設 serverless function timeout 為 10 秒，CSV 匯入需呼叫供應商 API +
 // 走 PgBouncer connection_limit=1 的逐筆寫入，列數一多 10 秒不夠。拉到 60 秒
@@ -134,11 +134,13 @@ function parseCsv(text: string): { rows: CsvProductRow[]; errors: string[] } {
     //   1) CSV 流量欄
     //   2) 整段 productName regex（吃到飽 / GB/MB）
     //   3) planCode / supplierSkuId 抓
-    const dataCapacity = get('dataCapacity')
+    // 統一正規化：每日 "1GB/天"、總量 "總量1GB"、吃到飽 鈦金/無限/高速吃到飽
+    const dataCapacity = normalizeCapacity(
+      get('dataCapacity')
       || (productName    ? parseCapacityFromName(productName)    : null)
       || (planCode       ? parseCapacityFromName(planCode)       : null)
-      || (supplierSkuId  ? parseCapacityFromName(supplierSkuId)  : null)
-      || undefined
+      || (supplierSkuId  ? parseCapacityFromName(supplierSkuId)  : null),
+    ) ?? undefined
 
     const sellPrice = parseInt(get('sellPrice'))
     const costPrice = parseInt(get('costPrice'))

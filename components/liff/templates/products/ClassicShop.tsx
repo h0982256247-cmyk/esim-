@@ -39,14 +39,17 @@ function fmtGB(gb: number): string {
 // 把 dataCapacity 拆成「主要數字 + 計量方式 + 總量」，讓每日／總量方案一眼可辨
 function describeCapacity(d: { plan: { dataCapacity: string | null }; isPerDay: boolean; isUnlimited: boolean; totalGB: number }) {
   const raw = (d.plan.dataCapacity ?? '').trim()
-  const amount = raw.replace(/\s*\/\s*(天|日|day)\s*/i, '').trim()
   if (d.isUnlimited) {
-    return { kind: 'unlimited' as const, amount: amount || '吃到飽', meterLabel: '不限流量', sub: '' }
+    // 已是「鈦金／無限／高速吃到飽」完整名稱，直接顯示，不再另貼標籤
+    return { kind: 'unlimited' as const, amount: raw || '無限吃到飽', meterLabel: '', sub: '' }
   }
   if (d.isPerDay) {
+    const amount = raw.replace(/\s*\/\s*(天|日|day)\s*/i, '').trim()
     return { kind: 'perday' as const, amount: amount || '—', meterLabel: '每日', sub: d.totalGB > 0 ? `共 ${fmtGB(d.totalGB)}` : '' }
   }
-  return { kind: 'total' as const, amount: amount || '—', meterLabel: '總用量', sub: '' }
+  // 總量：去掉「總量」前綴當大字，標籤顯示「總量」，組合起來即「總量1GB」
+  const amount = raw.replace(/^總量\s*/, '').trim()
+  return { kind: 'total' as const, amount: amount || '—', meterLabel: '總量', sub: '' }
 }
 
 function BackArrow() {
