@@ -17,6 +17,7 @@ const OLD_LIFF_PATHS = [
   '/group',
   '/support',
   '/gift',
+  '/group-admin',  // 已搬到 /liff/<slug>/group-admin；舊 bookmark 走這條 redirect
 ]
 
 export function middleware(req: NextRequest) {
@@ -39,7 +40,8 @@ export function middleware(req: NextRequest) {
 // 用 matcher 把不該攔截的路徑排除，省 middleware 運算量
 export const config = {
   matcher: [
-    // 排除 next 內部、靜態檔、liff、platform、group-admin、api
-    '/((?!_next/|api/|liff/|platform/|group-admin/|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)).*)',
+    // 排除 next 內部、靜態檔、liff、platform、api。group-admin 已搬到
+    // /liff/<slug>/group-admin，這裡刻意不排除，讓中介層攔到舊書籤導去登入頁。
+    '/((?!_next/|api/|liff/|platform/|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)).*)',
   ],
 }
