@@ -217,19 +217,27 @@ function CheckoutContent() {
 
   const showCardForm = useNewCard || savedCard === null
 
-  // setupSDK 只需呼叫一次（信用卡與 LINE Pay 共用）
-  const ensureSetup = () => {
-    if (setupDoneRef.current) return
+  // setupSDK 只需呼叫一次（信用卡與 LINE Pay 共用）。
+  // 回傳 true = 真的有效設定；回傳 false = appId 為 0（後端沒給 tenant 設定），
+  // 呼叫端必須立即報錯給使用者，不要繼續呼叫 card.setup（會炸 contentWindow）。
+  const ensureSetup = (): boolean => {
+    if (setupDoneRef.current) return true
     const cfg = tapPayConfigRef.current
     const appId = cfg?.appId ?? parseInt(process.env.NEXT_PUBLIC_TAPPAY_APP_ID ?? '0')
     const appKey = cfg?.appKey ?? process.env.NEXT_PUBLIC_TAPPAY_APP_KEY ?? ''
     const env = cfg?.env ?? (process.env.NEXT_PUBLIC_TAPPAY_ENV === 'production' ? 'production' : 'sandbox')
+    if (!appId || !appKey) {
+      // eslint-disable-next-line no-console
+      console.error('[checkout] TapPay config missing (appId=0). 後端 /api/liff/payment-config 未提供 tenant 設定。')
+      return false
+    }
     window.TPDirect.setupSDK(appId, appKey, env)
     setupDoneRef.current = true
+    return true
   }
 
   const initTapPay = () => {
-    ensureSetup()
+    if (!ensureSetup()) return  // 沒設定就不要設 fields，否則 SDK 內部會炸
     window.TPDirect.card.setup({
       fields: {
         number:         { element: '#card-number', placeholder: '1234 5678 9012 3456' },
@@ -436,7 +444,12 @@ function CheckoutContent() {
 
     // ── LINE Pay：取得 LINE Pay prime → 後端建立交易 → 導轉至 LINE 授權頁 ──
     if (paymentMethod === 'LINE_PAY') {
-      ensureSetup()
+      if (!ensureSetup()) {
+        stopWatchdog()
+        setErrorMsg('付款設定未就緒（後端尚未配置商家 TapPay 金鑰），請聯絡客服')
+        setSubmitting(false)
+        return
+      }
       if (typeof window.TPDirect?.linePay?.getPrime !== 'function') {
         stopWatchdog()
         setErrorMsg('LINE Pay 模組尚未就緒，請稍候再試')
