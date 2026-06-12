@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTapPaySdkLoader } from '@/hooks/useTapPaySdkLoader'
+import { redirectToPaymentUrl } from '@/lib/utils/payment-redirect'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { findBestCouponCombo as _findBestCouponCombo } from '@/lib/utils/coupon-combo'
@@ -231,15 +232,26 @@ function CheckoutContent() {
     ensureSetup()
     window.TPDirect.card.setup({
       fields: {
-        number:         { element: '#card-number', placeholder: '**** **** **** ****' },
+        number:         { element: '#card-number', placeholder: '1234 5678 9012 3456' },
         expirationDate: { element: '#card-expiry', placeholder: 'MM / YY' },
         ccv:            { element: '#card-ccv',    placeholder: 'CVV' },
       },
+      // styles 屬性會被注入到 iframe 內部 input；用 -apple-system 在 LINE iOS
+      // webview 才會抓到系統字、跟外層 UI 一致。height + line-height 讓文字
+      // 垂直置中、不會落到 box 下緣（之前 placeholder 跑出灰框的根因）。
       styles: {
-        input:    { color: '#1a1a1a', 'font-size': '16px' },
-        ':focus': { color: '#1a1a1a' },
-        '.valid':   { color: '#059669' },
-        '.invalid': { color: '#dc2626' },
+        input: {
+          color: '#1a1a1a',
+          'font-size': '16px',
+          'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
+          'font-weight': '500',
+          'line-height': '24px',
+        },
+        'input.ccv': { 'letter-spacing': '2px' },
+        ':focus':    { color: '#1a1a1a' },
+        '.valid':    { color: '#059669' },
+        '.invalid':  { color: '#dc2626' },
+        '::placeholder': { color: '#94a3b8' },
       },
     })
     setSdkReady(true)
@@ -306,7 +318,9 @@ function CheckoutContent() {
   const handlePayResult = (res: { requiresRedirect?: boolean; paymentUrl?: string; ok?: boolean; error?: string }, successHref: string) => {
     if (res.requiresRedirect && res.paymentUrl) {
       clearCartAfterCommit()
-      window.location.href = res.paymentUrl
+      // LINE Pay / 3DS：用 TPDirect.redirect（LINE webview 不吞）；helper 內部會
+      // 退回 window.location.href 作為 fallback。詳見 TapPay LINE Pay docs。
+      redirectToPaymentUrl(res.paymentUrl)
     } else if (res.ok) {
       clearCartAfterCommit()
       router.replace(successHref)
@@ -450,16 +464,24 @@ function CheckoutContent() {
     })
   }
 
-  // 信用卡輸入框（實心、可點擊、不過高）— 不可用 backdrop-filter，否則 LINE 內嵌瀏覽器無法點擊 TapPay iframe
+  // 信用卡輸入框 — 容器只負責外觀，內容（input）完全交給 TapPay iframe。
+  // 關鍵：用 height 固定總高、box-sizing: border-box 把 border 算進去，避免
+  //       iframe 跟外框錯位、placeholder 漂到下方（原本 minHeight + padding
+  //       會讓 iframe 高度 ≠ 容器可視高度）。padding 留給 iframe 自己處理
+  //       （透過 setup() 裡 styles.input.line-height 控制垂直置中）。
+  // 注意：不可用 backdrop-filter，否則 LINE 內嵌瀏覽器無法點擊 TapPay iframe。
   const fieldStyle: React.CSSProperties = {
-    border: '1px solid rgba(0,0,0,0.12)',
-    borderRadius: 10,
-    padding: '11px 14px',
-    minHeight: 44,
-    background: '#f6f7f9',
+    border: '1px solid #e5e7eb',
+    borderRadius: 12,
+    padding: '0 14px',
+    height: 50,
+    background: '#ffffff',
+    boxSizing: 'border-box',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
   }
   const fieldLabel: React.CSSProperties = {
-    display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6b7280', marginBottom: 5,
+    display: 'block', fontSize: 12.5, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.02em',
   }
 
   const pageReady = bundleMode ? cart.hydrated : (!loading && !!product)
