@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, Suspense } from 'react'
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
@@ -16,6 +16,15 @@ import { useCart } from '@/components/liff/CartProvider'
 import type { Country, Product, DayFilterControls, CartControls } from '@/components/liff/templates/products/types'
 
 const COMMON_PRESETS = [1, 3, 5, 7, 14, 30]
+
+// 把 dataCapacity 歸類成主頁搜尋的三種流量類型：吃到飽 / 每日型 / 總量。
+// 對應主頁 DATA_OPTIONS（'總量' / '每日型' / '吃到飽'）的 ?data 參數做篩選。
+function capKindOf(dc: string | null): '總量' | '每日型' | '吃到飽' | '' {
+  if (!dc) return ''
+  if (/吃到飽|無限|不限|max|hsd|鈦金|高速/i.test(dc)) return '吃到飽'
+  if (/\/\s*(天|日|day)/i.test(dc)) return '每日型'
+  return '總量'
+}
 
 function Spinner() {
   return (
@@ -41,6 +50,9 @@ function ProductsContent() {
   const slug = params?.slug ?? ''
   const selectedCountry = searchParams.get('country')
   const showSetup = searchParams.get('setup') === '1'
+  // 主頁搜尋帶入：天數 + 流量類型（總量 / 每日型 / 吃到飽）
+  const searchDays = searchParams.get('days')
+  const dataType = searchParams.get('data')
   const { liff, isReady } = useLiff()
   const C = useTenantColors()
   const tenant = useTenant()
@@ -52,12 +64,19 @@ function ProductsContent() {
   const [coupons, setCoupons] = useState<CouponItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Day filter state — 初始直接給 5，避免「340 → 17」閃爍（從 0 跳到 5 那一瞬間）
-  const [dayFilter, setDayFilter] = useState<number>(PRODUCTS_DEFAULT_DAYS)
-  const [pickerDays, setPickerDays] = useState<number>(PRODUCTS_DEFAULT_DAYS)
+  // Day filter state — 有從搜尋帶 ?days 就用它，否則預設 5（避免「340 → 17」閃爍）
+  const initialDay = (() => {
+    const n = searchDays ? parseInt(searchDays) : NaN
+    return Number.isFinite(n) && n > 0 ? n : PRODUCTS_DEFAULT_DAYS
+  })()
+  const [dayFilter, setDayFilter] = useState<number>(initialDay)
+  const [pickerDays, setPickerDays] = useState<number>(initialDay)
 
-  // 切國家時重設回 5（不重置成 0，避免又出現一次閃爍）
+  // 切國家時重設回 5（不重置成 0，避免又出現一次閃爍）。
+  // 首次掛載略過：保留從主頁搜尋帶進來的 ?days，不被重設覆蓋。
+  const dayResetSkipRef = useRef(true)
   useEffect(() => {
+    if (dayResetSkipRef.current) { dayResetSkipRef.current = false; return }
     setDayFilter(PRODUCTS_DEFAULT_DAYS)
     setPickerDays(PRODUCTS_DEFAULT_DAYS)
   }, [selectedCountry])
@@ -130,9 +149,10 @@ function ProductsContent() {
   }, [availableDays, pickerDays])
 
   const filteredProducts = useMemo(() => {
-    if (!dayFilter) return products
-    return products.filter(p => p.displayDays === dayFilter)
-  }, [products, dayFilter])
+    let list = dayFilter ? products.filter(p => p.displayDays === dayFilter) : products
+    if (dataType) list = list.filter(p => capKindOf(p.dataCapacity) === dataType)
+    return list
+  }, [products, dayFilter, dataType])
 
   const nearestDays = useMemo(() => {
     if (!dayFilter || filteredProducts.length > 0) return []

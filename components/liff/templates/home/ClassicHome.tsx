@@ -15,7 +15,7 @@ const QUICK_ACTIONS = [
 ]
 
 const DAY_OPTIONS  = ['3天','5天','7天','10天','15天']
-const DATA_OPTIONS = ['1GB','3GB','5GB','不限流量']
+const DATA_OPTIONS = ['總量','每日型','吃到飽']
 
 // 旅遊風統一色卡：每個國家擁有自己的「目的地色」作為頂部色條，但卡片本體
 // 維持米白底以避免畫面太雜。色相控制在低飽和、柔和的旅遊感色系。
@@ -38,6 +38,8 @@ export default function ClassicHome({
   const [query, setQuery]       = useState('')
   const [selDays, setSelDays]   = useState<string | null>(null)
   const [selData, setSelData]   = useState<string | null>(null)
+  // 點下拉選到的國家先「記住」而不是直接跳頁，讓使用者接著選天數/流量再按搜尋
+  const [selCountry, setSelCountry] = useState<{ code: string; name: string } | null>(null)
   const [searchOpen, setSearchOpen] = useState(true)   // 預設展開搜尋面板
   const brandName = tenant?.brandName ?? 'eSIM'
 
@@ -49,10 +51,12 @@ export default function ClassicHome({
   const hot = countries.slice(0, 6)
 
   function handleSearch() {
+    // 國家：優先用下拉點選的；沒點則用輸入字串比對到的第一個
+    const country = selCountry ?? (filtered[0] ? { code: filtered[0].countryCode, name: filtered[0].countryNameZh } : null)
     const p = new URLSearchParams()
-    if (query.trim()) p.set('q', query.trim())
+    if (country) p.set('country', country.code)
     if (selDays) p.set('days', selDays.replace('天', ''))
-    if (selData) p.set('data', selData)
+    if (selData) p.set('data', selData)   // 總量 / 每日型 / 吃到飽
     onSearch(p.toString() ? `?${p}` : '')
   }
 
@@ -117,7 +121,7 @@ export default function ClassicHome({
                 <input
                   type="text" placeholder="搜尋目的地，例如：日本"
                   autoFocus value={query}
-                  onChange={e => setQuery(e.target.value)}
+                  onChange={e => { setQuery(e.target.value); setSelCountry(null) }}
                   onKeyDown={e => e.key === 'Enter' && handleSearch()}
                   style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 16, color: '#1a1a1a', padding: '13px 0', minWidth: 0 }}
                 />
@@ -130,8 +134,8 @@ export default function ClassicHome({
                 )}
               </div>
 
-              {/* 搜尋下拉結果 */}
-              {filtered.length > 0 && (
+              {/* 搜尋下拉結果（已選定國家後收起，讓使用者接著選天數/流量）*/}
+              {filtered.length > 0 && !selCountry && (
                 <div style={{
                   position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 30,
                   background: '#fff', borderRadius: 18, overflow: 'hidden',
@@ -139,7 +143,7 @@ export default function ClassicHome({
                 }}>
                   {filtered.map((c, i) => (
                     <button key={c.countryCode}
-                      onClick={() => { setQuery(''); setSearchOpen(false); onSelectCountry(c.countryCode) }}
+                      onClick={() => { setSelCountry({ code: c.countryCode, name: c.countryNameZh }); setQuery(c.countryNameZh) }}
                       style={{
                         width: '100%', background: 'none', border: 'none',
                         borderBottom: i < filtered.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
