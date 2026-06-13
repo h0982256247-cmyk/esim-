@@ -20,6 +20,9 @@ export default function ProfileSetup() {
   const [form, setForm] = useState({ name: '', phone: '', email: '', birthday: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  // 已填過（phone/email 任一已有）→ 編輯模式：不再發歡迎券，文案改「儲存」。
+  // 與後端 issueCoupon 的 isFirstUpdate(!phone && !email) 判斷一致。
+  const [alreadyFilled, setAlreadyFilled] = useState(false)
 
   // 進頁載入現有資料預填：再打開時看得到已存的內容（而不是空白＝看起來像沒存）。
   // 讀 /api/users/me（phone/email 已在後端解密）；首次填寫無資料則維持空白。
@@ -35,6 +38,7 @@ export default function ProfileSetup() {
           email: u.email ?? '',
           birthday: u.birthday ? String(u.birthday).slice(0, 10) : '',  // ISO → YYYY-MM-DD
         })
+        setAlreadyFilled(!!(u.phone || u.email))
       })
       .catch(() => { /* 預填失敗不阻擋填寫 */ })
   }, [])
@@ -105,11 +109,17 @@ export default function ProfileSetup() {
             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.82a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
           </svg>
         </div>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: S.ink, margin: '0 0 6px', letterSpacing: '-0.02em' }}>完成註冊</h1>
-        <p style={{ fontSize: 14, color: S.muted, margin: 0 }}>
-          填寫以下資料，完成後即獲得{' '}
-          <span style={{ color: C.primary, fontWeight: 700 }}>官方 9 折優惠券</span>
-        </p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: S.ink, margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+          {alreadyFilled ? '個人資料' : '完成註冊'}
+        </h1>
+        {alreadyFilled ? (
+          <p style={{ fontSize: 14, color: S.muted, margin: 0 }}>更新你的基本資料</p>
+        ) : (
+          <p style={{ fontSize: 14, color: S.muted, margin: 0 }}>
+            填寫以下資料，完成後即獲得{' '}
+            <span style={{ color: C.primary, fontWeight: 700 }}>官方 9 折優惠券</span>
+          </p>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18, flex: 1 }}>
@@ -149,7 +159,7 @@ export default function ProfileSetup() {
             boxShadow: loading ? 'none' : `0 4px 14px ${C.primary}40`,
           }}
         >
-          {loading ? '儲存中...' : '完成註冊，領取 9 折券'}
+          {loading ? '儲存中...' : alreadyFilled ? '儲存' : '完成註冊，領取 9 折券'}
         </button>
       </form>
     </div>
