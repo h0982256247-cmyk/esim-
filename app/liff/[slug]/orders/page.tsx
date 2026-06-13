@@ -155,7 +155,6 @@ export default function OrdersPage() {
   }, [orders])
 
   const counts: Record<OrdersTab, number> = {
-    active: buckets.active.length,
     install: buckets.install.length,
     history: buckets.history.length,
   }
@@ -170,18 +169,12 @@ export default function OrdersPage() {
   )
   const bundleFirstFailureReason = bundleOrders.find(o => o.failureReason)?.failureReason ?? null
 
-  // 預設分頁：bundle 全失敗→歷史；否則第一個非空（使用中→待安裝→歷史）
-  const defaultTab: OrdersTab =
-    bundleAllFailed ? 'history'
-      : counts.active > 0 ? 'active'
-      : counts.install > 0 ? 'install'
-      : counts.history > 0 ? 'history'
-      : 'active'
+  // 預設分頁：bundle 全失敗→歷史；否則一律停在「待安裝」（消費者一進來先看到要做的動作）
+  const defaultTab: OrdersTab = bundleAllFailed ? 'history' : 'install'
   const activeTab = tab ?? defaultTab
 
-  // 「使用中」分頁開啟時，best-effort 抓一次流量（只打有 ICCID 的，且每張只打一次）
+  // 使用中卡常駐頂部 → 一進來就 best-effort 抓流量（只打有 ICCID 的，每張只打一次）
   useEffect(() => {
-    if (activeTab !== 'active') return
     const toFetch = buckets.active.filter(o => o.esimIccid && !usageFetchedRef.current.has(o.id))
     if (toFetch.length === 0) return
     let cancelled = false
@@ -197,7 +190,7 @@ export default function OrdersPage() {
       }
     })()
     return () => { cancelled = true }
-  }, [activeTab, buckets.active])
+  }, [buckets.active])
 
   const now = new Date()
   const couponsAvailable = coupons.filter(c => !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now))
@@ -351,9 +344,25 @@ export default function OrdersPage() {
             </div>
           )}
 
-          {/* ── 分頁籤（sticky）── */}
+          {/* ── 使用中：釘在頂部常駐，跨分頁都看得到 ── */}
+          {buckets.active.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', margin: '0 4px 10px' }}>
+                <h2 style={{ fontSize: 14, fontWeight: 800, color: S.ink, margin: 0 }}>使用中</h2>
+                <span style={{ fontSize: 11, color: S.faint }}>{buckets.active.length}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {buckets.active.map(o => (
+                  <ActiveCard key={o.id} order={o} usage={usageMap[o.id]} primary={C.primary}
+                    onClick={() => router.push(`${base}/orders/${o.id}`)} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── 分頁籤（sticky）：待安裝 / 歷史 ── */}
           <div style={{ position: 'sticky', top: 0, zIndex: 10, background: '#fff', paddingTop: 4, paddingBottom: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, background: '#f1f5f9', borderRadius: 12, padding: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, background: '#f1f5f9', borderRadius: 12, padding: 4 }}>
               {TAB_ORDER.map(t => {
                 const sel = activeTab === t
                 return (
@@ -384,17 +393,6 @@ export default function OrdersPage() {
           </div>
 
           {/* ── 分頁內容 ── */}
-          {activeTab === 'active' && (
-            buckets.active.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {buckets.active.map(o => (
-                  <ActiveCard key={o.id} order={o} usage={usageMap[o.id]} primary={C.primary}
-                    onClick={() => router.push(`${base}/orders/${o.id}`)} />
-                ))}
-              </div>
-            ) : <TabEmpty text="目前沒有使用中的 eSIM" />
-          )}
-
           {activeTab === 'install' && (
             buckets.install.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

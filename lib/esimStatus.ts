@@ -101,8 +101,8 @@ export const TONE_STYLE: Record<EsimTone, { bg: string; border: string; fg: stri
 // ─── 分頁籤分組 ───────────────────────────────────────────────────
 // 'processing' 不是分頁，是頂部橫幅（瞬時狀態，任何分頁都該看得到）。
 
-export type OrdersTab = 'active' | 'install' | 'history'
-export type OrdersGroup = OrdersTab | 'processing'
+// 'active' = 使用中（釘在頂部常駐，不是分頁）；'processing' = 處理中橫幅
+export type OrdersGroup = 'active' | 'install' | 'history' | 'processing'
 
 export function groupOf(phase: EsimPhase): OrdersGroup {
   switch (phase) {
@@ -121,10 +121,12 @@ export function groupOf(phase: EsimPhase): OrdersGroup {
   }
 }
 
+// 分頁籤只剩兩個：使用中已抽出常駐頂部、處理中是橫幅
+export type OrdersTab = 'install' | 'history'
+
 export const TAB_LABEL: Record<OrdersTab, string> = {
-  active:  '使用中',
   install: '待安裝',
   history: '歷史',
 }
 
-export const TAB_ORDER: OrdersTab[] = ['active', 'install', 'history']
+export const TAB_ORDER: OrdersTab[] = ['install', 'history']

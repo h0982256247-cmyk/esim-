@@ -135,7 +135,7 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>
-    let pollStart = 0   // 計算「兌換中」polling 起始時間以判定 timeout
+    let pollStart = 0   // polling 起始時間（判斷 QR timeout / 啟用輪詢上限）
     const POLLING_STATUSES = ['PROCESSING', 'PAID', 'ESIM_PENDING']
     const load = () =>
       fetch(`/api/orders/${id}`)
@@ -143,12 +143,18 @@ export default function OrderDetailPage() {
         .then(d => {
           if (d.order) setOrder(d.order)
           const o = d.order
-          // 兩種情境需要 polling：
-          //   A. 訂單在處理中（PAID/ESIM_PENDING 還沒收 2.2 callback）
-          //   B. 已按過「我要安裝」(redeemedAt 有) 但 QR 還沒到（等 3.2 callback）
+          // 需要 polling 的情境：
+          //   A. 訂單處理中（PAID/ESIM_PENDING 還沒收 2.2 callback）
+          //   B. 已按「我要安裝」但 QR 還沒到（等 3.2 callback）
+          //   C. QR 已給、還沒啟用 → 等手機安裝後 WM 2.7 啟用 callback。
+          //      使用者多半離開去手機設定，故輪詢上限 5 分鐘避免空轉；
+          //      回到頁面另有 visibilitychange 重新檢查。
+          const awaitingQr = o?.redeemedAt && !o?.esimQrcode && !o?.activatedAt
+          const awaitingActivation = o?.esimQrcode && !o?.activatedAt
           const needsPolling =
             POLLING_STATUSES.includes(o?.status) ||
-            (o?.redeemedAt && !o?.esimQrcode && !o?.activatedAt)
+            awaitingQr ||
+            (awaitingActivation && (pollStart === 0 || Date.now() - pollStart < 300_000))
 
           if (needsPolling) {
             if (!timer) {
@@ -156,7 +162,7 @@ export default function OrderDetailPage() {
               timer = setInterval(load, 3000)
             }
             // 兌換中超過 60 秒未拿到 QR → 顯示 timeout 提示但繼續 poll
-            if (o?.redeemedAt && !o?.esimQrcode && Date.now() - pollStart > 60_000) {
+            if (awaitingQr && Date.now() - pollStart > 60_000) {
               setRedeemTimeout(true)
             }
           } else {
@@ -167,7 +173,13 @@ export default function OrderDetailPage() {
         })
         .finally(() => setLoading(false))
     load()
-    return () => clearInterval(timer)
+    // 從手機設定安裝完回到此頁時立即重查一次（可能已啟用 → 翻成使用中）
+    const onVisible = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [id])
 
   const handleRedeem = async () => {
@@ -518,6 +530,18 @@ export default function OrderDetailPage() {
               <br/>
               或長按上方 QR 碼也可直接安裝
             </p>
+          )}
+
+          {/* 安裝步驟指引（尚未啟用時顯示） */}
+          {!order.activatedAt && (
+            <div style={{ background: '#f8fafc', border: `1px solid ${S.line}`, borderRadius: 12, padding: '12px 14px', margin: '0 0 14px' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: S.ink, margin: '0 0 8px' }}>安裝步驟</p>
+              <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: S.muted, lineHeight: 1.8 }}>
+                <li>用上方「一鍵安裝」或長按 QR 碼，把 eSIM 加入手機</li>
+                <li>到手機<strong style={{ color: S.ink }}>設定 → 行動服務／行動網路</strong>，開啟此 eSIM 的「行動數據」與「數據漫遊」</li>
+                <li>連上網路後，本頁會自動更新為 <strong style={{ color: '#047857' }}>使用中</strong></li>
+              </ol>
+            </div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
