@@ -65,7 +65,9 @@ const COUPON_TYPE_LABEL: Record<string, string> = {
 
 // ─── State 分類 ────────────────────────────────────────────────
 
-type EsimState = 'using' | 'installable' | 'redeeming' | 'pending' | 'processing' | 'history'
+// 'awaitingPayment' 與 'preparingEsim' 把舊的 'processing' 拆開，UI 才能
+// 給使用者更清楚的進度（等付款 vs 等啟動碼），不會看到一堆「處理中」混在一起。
+type EsimState = 'using' | 'installable' | 'redeeming' | 'pending' | 'awaitingPayment' | 'preparingEsim' | 'history'
 
 function classifyOrder(o: Order): EsimState {
   if (['REFUNDED', 'CANCELLED', 'FAILED'].includes(o.status)) return 'history'
@@ -73,7 +75,10 @@ function classifyOrder(o: Order): EsimState {
   if (o.esimQrcode) return 'installable'
   if (o.redeemedAt) return 'redeeming'
   if (o.esimRcode && o.status === 'COMPLETED') return 'pending'
-  return 'processing'
+  // PROCESSING = 付款 webhook 還沒回來；之外（PAID / ESIM_PENDING / COMPLETED-未發 rcode）
+  // 都已經付完款，正等供應商開卡。
+  if (o.status === 'PROCESSING') return 'awaitingPayment'
+  return 'preparingEsim'
 }
 
 function giftBadge(o: Order): { text: string; bg: string; color: string } | null {
@@ -120,25 +125,39 @@ export default function OrdersPage() {
 
   // 分桶
   const buckets = useMemo(() => {
-    const using:        Order[] = []
-    const installable:  Order[] = []
-    const redeeming:    Order[] = []
-    const pending:      Order[] = []
-    const processing:   Order[] = []
-    const history:      Order[] = []
+    const using:           Order[] = []
+    const installable:     Order[] = []
+    const redeeming:       Order[] = []
+    const pending:         Order[] = []
+    const awaitingPayment: Order[] = []
+    const preparingEsim:   Order[] = []
+    const history:         Order[] = []
     for (const o of orders) {
       const s = classifyOrder(o)
       switch (s) {
-        case 'using':       using.push(o); break
-        case 'installable': installable.push(o); break
-        case 'redeeming':   redeeming.push(o); break
-        case 'pending':     pending.push(o); break
-        case 'processing':  processing.push(o); break
-        case 'history':     history.push(o); break
+        case 'using':           using.push(o); break
+        case 'installable':     installable.push(o); break
+        case 'redeeming':       redeeming.push(o); break
+        case 'pending':         pending.push(o); break
+        case 'awaitingPayment': awaitingPayment.push(o); break
+        case 'preparingEsim':   preparingEsim.push(o); break
+        case 'history':         history.push(o); break
       }
     }
-    return { using, installable, redeeming, pending, processing, history }
+    return { using, installable, redeeming, pending, awaitingPayment, preparingEsim, history }
   }, [orders])
+
+  // 一鍵取消所有卡在等待付款的訂單（特別處理使用者在 LINE Pay 取消後留下的殭屍訂單）
+  const handleCancelStuck = async () => {
+    if (actioning) return
+    if (!window.confirm(`確定要取消這 ${buckets.awaitingPayment.length} 筆等待付款的訂單？\n\n若您剛在 LINE Pay 或銀行頁取消了付款，可一鍵清掉。`)) return
+    setActioning('bulk_cancel')
+    await Promise.all(
+      buckets.awaitingPayment.map(o => fetch(`/api/orders/${o.id}/cancel`, { method: 'POST' }).catch(() => null))
+    )
+    setActioning(null)
+    await refresh()
+  }
 
   const now = new Date()
   const couponsAvailable = coupons.filter(c => !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now))
@@ -315,11 +334,34 @@ export default function OrdersPage() {
         />
       ))}
 
-      {/* ─── 處理中（等 WM callback）─── */}
-      {(buckets.processing.length + buckets.redeeming.length) > 0 && (
-        <SectionHeader title="處理中" count={buckets.processing.length + buckets.redeeming.length} />
+      {/* ─── 等待付款（PROCESSING：銀行 webhook 沒回 / 使用者剛在 LINE Pay 取消）─── */}
+      {buckets.awaitingPayment.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <SectionHeader title="等待付款" count={buckets.awaitingPayment.length} />
+            <button
+              onClick={handleCancelStuck}
+              disabled={!!actioning}
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                fontSize: 12, color: '#b45309', fontWeight: 700,
+                textDecoration: 'underline', padding: '0 0 4px',
+              }}
+            >
+              {actioning === 'bulk_cancel' ? '取消中…' : '全部取消'}
+            </button>
+          </div>
+          {buckets.awaitingPayment.map(o => (
+            <ProcessingCard key={o.id} order={o} stage="awaiting" onClick={() => router.push(`${base}/orders/${o.id}`)} />
+          ))}
+        </>
       )}
-      {buckets.processing.map(o => (
+
+      {/* ─── 準備 eSIM 中（已付款，等供應商開卡）─── */}
+      {(buckets.preparingEsim.length + buckets.redeeming.length) > 0 && (
+        <SectionHeader title="準備 eSIM 中" count={buckets.preparingEsim.length + buckets.redeeming.length} />
+      )}
+      {buckets.preparingEsim.map(o => (
         <ProcessingCard key={o.id} order={o} stage="ordered" onClick={() => router.push(`${base}/orders/${o.id}`)} />
       ))}
       {buckets.redeeming.map(o => (
@@ -480,9 +522,11 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
   )
 }
 
-function ProcessingCard({ order, stage, onClick }: { order: Order; stage: 'ordered' | 'redeeming'; onClick: () => void }) {
+function ProcessingCard({ order, stage, onClick }: { order: Order; stage: 'awaiting' | 'ordered' | 'redeeming'; onClick: () => void }) {
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
-  const text = stage === 'ordered' ? '⏳ 正在準備 eSIM，請稍候…' : '⏳ 正在生成 QR 碼，請稍候…'
+  const text = stage === 'awaiting'  ? '⏳ 等待付款確認中…'
+             : stage === 'ordered'   ? '⏳ 正在準備 eSIM，請稍候…'
+             :                          '⏳ 正在生成 QR 碼，請稍候…'
   return (
     <button onClick={onClick}
       style={{ width: '100%', textAlign: 'left', cursor: 'pointer', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 16, padding: '14px 16px', marginBottom: 8 }}>

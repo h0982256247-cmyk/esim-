@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useTenantColors } from '@/components/liff/TenantContext'
@@ -104,6 +104,7 @@ export default function OrderDetailPage() {
   const router = useRouter()
   const base = useLiffBase()
   const { id } = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
   const C = useTenantColors()
   const { liff } = useLiff()
   const [order, setOrder] = useState<OrderDetail | null>(null)
@@ -119,6 +120,28 @@ export default function OrderDetailPage() {
   const [canOneClick, setCanOneClick] = useState(false)
 
   useEffect(() => { setCanOneClick(supportsOneClickEsim()) }, [])
+
+  // 從 TapPay (LINE Pay / 3DS) 跳轉回來時，網址會帶 ?status=<n>。
+  // status=0 是付款成功（等 webhook fan-out），非零代表失敗或使用者取消。
+  // 後者通常 webhook 也會送來標 FAILED，但 LINE Pay 取消有時延遲很久，
+  // 訂單會一直卡 PROCESSING 看似「準備 eSIM 中」，使用者很困惑。
+  // 直接在 mount 時偵測：若 status 非零、訂單還在 PROCESSING，立刻打
+  // /cancel API 主動標記為已取消。若萬一 TapPay 之後仍回成功，webhook
+  // 已有保護路徑 (order=CANCELLED → 觸發退款)。
+  const autoCancelDoneRef = useRef(false)
+  useEffect(() => {
+    if (autoCancelDoneRef.current) return
+    const statusParam = searchParams.get('status')
+    if (statusParam == null) return
+    autoCancelDoneRef.current = true
+    if (statusParam === '0') return   // 付款成功的 redirect，交給 polling
+    fetch(`/api/orders/${id}/cancel`, { method: 'POST' })
+      .then(r => r.json())
+      .catch(() => null)
+      .then(() => fetch(`/api/orders/${id}`).then(r => r.json()))
+      .then(d => { if (d?.order) setOrder(d.order) })
+      .catch(() => null)
+  }, [id, searchParams])
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>
