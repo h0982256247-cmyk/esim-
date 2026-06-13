@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { Agent } from 'undici'
 import { prisma } from '@/lib/db/prisma'
 import { markOrderCompleted } from './order'
 import { notifyEsimPending } from './notification'
@@ -10,6 +11,16 @@ function buildWmSignature(merchantId: string, deptId: string, token: string, bod
   // SHA-1(merchantId + deptId + token + body)
   const raw = merchantId + deptId + token + body
   return crypto.createHash('sha1').update(raw).digest('hex')
+}
+
+// 世界移動「測試機」(tfmshippingsys) 使用自簽 SSL 憑證，Node fetch 預設會拒絕 →
+// 'fetch failed'、卡發不出。僅對測試機放行不驗憑證；正式機 (fmshippingsys) 憑證正常、
+// 維持完整驗證。所有 WM fetch 的 init 都經 wmFetchInit() 包一層。
+let wmInsecureAgent: Agent | null = null
+function wmFetchInit(apiUrl: string, init: RequestInit): RequestInit {
+  if (!/tfmshippingsys\./i.test(apiUrl)) return init  // 正式機：維持驗證
+  if (!wmInsecureAgent) wmInsecureAgent = new Agent({ connect: { rejectUnauthorized: false } })
+  return { ...init, dispatcher: wmInsecureAgent } as RequestInit
 }
 
 async function getWmConfig(tenantAdminId?: string | null) {
@@ -39,7 +50,7 @@ async function wmPost(endpoint: string, payload: object, tenantAdminId?: string 
   const body = JSON.stringify(payload)
   const sign = buildWmSignature(merchantId, deptId, token, body)
 
-  const res = await fetch(`${apiUrl}${endpoint}`, {
+  const res = await fetch(`${apiUrl}${endpoint}`, wmFetchInit(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -48,7 +59,7 @@ async function wmPost(endpoint: string, payload: object, tenantAdminId?: string 
       'sign': sign,
     },
     body,
-  })
+  }))
 
   if (!res.ok) throw new Error(`World Move API HTTP ${res.status}`)
   return res.json()
@@ -156,7 +167,7 @@ async function placeWmOrder(orderId: string, tenantAdminId?: string | null): Pro
   const encStr = crypto.createHash('sha1').update(raw).digest('hex')
 
   try {
-    const res = await fetch(`${apiUrl}/Api/SOrder/mybuyesim`, {
+    const res = await fetch(`${apiUrl}/Api/SOrder/mybuyesim`, wmFetchInit(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -164,7 +175,7 @@ async function placeWmOrder(orderId: string, tenantAdminId?: string | null): Pro
         systemMail: false,    // 不要 WM 寄 mail，我們透過 LIFF 顯示
         encStr,
       }),
-    })
+    }))
     let data: Record<string, unknown> | null = null
     try { data = await res.json() as Record<string, unknown> } catch { /* 非 JSON */ }
     await wmlog('wm_response', { wmProductId: wmproductId, httpStatus: res.status, response: data })
@@ -220,11 +231,11 @@ export async function triggerEsimRedemption(orderId: string): Promise<{ ok: bool
     .digest('hex')
 
   try {
-    const res = await fetch(`${apiUrl}/Api/OrderRedemption/redemption`, {
+    const res = await fetch(`${apiUrl}/Api/OrderRedemption/redemption`, wmFetchInit(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ merchantId, rcode, qrcodeType, encStr }),
-    })
+    }))
     if (!res.ok) return { ok: false, reason: `WM HTTP ${res.status}` }
     const data = await res.json() as Record<string, unknown>
     if (data.code !== 0) return { ok: false, reason: (data.msg as string) ?? '兌換失敗' }
@@ -364,12 +375,12 @@ export async function fetchSupplierProductMap(tenantAdminId?: string | null): Pr
   const timer = setTimeout(() => ac.abort(), 8000)
   let res: Response
   try {
-    res = await fetch(`${apiUrl}/Api/QuoteMg/myQueryAll`, {
+    res = await fetch(`${apiUrl}/Api/QuoteMg/myQueryAll`, wmFetchInit(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ merchantId, encStr }),
       signal: ac.signal,
-    })
+    }))
   } catch (err) {
     if ((err as Error).name === 'AbortError') throw new Error('World Move QuoteQuery 逾時（8s）')
     throw err
