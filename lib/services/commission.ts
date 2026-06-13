@@ -35,27 +35,32 @@ export async function calculateAndSaveCommission(orderId: string): Promise<void>
   if (!order) throw new Error(`Order ${orderId} not found`)
   if (order.commission) return // 冪等：已計算過就跳過
 
-  // 找出分潤歸屬：取第一張有 sourceGroupId 的非官方社群券
-  const commissionSource = order.orderCoupons
+  // 找出所有「群組券」（有 sourceGroupId、非官方、非社群主7折）。官方券＝平台自行
+  // 吸收折扣、不計分潤；社群主7折券亦不產生分潤。
+  const groupCoupons = order.orderCoupons
     .map(oc => oc.coupon)
-    .find(c => c.sourceGroupId && !c.isOfficial && c.type !== 'GROUP_OWNER')
+    .filter(c => c.sourceGroupId && !c.isOfficial && c.type !== 'GROUP_OWNER')
 
-  if (!commissionSource?.sourceGroupId) return // 官方券 / 社群主7折券 → 不產生分潤
+  if (groupCoupons.length === 0) return // 純官方券 / 社群主7折券 → 不產生分潤
+
+  // 分潤歸屬：以第一張群組券的社群為準；只加總「同一社群」的群組券讓利
+  // （使用者通常只屬於一個社群；跨社群的歷史券不混進此社群的分潤計算）。
+  const sourceGroupId = groupCoupons[0].sourceGroupId!
+  const sameGroupCoupons = groupCoupons.filter(c => c.sourceGroupId === sourceGroupId)
 
   const group = await prisma.group.findUnique({
-    where: { id: commissionSource.sourceGroupId },
-    select: { id: true, ownerId: true, rebateRate: true, status: true },
+    where: { id: sourceGroupId },
+    select: { id: true, ownerId: true, status: true },
   })
 
   if (!group || group.status !== 'APPROVED') return
 
-  // 從 coupon snapshot 推導實際讓利比例（取消「群組中途調整影響歷史訂單」的問題）
-  //   coupon.discount = 1 - rebateRate_at_issue
-  //   effectiveRebateRate = 1 - coupon.discount
-  // 這樣 commission 與用戶實際拿到的折扣對齊，三方金流永遠一致。
-  const effectiveRebateRate = 1 - Number(commissionSource.discount)
+  // 讓利「加總」：多張群組券同時使用時，讓利率相加（例：兩張 9 折券 → 10%+10%=20%）。
+  // 每張的讓利率由 coupon snapshot 推導：coupon.discount = 1 − rebateRate_at_issue。
+  // 用 snapshot 而非 group 當下值，避免社群中途調整影響歷史訂單，三方金流恆一致。
+  const effectiveRebateRate = sameGroupCoupons.reduce((s, c) => s + (1 - Number(c.discount)), 0)
   const ownerRate = PLATFORM_SHARE - effectiveRebateRate
-  if (ownerRate <= 0) return                     // 讓利 ≥ 30% 時社群主沒分潤，不建立記錄
+  if (ownerRate <= 0) return                     // 讓利加總 ≥ 30% 時社群主沒分潤，不建立記錄
   const commissionAmount = Math.round(order.subtotal * ownerRate)
   if (commissionAmount <= 0) return
 

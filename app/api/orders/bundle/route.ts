@@ -20,13 +20,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
 
-  let body: { lines?: BundleCartLine[]; paymentMethod?: PaymentMethod }
+  let body: { lines?: BundleCartLine[]; paymentMethod?: PaymentMethod; couponIds?: string[] }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: '請求格式錯誤' }, { status: 400 })
   }
   const { lines, paymentMethod } = body
+  const couponIds = Array.isArray(body.couponIds) ? body.couponIds.filter(x => typeof x === 'string') : []
 
   if (!Array.isArray(lines) || lines.length === 0) {
     return NextResponse.json({ error: 'lines 必填' }, { status: 400 })
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
       lineUid: session.lineUid,
       lines: cleaned,
       paymentMethod,
+      couponIds,
     })
 
     if (!result.ok) {

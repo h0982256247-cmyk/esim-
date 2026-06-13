@@ -143,6 +143,23 @@ export interface CreateBundleOrdersInput {
   lineUid: string
   lines: BundleCartLine[]
   paymentMethod: PaymentMethod
+  couponIds?: string[]
+}
+
+// 把「總折扣」按各筆原價比例攤到每一筆（最大餘數法）。
+// 回傳整數陣列，加總必定 === total，且每筆 ≤ 對應原價（total ≤ Σweights 時成立）。
+// 折總額才能讓「整車 = 各張分開買用同一組券」三方數字一致。
+export function allocateDiscountByWeight(weights: number[], total: number): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0)
+  if (sum <= 0 || total <= 0) return weights.map(() => 0)
+  const raw = weights.map(w => (total * w) / sum)
+  const floored = raw.map(Math.floor)
+  const remainder = total - floored.reduce((a, b) => a + b, 0)
+  // 餘數分給小數部分最大的幾筆
+  const byFrac = raw.map((r, i) => ({ i, frac: r - Math.floor(r) })).sort((a, b) => b.frac - a.frac)
+  const result = [...floored]
+  for (let k = 0; k < remainder && k < byFrac.length; k++) result[byFrac[k].i]++
+  return result
 }
 
 export type CreateBundleOrdersResult =
@@ -185,8 +202,24 @@ export async function createBundleOrders(input: CreateBundleOrdersInput): Promis
     productMap.set(uniqueIds[i], p)
   }
 
-  const subtotal = slots.reduce((sum, s) => sum + (productMap.get(s.productId)?.sellPrice ?? 0), 0)
-  const totalPaid = subtotal   // no coupons in v1
+  const slotPrices = slots.map(s => productMap.get(s.productId)!.sellPrice)
+  const subtotal = slotPrices.reduce((sum, p) => sum + p, 0)
+
+  // ── 優惠券：在「總額」上驗證組合 + 連續相乘算折扣，再按各筆原價比例攤回每筆 ──
+  const couponIds = input.couponIds ?? []
+  const validatedCoupons: Array<{ id: string; discount: number; sourceGroupId: string | null }> = []
+  for (const cid of couponIds) {
+    const r = await validateCouponOwnership(cid, input.lineUid)
+    if (!r.ok) return { ok: false, reason: r.reason }
+    validatedCoupons.push(r.coupon)
+  }
+  const discounts = validatedCoupons.map(c => c.discount)
+  const combo = validateCouponCombination(discounts)
+  if (!combo.valid) return { ok: false, reason: combo.reason ?? '優惠券組合無效' }
+
+  const totalPaid = calculateFinalPrice(subtotal, discounts)
+  const totalDiscount = subtotal - totalPaid
+  const slotDiscounts = allocateDiscountByWeight(slotPrices, totalDiscount)
   const bundleId = generateBundleId()
 
   // Pre-generate unique order numbers OUTSIDE the transaction. The uniqueness
@@ -215,6 +248,7 @@ export async function createBundleOrders(input: CreateBundleOrdersInput): Promis
       const ids: string[] = []
       for (let i = 0; i < slots.length; i++) {
         const p = productMap.get(slots[i].productId)!
+        const discountAmount = slotDiscounts[i]
         const o = await tx.order.create({
           data: {
             userId: input.userId,
@@ -224,8 +258,8 @@ export async function createBundleOrders(input: CreateBundleOrdersInput): Promis
             bundleSeq: i + 1,
             status: OrderStatus.PENDING,
             subtotal: p.sellPrice,
-            discountAmount: 0,
-            totalPaid: p.sellPrice,
+            discountAmount,
+            totalPaid: p.sellPrice - discountAmount,
             taxAmount: 0,
             paymentMethod: input.paymentMethod,
             orderItems: {
@@ -237,9 +271,29 @@ export async function createBundleOrders(input: CreateBundleOrdersInput): Promis
                 unitCost: p.costPrice,
               },
             },
+            // 折總額：同一組券掛到 bundle 內每一筆，讓分潤可逐筆用各自 subtotal 計算
+            // （Σ 分潤 = ownerRate × 總原價）。coupon 本身只標記用在錨單一次（見下）。
+            ...(validatedCoupons.length > 0 ? {
+              orderCoupons: {
+                create: validatedCoupons.map(c => ({ couponId: c.id, discountApplied: c.discount })),
+              },
+            } : {}),
           },
         })
         ids.push(o.id)
+      }
+
+      // 標記優惠券已使用：usedOrderId 指向錨單（bundle 第一筆）。條件式 updateMany
+      // （usedAt 必須仍為 null）擋並發雙花；任一張搶不到 → throw → 整批 rollback。
+      if (validatedCoupons.length > 0) {
+        const anchorId = ids[0]
+        for (const c of validatedCoupons) {
+          const r = await tx.coupon.updateMany({
+            where: { id: c.id, usedAt: null },
+            data: { usedAt: new Date(), usedOrderId: anchorId },
+          })
+          if (r.count !== 1) throw new Error('COUPON_ALREADY_USED')
+        }
       }
       return ids
     }, {
@@ -249,6 +303,9 @@ export async function createBundleOrders(input: CreateBundleOrdersInput): Promis
       maxWait: 10_000,
     })
   } catch (err) {
+    if (err instanceof Error && err.message === 'COUPON_ALREADY_USED') {
+      return { ok: false, reason: '優惠券已被使用，請重新整理後再試' }
+    }
     const reason = err instanceof Error ? err.message : '建立訂單失敗'
     return { ok: false, reason: `建立訂單失敗：${reason}` }
   }

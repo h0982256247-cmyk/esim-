@@ -168,7 +168,7 @@ function CheckoutContent() {
   const [tapPayConfig, setTapPayConfig] = useState<{ appId: number; appKey: string; env: string } | null>(null)
   const setupDoneRef = useRef(false)
 
-  // 單張：載入商品 + 優惠券；多張：直接用購物車內容，不需打 API
+  // 單張：商品 + 優惠券一起載入，並用商品原價自動帶入最優惠組合
   useEffect(() => {
     if (bundleMode) { setLoading(false); return }
     if (!productId) return
@@ -184,7 +184,6 @@ function CheckoutContent() {
         (!c.expiresAt || new Date(c.expiresAt) > now)
       )
       setCoupons(validCoupons)
-      // 自動帶入最優惠組合
       if (prod && validCoupons.length > 0) {
         const best = findBestCouponCombo(validCoupons, prod.sellPrice)
         setSelectedCouponIds(best)
@@ -192,6 +191,25 @@ function CheckoutContent() {
       }
     }).finally(() => setLoading(false))
   }, [productId, bundleMode])
+
+  // 購物車（多張）：載入優惠券，並用「整筆總額」自動帶入最優惠組合（折總額）
+  useEffect(() => {
+    if (!bundleMode || !cart.hydrated) return
+    const base = cart.subtotal
+    fetch('/api/coupons').then(r => r.json()).then(cd => {
+      const now = new Date()
+      const validCoupons: Coupon[] = (cd.coupons ?? []).filter((c: Coupon) =>
+        !('usedAt' in c && (c as { usedAt: string | null }).usedAt) &&
+        (!c.expiresAt || new Date(c.expiresAt) > now)
+      )
+      setCoupons(validCoupons)
+      if (validCoupons.length > 0 && base > 0) {
+        const best = findBestCouponCombo(validCoupons, base)
+        setSelectedCouponIds(best)
+        setAutoSelectedIds(best)
+      }
+    }).catch(() => {})
+  }, [bundleMode, cart.hydrated, cart.subtotal])
 
   // 載入已儲存卡片
   useEffect(() => {
@@ -316,28 +334,29 @@ function CheckoutContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sdkLoaded, paymentMethod, tapPayConfig])
 
-  // 優惠券試算（僅單張模式）
+  // 優惠券試算（單張用商品原價、購物車用總額）
   useEffect(() => {
-    if (bundleMode) return
-    if (!product || selectedCouponIds.length === 0) {
-      setFinalPrice(product?.sellPrice ?? null)
+    const base = bundleMode ? cart.subtotal : product?.sellPrice
+    if (base == null) return
+    if (selectedCouponIds.length === 0) {
+      setFinalPrice(base)
       setComboError(null)
       return
     }
     fetch('/api/coupons/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ couponIds: selectedCouponIds, productPrice: product.sellPrice }),
+      body: JSON.stringify({ couponIds: selectedCouponIds, productPrice: base }),
     }).then(r => r.json()).then(d => {
       if (d.valid) {
         setFinalPrice(d.finalPrice)
         setComboError(null)
       } else {
-        setFinalPrice(product.sellPrice)
+        setFinalPrice(base)
         setComboError(d.reason)
       }
     })
-  }, [selectedCouponIds, product, bundleMode])
+  }, [selectedCouponIds, product, bundleMode, cart.subtotal])
 
   const toggleCoupon = (id: string) => {
     setSelectedCouponIds(prev =>
@@ -434,6 +453,7 @@ function CheckoutContent() {
           body: JSON.stringify({
             paymentMethod,
             lines: cart.items.map(i => ({ productId: i.productId, qty: i.qty })),
+            couponIds: selectedCouponIds,
           }),
         })
         dbg('bundle order HTTP', r.status)
@@ -635,8 +655,9 @@ function CheckoutContent() {
   const bundleItems = cart.items
   const bundleQty = cart.totalQty
   const bundleSubtotal = cart.subtotal
-  const displayPrice = bundleMode ? bundleSubtotal : (finalPrice ?? product!.sellPrice)
-  const discount = bundleMode ? 0 : (product!.sellPrice - displayPrice)
+  const basePrice = bundleMode ? bundleSubtotal : product!.sellPrice
+  const displayPrice = finalPrice ?? basePrice
+  const discount = basePrice - displayPrice
 
   const cc = paymentMethod === 'CREDIT_CARD'
   const lp = paymentMethod === 'LINE_PAY'
@@ -646,7 +667,7 @@ function CheckoutContent() {
   const methodReady = cc
     ? ((!useNewCard && savedCard) ? true : (canPay && sdkReady))
     : (lp ? sdkLoaded : false)
-  const canSubmit = !submitting && (bundleMode ? true : !comboError) && methodReady
+  const canSubmit = !submitting && !comboError && methodReady
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 120 }}>
@@ -720,7 +741,7 @@ function CheckoutContent() {
             ))}
 
             <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>
-              一次刷卡完成 · 每張 eSIM 會獨立發送 · 此模式不套用優惠券
+              一次刷卡完成 · 每張 eSIM 會獨立發送 · 優惠券折抵整筆總額
             </p>
           </div>
         ) : (
@@ -768,8 +789,8 @@ function CheckoutContent() {
           </div>
         )}
 
-        {/* Coupon section（僅單張） */}
-        {!bundleMode && (
+        {/* Coupon section（單張與購物車皆適用；購物車折整筆總額） */}
+        {(
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 8px 4px' }}>
               <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>使用優惠券</p>
@@ -1121,7 +1142,7 @@ function CheckoutContent() {
         <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 16 }}>
           <div>
             {discount > 0 && (
-              <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, textDecoration: 'line-through' }}>NT${product!.sellPrice.toLocaleString()}</p>
+              <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, textDecoration: 'line-through' }}>NT${basePrice.toLocaleString()}</p>
             )}
             <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
               NT${displayPrice.toLocaleString()}
