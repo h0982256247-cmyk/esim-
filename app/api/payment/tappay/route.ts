@@ -22,7 +22,7 @@ import { getUserById } from '@/lib/services/user'
 import { notifyOrderPaid } from '@/lib/services/notification'
 import { fireAndLog } from '@/lib/utils/fire-and-log'
 import { prisma } from '@/lib/db/prisma'
-import { decrypt } from '@/lib/utils/crypto'
+import { decrypt, safeDecrypt } from '@/lib/utils/crypto'
 import { OrderStatus } from '@prisma/client'
 
 // POST /api/payment/tappay
@@ -138,9 +138,9 @@ export async function POST(req: NextRequest) {
   }
 
   const cardholder = {
-    phone_number: user.phone ?? '',
+    phone_number: user.phone ? safeDecrypt(user.phone) : '',
     name: user.displayName ?? '',
-    email: user.email ?? '',
+    email: user.email ? safeDecrypt(user.email) : '',
   }
 
   const origin = req.nextUrl.origin

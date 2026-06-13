@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/prisma'
+import { safeDecrypt } from '@/lib/utils/crypto'
 
 // GET /api/users/me — 回傳目前使用者的個人資料（用於檢查註冊完整性）
 export async function GET(req: NextRequest) {
@@ -25,6 +26,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     user: {
       ...user,
+      phone: user.phone ? safeDecrypt(user.phone) : user.phone,
+      email: user.email ? safeDecrypt(user.email) : user.email,
       profileComplete: !!(user.phone && user.email),
     },
   })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
+import { safeDecrypt } from '@/lib/utils/crypto'
 
 // GET /api/platform/users?page=1&q=keyword
 export async function GET(req: NextRequest) {
@@ -55,5 +56,11 @@ export async function GET(req: NextRequest) {
     prisma.user.count({ where }),
   ])
 
-  return NextResponse.json({ users, total, page, pageSize })
+  const usersDecrypted = users.map(u => ({
+    ...u,
+    phone: u.phone ? safeDecrypt(u.phone) : u.phone,
+    email: u.email ? safeDecrypt(u.email) : u.email,
+  }))
+
+  return NextResponse.json({ users: usersDecrypted, total, page, pageSize })
 }

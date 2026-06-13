@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { issueCoupon } from '@/lib/services/coupon'
+import { encrypt } from '@/lib/utils/crypto'
 import type { LineUserInfo } from '@/lib/auth/line'
 
 export interface UpdateProfileInput {
@@ -48,8 +49,10 @@ export async function updateProfile(userId: string, input: UpdateProfileInput) {
     where: { id: userId },
     data: {
       realName: input.name,
-      phone: input.phone,   // TODO: 加密
-      email: input.email,   // TODO: 加密
+      // PII 加密（AES-256-GCM）。空字串保持空，避免讓 isProfileComplete 把空值誤判為已填。
+      // 讀取端一律用 safeDecrypt（相容舊的明文資料，無需 backfill）。
+      phone: input.phone ? encrypt(input.phone) : input.phone,
+      email: input.email ? encrypt(input.email) : input.email,
       birthday: input.birthday,
     },
   })

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
+import { safeDecrypt } from '@/lib/utils/crypto'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -74,5 +75,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: '無權限' }, { status: 403 })
   }
 
-  return NextResponse.json({ user })
+  return NextResponse.json({
+    user: {
+      ...user,
+      phone: user.phone ? safeDecrypt(user.phone) : user.phone,
+      email: user.email ? safeDecrypt(user.email) : user.email,
+    },
+  })
 }
