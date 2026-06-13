@@ -6,6 +6,7 @@ import { useLiffBase } from '@/hooks/useLiffBase'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { deriveEsimStatus, daysLeftOf, TONE_STYLE } from '@/lib/esimStatus'
+import { IconSim, IconInstall, IconShare, IconCheck, IconClock, IconAlert } from '@/components/liff/EsimIcons'
 
 type GiftInfo = {
   token: string
@@ -397,7 +398,7 @@ export default function OrderDetailPage() {
             background: sTone.bg, color: sTone.fg,
             padding: '3px 10px', borderRadius: 100,
           }}>
-            {sv.icon} {sv.label}
+            {sv.label}
           </span>
         </div>
         <p style={{ fontSize: 12, color: S.faint, marginTop: 4 }}>{order.orderNumber ?? `#${order.id.slice(-8).toUpperCase()}`}</p>
@@ -410,7 +411,9 @@ export default function OrderDetailPage() {
         return (
           <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px', marginBottom: 12 }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: 36, marginBottom: 6 }}>📦</div>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#fff', border: `1px solid ${C.border}`, color: C.primary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                <IconSim size={24} />
+              </div>
               <h2 style={{ fontSize: 16, fontWeight: 800, color: S.ink, margin: '0 0 4px' }}>eSIM 已準備好</h2>
               <p style={{ fontSize: 13, color: S.muted, margin: 0, lineHeight: 1.6 }}>
                 {isPendingGift
@@ -422,7 +425,7 @@ export default function OrderDetailPage() {
             {/* 分享中狀態 */}
             {isPendingGift && (
               <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#c2410c', margin: '0 0 4px' }}>📤 已分享，等待領取</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#c2410c', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 5 }}><IconClock size={13} /> 已分享，等待領取</p>
                 <p style={{ fontSize: 11, color: '#9a3412', margin: '0 0 10px', lineHeight: 1.5 }}>
                   連結將於 {new Date(gift!.expiresAt).toLocaleDateString('zh-TW')} 過期
                 </p>
@@ -447,38 +450,49 @@ export default function OrderDetailPage() {
 
             {/* 我要安裝按鈕（pending gift 時隱藏，避免衝突） */}
             {!isPendingGift && (
-              <button
-                onClick={handleRedeem}
-                disabled={redeeming}
-                style={{
-                  width: '100%', background: C.primary, color: C.onPrimary,
-                  border: 'none', borderRadius: 100, padding: '15px',
-                  fontSize: 15, fontWeight: 800, cursor: redeeming ? 'wait' : 'pointer',
-                  opacity: redeeming ? 0.7 : 1, letterSpacing: '0.02em', marginBottom: 10,
-                }}
-              >
-                {redeeming ? '處理中…' : '我要安裝'}
-              </button>
+              <>
+                <button
+                  onClick={handleRedeem}
+                  disabled={redeeming}
+                  style={{
+                    width: '100%', background: C.primary, color: C.onPrimary,
+                    border: 'none', borderRadius: 100, padding: '15px',
+                    fontSize: 15, fontWeight: 800, cursor: redeeming ? 'wait' : 'pointer',
+                    opacity: redeeming ? 0.7 : 1, letterSpacing: '0.02em', marginBottom: 4,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  {redeeming ? '處理中…' : <><IconInstall size={17} /> 我要安裝</>}
+                </button>
+                <p style={{ fontSize: 11, color: S.faint, textAlign: 'center', margin: '0 0 12px', lineHeight: 1.5 }}>
+                  安裝後綁定此手機，將無法再轉贈
+                </p>
+              </>
             )}
             {redeemError && (
               <p style={{ fontSize: 12, color: '#dc2626', marginTop: 4, marginBottom: 10, textAlign: 'center' }}>{redeemError}</p>
             )}
 
-            {/* 分享按鈕（沒 gift 時顯示） */}
+            {/* 轉贈按鈕（沒 gift 時顯示） */}
             {!isPendingGift && !gift?.claimedAt && (
-              <button
-                onClick={handleShare}
-                disabled={sharing}
-                style={{
-                  width: '100%', background: S.white,
-                  border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 16px',
-                  fontSize: 14, fontWeight: 700, color: C.primary,
-                  cursor: sharing ? 'wait' : 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}
-              >
-                📲 分享給 LINE 好友
-              </button>
+              <>
+                <button
+                  onClick={handleShare}
+                  disabled={sharing}
+                  style={{
+                    width: '100%', background: S.white,
+                    border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 16px',
+                    fontSize: 14, fontWeight: 700, color: C.primary,
+                    cursor: sharing ? 'wait' : 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  <IconShare size={16} /> 轉贈給朋友
+                </button>
+                <p style={{ fontSize: 11, color: S.faint, textAlign: 'center', margin: '8px 0 0', lineHeight: 1.5 }}>
+                  透過 LINE 傳給朋友，對方領取後由對方使用
+                </p>
+              </>
             )}
           </div>
         )
@@ -503,7 +517,7 @@ export default function OrderDetailPage() {
       {/* === eSIM 階段三/四：QR 已生成（含已激活） === */}
       {order.status === 'COMPLETED' && order.esimRcode && order.esimQrcode && (
         <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px', marginBottom: 12 }}>
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: '0 0 14px' }}>eSIM 啟動碼</h2>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: '0 0 14px' }}>安裝你的 eSIM</h2>
 
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -515,13 +529,14 @@ export default function OrderDetailPage() {
             <a
               href={buildAppleOneClickUrl(order.esimLpa)}
               style={{
-                display: 'block', textAlign: 'center', textDecoration: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                textDecoration: 'none',
                 background: C.primary, color: C.onPrimary,
                 borderRadius: 100, padding: '13px',
                 fontSize: 14, fontWeight: 800, marginBottom: 8, letterSpacing: '0.02em',
               }}
             >
-              📲 一鍵安裝
+              <IconInstall size={16} /> 一鍵安裝
             </a>
           )}
           {order.esimLpa && !order.activatedAt && (
@@ -544,26 +559,30 @@ export default function OrderDetailPage() {
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
-            <div>
-              <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>啟動碼</span>
-              <span style={{ fontFamily: 'ui-monospace, monospace', color: S.ink, wordBreak: 'break-all', fontWeight: 600 }}>{order.esimRcode}</span>
+          {order.activationStart && order.activationEnd && (
+            <div style={{ fontSize: 13, marginBottom: 4 }}>
+              <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>使用期間</span>
+              <span style={{ color: S.ink, fontWeight: 600 }}>
+                {new Date(order.activationStart).toLocaleDateString('zh-TW')} ～ {new Date(order.activationEnd).toLocaleDateString('zh-TW')}
+              </span>
             </div>
-            {order.esimLpa && (
+          )}
+          {/* 技術資料（啟動碼／LPA）一般用一鍵安裝或掃 QR 即可，預設收合避免畫面雜亂 */}
+          <details style={{ marginTop: 4 }}>
+            <summary style={{ fontSize: 12, color: S.muted, cursor: 'pointer' }}>進階：手動安裝資料</summary>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, marginTop: 10 }}>
               <div>
-                <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>LPA</span>
-                <span style={{ fontFamily: 'ui-monospace, monospace', color: S.ink, fontSize: 11, wordBreak: 'break-all' }}>{order.esimLpa}</span>
+                <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>啟動碼</span>
+                <span style={{ fontFamily: 'ui-monospace, monospace', color: S.ink, wordBreak: 'break-all', fontWeight: 600 }}>{order.esimRcode}</span>
               </div>
-            )}
-            {order.activationStart && order.activationEnd && (
-              <div>
-                <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>使用期間</span>
-                <span style={{ color: S.ink, fontWeight: 600 }}>
-                  {new Date(order.activationStart).toLocaleDateString('zh-TW')} ～ {new Date(order.activationEnd).toLocaleDateString('zh-TW')}
-                </span>
-              </div>
-            )}
-          </div>
+              {order.esimLpa && (
+                <div>
+                  <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>LPA</span>
+                  <span style={{ fontFamily: 'ui-monospace, monospace', color: S.ink, fontSize: 11, wordBreak: 'break-all' }}>{order.esimLpa}</span>
+                </div>
+              )}
+            </div>
+          </details>
 
           {/* 已激活提示（只有在 QR 已展示 + 已激活時出現在這個 block） */}
           {order.activatedAt && (
@@ -573,15 +592,15 @@ export default function OrderDetailPage() {
                 const expiring = dl !== null && dl >= 0 && dl <= 3
                 const expired = dl !== null && dl < 0
                 const box = expired
-                  ? { bg: '#f8fafc', border: '#e2e8f0', fg: '#64748b', sub: '#94a3b8', title: '⌛ 已結束' }
+                  ? { bg: '#f8fafc', border: '#e2e8f0', fg: '#64748b', sub: '#94a3b8', title: '已結束', Icon: IconClock }
                   : expiring
-                    ? { bg: '#fff7ed', border: '#fed7aa', fg: '#c2410c', sub: '#9a3412', title: '⚠️ 即將到期' }
-                    : { bg: '#f0fdf4', border: '#86efac', fg: '#15803d', sub: '#166534', title: '✅ 已激活使用中' }
+                    ? { bg: '#fff7ed', border: '#fed7aa', fg: '#c2410c', sub: '#9a3412', title: '即將到期', Icon: IconAlert }
+                    : { bg: '#f0fdf4', border: '#86efac', fg: '#15803d', sub: '#166534', title: '已激活使用中', Icon: IconCheck }
                 const remain = dl === null ? null : dl < 0 ? '使用期間已過' : dl === 0 ? '今天到期' : `剩 ${dl} 天`
                 return (
                   <div style={{ background: box.bg, border: `1px solid ${box.border}`, borderRadius: 12, padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: box.fg, margin: 0 }}>{box.title}</p>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: box.fg, margin: 0, display: 'flex', alignItems: 'center', gap: 5 }}><box.Icon size={14} /> {box.title}</p>
                       {remain && (
                         <span style={{ fontSize: 12, fontWeight: 700, color: box.fg }}>{remain}</span>
                       )}

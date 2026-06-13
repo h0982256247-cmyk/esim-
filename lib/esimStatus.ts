@@ -38,7 +38,6 @@ export interface EsimStatusView {
   phase: EsimPhase
   label: string          // 短標籤，例如「使用中」
   hint: string           // 一句話說明「現在發生什麼／要做什麼」
-  icon: string           // emoji
   tone: EsimTone         // 配色語意
   actionNeeded: boolean  // true → 卡片要被凸顯（使用者得動作）
   daysLeft: number | null
@@ -58,34 +57,34 @@ export function daysLeftOf(activationEnd?: string | null): number | null {
 export function deriveEsimStatus(o: EsimStatusInput): EsimStatusView {
   const daysLeft = daysLeftOf(o.activationEnd)
   const v = (
-    phase: EsimPhase, label: string, hint: string, icon: string,
+    phase: EsimPhase, label: string, hint: string,
     tone: EsimTone, actionNeeded = false,
-  ): EsimStatusView => ({ phase, label, hint, icon, tone, actionNeeded, daysLeft })
+  ): EsimStatusView => ({ phase, label, hint, tone, actionNeeded, daysLeft })
 
   // 終態優先
-  if (o.status === 'FAILED')    return v('failed',    '付款未完成', '此訂單付款失敗', '⚠️', 'error')
-  if (o.status === 'REFUNDED')  return v('refunded',  '已退款',     '款項已退回',     '↩️', 'ended')
-  if (o.status === 'CANCELLED') return v('cancelled', '已取消',     '訂單已取消',     '✕',  'ended')
+  if (o.status === 'FAILED')    return v('failed',    '付款未完成', '此訂單付款失敗', 'error')
+  if (o.status === 'REFUNDED')  return v('refunded',  '已退款',     '款項已退回',     'ended')
+  if (o.status === 'CANCELLED') return v('cancelled', '已取消',     '訂單已取消',     'ended')
 
   // 已激活 → 看到期日決定 inUse / expiringSoon / ended
   if (o.activatedAt) {
     if (daysLeft !== null && daysLeft < 0)
-      return v('ended', '已結束', '使用期間已過', '⌛', 'ended')
+      return v('ended', '已結束', '使用期間已過', 'ended')
     if (daysLeft !== null && daysLeft <= EXPIRING_DAYS)
-      return v('expiringSoon', '即將到期', daysLeft <= 0 ? '今天到期' : `剩 ${daysLeft} 天`, '⚠️', 'warn')
-    return v('inUse', '使用中', daysLeft !== null ? `剩 ${daysLeft} 天` : '', '✅', 'active')
+      return v('expiringSoon', '即將到期', daysLeft <= 0 ? '今天到期' : `剩 ${daysLeft} 天`, 'warn')
+    return v('inUse', '使用中', daysLeft !== null ? `剩 ${daysLeft} 天` : '', 'active')
   }
 
   // 未激活：依 esim 欄位推進度（順序對應流程）
   if (o.esimQrcode)
-    return v('installable', '待安裝', '掃描 QR 或一鍵安裝', '📱', 'action', true)
+    return v('installable', '待安裝', '掃描 QR 或一鍵安裝', 'action', true)
   if (o.redeemedAt)
-    return v('generatingQr', '產生 QR 中', '正在生成安裝碼，約 1 分鐘', '⏳', 'wait')
+    return v('generatingQr', '產生 QR 中', '正在生成安裝碼，約 1 分鐘', 'wait')
   if (o.esimRcode && o.status === 'COMPLETED')
-    return v('readyToInstall', '可以安裝', '點「我要安裝」或轉贈好友', '📦', 'action', true)
+    return v('readyToInstall', '可以安裝', '點「我要安裝」或轉贈好友', 'action', true)
   if (o.status === 'PROCESSING')
-    return v('awaitingPayment', '等待付款', '正在確認付款結果', '⏳', 'wait')
-  return v('preparing', '開卡中', '正在為你準備 eSIM', '⏳', 'wait')
+    return v('awaitingPayment', '等待付款', '正在確認付款結果', 'wait')
+  return v('preparing', '開卡中', '正在為你準備 eSIM', 'wait')
 }
 
 /** tone → 固定配色。'action' 留給元件用品牌色覆蓋（這裡給藍色 fallback）。 */

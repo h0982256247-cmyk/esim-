@@ -12,6 +12,7 @@ import {
   deriveEsimStatus, groupOf, daysLeftOf,
   TAB_ORDER, TAB_LABEL, type OrdersTab,
 } from '@/lib/esimStatus'
+import { IconSim, IconQr, IconInstall, IconShare, IconClock, IconGift } from '@/components/liff/EsimIcons'
 
 // ─── Types ─────────────────────────────────────────────────────
 
@@ -80,17 +81,22 @@ const COUPON_TYPE_LABEL: Record<string, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-function giftBadge(o: Order): { text: string; bg: string; color: string } | null {
+function giftBadge(o: Order): { text: string; bg: string; color: string; kind: 'received' | 'waiting' } | null {
   const g = o.gift
   if (!g || g.cancelledAt) return null
   if (o.currentOwnerId !== o.userId && g.claimedAt && g.fromUser) {
-    return { text: `📩 由 ${g.fromUser.displayName} 轉贈`, bg: '#ede9fe', color: '#6d28d9' }
+    return { text: `由 ${g.fromUser.displayName} 轉贈`, bg: '#ede9fe', color: '#6d28d9', kind: 'received' }
   }
   if (g.claimedAt) return null
   if (new Date(g.expiresAt) > new Date()) {
-    return { text: '📤 等待領取', bg: '#ffedd5', color: '#c2410c' }
+    return { text: '等待領取', bg: '#ffedd5', color: '#c2410c', kind: 'waiting' }
   }
   return null
+}
+
+// gift pill 內的小圖示（收到轉贈／等待領取）
+function GiftBadgeIcon({ kind }: { kind: 'received' | 'waiting' }) {
+  return kind === 'received' ? <IconGift size={11} /> : <IconShare size={11} />
 }
 
 function formatData(mb: number, unit: string): string {
@@ -502,11 +508,11 @@ function ActiveCard({ order, usage, primary, onClick }: {
       style={{ width: '100%', textAlign: 'left', cursor: 'pointer', background: bg, border: `1px solid ${border}`, borderRadius: 18, padding: '18px 20px', boxShadow: shadow }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: accent, background: '#fff', padding: '4px 10px', borderRadius: 100 }}>
-          {view.icon} {view.label}
+          {view.label}
         </span>
         {gift && (
-          <span style={{ fontSize: 11, fontWeight: 700, background: gift.bg, color: gift.color, padding: '3px 10px', borderRadius: 100 }}>
-            {gift.text}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, background: gift.bg, color: gift.color, padding: '3px 10px', borderRadius: 100 }}>
+            <GiftBadgeIcon kind={gift.kind} />{gift.text}
           </span>
         )}
       </div>
@@ -547,8 +553,8 @@ function InstallableCard({ order, primary, onClick }: { order: Order; primary: s
       style={{ width: '100%', textAlign: 'left', cursor: 'pointer', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 16, padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ flex: 1 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, background: '#dbeafe', color: '#1d4ed8', padding: '3px 8px', borderRadius: 100 }}>
-            📱 QR 已就緒
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, background: '#dbeafe', color: '#1d4ed8', padding: '3px 8px', borderRadius: 100 }}>
+            <IconQr size={11} /> QR 已就緒
           </span>
           <p style={{ fontSize: 15, fontWeight: 700, color: S.ink, margin: '8px 0 2px' }}>{productName}</p>
           <p style={{ fontSize: 11, color: S.muted, margin: 0 }}>點擊查看 QR 與一鍵安裝</p>
@@ -571,12 +577,12 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
     <div style={{ background: S.white, border: `1.5px solid ${primary}`, borderRadius: 16, padding: '16px', boxShadow: `0 2px 10px ${primary}22` }}>
       <button onClick={onClick} style={{ background: 'none', border: 'none', padding: 0, width: '100%', textAlign: 'left', cursor: 'pointer' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, background: primary, color: onPrimary, padding: '3px 10px', borderRadius: 100 }}>
-            📦 可以安裝
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, background: primary, color: onPrimary, padding: '3px 10px', borderRadius: 100 }}>
+            <IconSim size={11} /> 可以安裝
           </span>
           {gift && (
-            <span style={{ fontSize: 11, fontWeight: 700, background: gift.bg, color: gift.color, padding: '3px 10px', borderRadius: 100 }}>
-              {gift.text}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, background: gift.bg, color: gift.color, padding: '3px 10px', borderRadius: 100 }}>
+              <GiftBadgeIcon kind={gift.kind} />{gift.text}
             </span>
           )}
         </div>
@@ -589,12 +595,12 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
       {!hasPendingGift ? (
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
           <button onClick={onRedeem} disabled={actioning}
-            style={{ background: primary, color: onPrimary, border: 'none', borderRadius: 100, padding: '11px', fontSize: 14, fontWeight: 700, cursor: actioning ? 'wait' : 'pointer', opacity: actioning ? 0.6 : 1 }}>
-            {actioning ? '處理中…' : '📲 我要安裝'}
+            style={{ background: primary, color: onPrimary, border: 'none', borderRadius: 100, padding: '11px', fontSize: 14, fontWeight: 700, cursor: actioning ? 'wait' : 'pointer', opacity: actioning ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            {actioning ? '處理中…' : <><IconInstall size={15} /> 我要安裝</>}
           </button>
           <button onClick={onShare} disabled={actioning}
-            style={{ background: S.white, color: primary, border: `1.5px solid ${primary}`, borderRadius: 100, padding: '11px', fontSize: 13, fontWeight: 700, cursor: actioning ? 'wait' : 'pointer', opacity: actioning ? 0.6 : 1 }}>
-            📤 轉贈
+            style={{ background: S.white, color: primary, border: `1.5px solid ${primary}`, borderRadius: 100, padding: '11px', fontSize: 13, fontWeight: 700, cursor: actioning ? 'wait' : 'pointer', opacity: actioning ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+            <IconShare size={14} /> 轉贈
           </button>
         </div>
       ) : (
@@ -628,7 +634,7 @@ function ProcessingRow({ order, stage, boxed, onClick }: {
       }}>
       <div style={{ minWidth: 0 }}>
         <p style={{ fontSize: boxed ? 14 : 13, fontWeight: 600, color: S.ink, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{productName}</p>
-        <p style={{ fontSize: 11, color: '#a16207', margin: '2px 0 0' }}>⏳ {text}</p>
+        <p style={{ fontSize: 11, color: '#a16207', margin: '2px 0 0', display: 'flex', alignItems: 'center', gap: 4 }}><IconClock size={11} /> {text}</p>
       </div>
       <span style={{ fontSize: 13, color: S.faint, flexShrink: 0 }}>→</span>
     </button>
