@@ -22,6 +22,7 @@ import { getUserById } from '@/lib/services/user'
 import { notifyOrderPaid } from '@/lib/services/notification'
 import { upsertSavedCard } from '@/lib/services/saved-card'
 import { fireAndLog } from '@/lib/utils/fire-and-log'
+import { checkRateLimit } from '@/lib/utils/rate-limit'
 import { prisma } from '@/lib/db/prisma'
 import { decrypt, safeDecrypt } from '@/lib/utils/crypto'
 import { OrderStatus } from '@prisma/client'
@@ -38,6 +39,11 @@ export async function POST(req: NextRequest) {
   let session
   try { session = await verifySession(token) } catch {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
+  }
+
+  // 限流：同一使用者短時間內過多扣款請求 → 擋（防重複送出/濫用）。fail-open。
+  if (!(await checkRateLimit(`pay:${session.userId}`, 15, 60))) {
+    return NextResponse.json({ error: '操作過於頻繁，請稍後再試' }, { status: 429 })
   }
 
   const body = await req.json()

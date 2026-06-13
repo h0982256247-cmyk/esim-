@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 import { createBundleOrders, type BundleCartLine } from '@/lib/services/order'
 import { isUserProfileComplete } from '@/lib/services/user'
+import { checkRateLimit } from '@/lib/utils/rate-limit'
 import { PaymentMethod } from '@prisma/client'
 
 // 多品項結帳要逐筆寫入 N 張訂單，走 PgBouncer 的遠端連線一多就超過 Vercel
@@ -18,6 +19,11 @@ export async function POST(req: NextRequest) {
   let session
   try { session = await verifySession(token) } catch {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
+  }
+
+  // 限流：同一使用者短時間內過多建單請求 → 擋（防濫用）。fail-open。
+  if (!(await checkRateLimit(`order:${session.userId}`, 30, 60))) {
+    return NextResponse.json({ error: '操作過於頻繁，請稍後再試' }, { status: 429 })
   }
 
   let body: { lines?: BundleCartLine[]; paymentMethod?: PaymentMethod; couponIds?: string[] }
