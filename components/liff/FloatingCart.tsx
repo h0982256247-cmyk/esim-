@@ -6,6 +6,7 @@ import { useCart } from '@/components/liff/CartProvider'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
+import { calcBestPrice, type CouponItem } from '@/lib/utils/coupon-combo'
 
 // Pages where the floating cart should NOT appear
 const HIDE_ON = ['/checkout', '/profile/setup', '/login', '/gift/']
@@ -66,6 +67,8 @@ export default function FloatingCart() {
   const { items, count, totalQty, subtotal, remove, setQty, hydrated } = useCart()
   const [open, setOpen] = useState(false)
   const [bumped, setBumped] = useState(false)
+  // 優惠券：載入使用者可用券，在購物車預覽「折總額後」價格（與結帳頁、商品卡一致）。
+  const [coupons, setCoupons] = useState<CouponItem[]>([])
 
   // Bump animation when qty count increases
   const [prevTotalQty, setPrevTotalQty] = useState(totalQty)
@@ -85,6 +88,19 @@ export default function FloatingCart() {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = prev }
   }, [open])
+
+  // 載入可用優惠券（折總額預覽用）
+  useEffect(() => {
+    if (!hydrated) return
+    fetch('/api/coupons').then(r => r.json()).then(cd => {
+      const now = new Date()
+      setCoupons(
+        (cd.coupons ?? [])
+          .filter((c: { usedAt?: string | null; expiresAt?: string | null }) => !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now))
+          .map((c: { id: string; discount: number }) => ({ id: c.id, discount: c.discount }))
+      )
+    }).catch(() => {})
+  }, [hydrated])
 
   if (!hydrated) return null
   if (HIDE_ON.some(p => pathname.includes(p))) return null
@@ -112,6 +128,10 @@ export default function FloatingCart() {
   }
 
   const badgeNumber = totalQty > 0 ? totalQty : count
+
+  // 折總額預覽：把可用券的最優組合套在「整筆小計」上（與結帳頁折總額一致）。
+  // 結帳頁會自動帶入同一組合，使用者可在那裡再調整。
+  const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, subtotal)
 
   return (
     <>
@@ -332,17 +352,26 @@ export default function FloatingCart() {
                 padding: '14px 20px 18px',
                 background: '#fff',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, color: '#64748b' }}>
-                    共 {totalQty} 張 eSIM
-                  </span>
-                  <span style={{ fontSize: 22, fontWeight: 900, color: '#1a1a1a', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-                    NT${subtotal.toLocaleString()}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 13, color: '#64748b' }}>
+                  <span>共 {totalQty} 張 eSIM</span>
+                  <span style={{ textDecoration: hasDiscount ? 'line-through' : 'none' }}>NT${subtotal.toLocaleString()}</span>
+                </div>
+                {hasDiscount && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16a34a', marginTop: 4 }}>
+                    <span>優惠券折抵</span>
+                    <span>−NT${savedAmount.toLocaleString()}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, color: '#1a1a1a', fontWeight: 700 }}>應付</span>
+                  <span style={{ fontSize: 22, fontWeight: 900, color: hasDiscount ? C.primary : '#1a1a1a', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                    NT${bestPrice.toLocaleString()}
                   </span>
                 </div>
 
                 {/* Single-line, single-qty cart: route through the coupon-aware
-                    /checkout page. Multi-line or qty > 1: use the bundle flow. */}
+                    /checkout page. Multi-line or qty > 1: use the bundle flow.
+                    兩條路徑結帳都會套優惠券（bundle 折總額），預覽金額一致。 */}
                 {count === 1 && items[0] && items[0].qty === 1 ? (
                   <button
                     type="button"
@@ -360,7 +389,7 @@ export default function FloatingCart() {
                       boxShadow: `0 6px 18px ${C.primary}44`,
                       WebkitTapHighlightColor: 'transparent',
                     }}
-                  >前往結帳 · NT${subtotal.toLocaleString()}</button>
+                  >前往結帳 · NT${bestPrice.toLocaleString()}</button>
                 ) : (
                   <button
                     type="button"
@@ -379,14 +408,16 @@ export default function FloatingCart() {
                       WebkitTapHighlightColor: 'transparent',
                     }}
                   >
-                    {`全部結帳 · NT$${subtotal.toLocaleString()}`}
+                    {`全部結帳 · NT$${bestPrice.toLocaleString()}`}
                   </button>
                 )}
 
                 <p style={{ fontSize: 10, color: '#94a3b8', margin: '10px 0 0', textAlign: 'center' }}>
-                  {count === 1 && items[0]?.qty === 1
-                    ? '結帳頁可選擇優惠券折扣'
-                    : '一次刷卡完成 · 每張 eSIM 會獨立發送 · 此模式不套用優惠券'}
+                  {hasDiscount
+                    ? '已預估最優惠券折扣 · 結帳頁可調整'
+                    : (count === 1 && items[0]?.qty === 1
+                        ? '結帳頁可選擇優惠券折扣'
+                        : '一次刷卡完成 · 每張 eSIM 會獨立發送 · 優惠券折抵整筆總額')}
                 </p>
               </div>
             )}
