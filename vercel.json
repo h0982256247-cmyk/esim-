@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/cancel-expired-gifts",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/retry-esim-activation",
+      "schedule": "0 18 * * *"
     }
   ]
 }

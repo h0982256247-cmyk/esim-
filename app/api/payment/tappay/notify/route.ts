@@ -13,6 +13,7 @@ import { triggerEsimActivation } from '@/lib/services/esim'
 import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
 import { notifyOrderPaid } from '@/lib/services/notification'
+import { fireAndLog } from '@/lib/utils/fire-and-log'
 import { tapPayRefund, tapPayQueryTrade } from '@/lib/services/tappay'
 import { mapTapPayFailureReason } from '@/lib/services/tappay-failure-reason'
 import { encrypt } from '@/lib/utils/crypto'
@@ -188,9 +189,9 @@ export async function POST(req: NextRequest) {
 
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
   for (const oid of paidOrderIds) {
-    triggerEsimActivation(oid).catch(() => {})
-    calculateAndSaveCommission(oid).catch(() => {})
-    issueRepurchaseCouponForOrder(oid).catch(() => {})
+    fireAndLog('triggerEsimActivation', oid, triggerEsimActivation(oid))
+    fireAndLog('calculateAndSaveCommission', oid, calculateAndSaveCommission(oid))
+    fireAndLog('issueRepurchaseCouponForOrder', oid, issueRepurchaseCouponForOrder(oid))
   }
 
   if (bundleId && paidOrderIds.length > 1) {

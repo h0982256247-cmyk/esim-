@@ -1,6 +1,7 @@
 import crypto from 'crypto'
+import { OrderStatus } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { markOrderCompleted } from './order'
+import { markOrderCompleted, incrementRetryCount } from './order'
 import { notifyEsimPending } from './notification'
 import { safeDecrypt } from '@/lib/utils/crypto'
 
@@ -274,7 +275,11 @@ export async function triggerEsimActivation(orderId: string): Promise<void> {
   const wmOrderId = await placeWmOrder(orderId, tenantAdminId)
   if (!wmOrderId) {
     // 下單失敗：訂單維持 PAID（付款成功但尚未發卡），不再轉成 ESIM_PENDING。
-    // 後台「待補發」統計與補發功能皆改以「PAID 且尚未發卡」為準，仍會發通知提醒。
+    // ⚠ 不要靜默：印出 log（Vercel 可見），訂單留在「PAID 且無 esimRcode」可被
+    // retry cron / 後台補發撈到。這段過去靜默吞錯，是「付款成功卻沒收到 eSIM」
+    // 最難 debug 的主因。
+    // eslint-disable-next-line no-console
+    console.error('[esim] placeWmOrder 失敗，訂單維持 PAID 待重試', { orderId })
     notifyEsimPending(userId, productName).catch(() => {})
     return
   }
@@ -406,4 +411,37 @@ export async function retryEsimActivation(orderId: string): Promise<void> {
 
   // 重新下單
   await triggerEsimActivation(orderId)
+}
+
+// ─── Cron：自動重試「已付款卻還沒拿到 eSIM」的訂單 ──────────────────
+// 付款成功後 placeWmOrder 可能因瞬時錯誤（WM 暫時不可用 / 網路）失敗，訂單會停在
+// PAID 但無 esimRcode。此函式由 cron 定期撈出這些單重試，以 retryCount 設上限避免
+// 對 WM 無限重打（資料型錯誤如假 wmproductId 重試也不會好，達上限後就停、留待人工）。
+const MAX_ESIM_RETRY = 5
+
+export async function retryStuckEsimActivations(): Promise<{ scanned: number; retried: number }> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000) // 只重試近 24h 的，更舊的留待人工補發
+  const stuck = await prisma.order.findMany({
+    where: {
+      status: { in: [OrderStatus.PAID, OrderStatus.ESIM_PENDING] },
+      esimRcode: null,
+      retryCount: { lt: MAX_ESIM_RETRY },
+      createdAt: { gte: since },
+    },
+    select: { id: true },
+    take: 100,
+  })
+
+  let retried = 0
+  for (const o of stuck) {
+    await incrementRetryCount(o.id).catch(() => {})
+    try {
+      await retryEsimActivation(o.id)
+      retried++
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[esim] retryStuckEsimActivations 單筆失敗', { orderId: o.id, err: err instanceof Error ? err.message : String(err) })
+    }
+  }
+  return { scanned: stuck.length, retried }
 }

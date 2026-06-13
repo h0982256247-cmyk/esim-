@@ -20,6 +20,7 @@ import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
 import { getUserById } from '@/lib/services/user'
 import { notifyOrderPaid } from '@/lib/services/notification'
+import { fireAndLog } from '@/lib/utils/fire-and-log'
 import { prisma } from '@/lib/db/prisma'
 import { decrypt } from '@/lib/utils/crypto'
 import { OrderStatus } from '@prisma/client'
@@ -230,19 +231,19 @@ export async function POST(req: NextRequest) {
   if (isBundle) {
     const orders = await markBundlePaid(bundleId!, charge.recTradeId)
     for (const o of orders) {
-      triggerEsimActivation(o.id).catch(() => {})
-      calculateAndSaveCommission(o.id).catch(() => {})
-      issueRepurchaseCouponForOrder(o.id).catch(() => {})
+      fireAndLog('triggerEsimActivation', o.id, triggerEsimActivation(o.id))
+      fireAndLog('calculateAndSaveCommission', o.id, calculateAndSaveCommission(o.id))
+      fireAndLog('issueRepurchaseCouponForOrder', o.id, issueRepurchaseCouponForOrder(o.id))
     }
-    notifyOrderPaid(session.userId, detailsLabel, amount).catch(() => {})
+    fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, detailsLabel, amount))
     return NextResponse.json({ ok: true, bundleId, orderIds: orders.map(o => o.id) })
   }
 
   await markOrderPaid(anchor.id, charge.recTradeId)
-  triggerEsimActivation(anchor.id).catch(() => {})
-  calculateAndSaveCommission(anchor.id).catch(() => {})
-  issueRepurchaseCouponForOrder(anchor.id).catch(() => {})
-  notifyOrderPaid(session.userId, detailsLabel, amount).catch(() => {})
+  fireAndLog('triggerEsimActivation', anchor.id, triggerEsimActivation(anchor.id))
+  fireAndLog('calculateAndSaveCommission', anchor.id, calculateAndSaveCommission(anchor.id))
+  fireAndLog('issueRepurchaseCouponForOrder', anchor.id, issueRepurchaseCouponForOrder(anchor.id))
+  fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, detailsLabel, amount))
 
   return NextResponse.json({ ok: true, orderId: anchor.id })
 }
