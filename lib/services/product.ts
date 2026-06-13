@@ -72,6 +72,31 @@ export async function getAvailableCountries(tenantAdminId?: string | null) {
   return products
 }
 
+// 主頁「熱門目的地」專用：只回國家清單 + 各國最低售價（約數十筆），不撈全部商品。
+// 原本主頁打 /api/products（上萬筆）只為了算每國最低價，載入很慢；改用此聚合查詢。
+export async function getCountriesWithMinPrice(tenantAdminId?: string | null) {
+  const where: Prisma.ProductWhereInput = {
+    status: ProductStatus.ACTIVE,
+    supplierProduct: { status: SupplierProductStatus.ACTIVE },
+    ...(tenantAdminId != null ? { tenantAdminId } : {}),
+  }
+  const [countries, mins] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      select: { countryCode: true, countryNameZh: true, countryNameEn: true, countryFlag: true },
+      distinct: ['countryCode'],
+      orderBy: { sortOrder: 'asc' },
+    }),
+    prisma.product.groupBy({
+      by: ['countryCode'],
+      where,
+      _min: { sellPrice: true },
+    }),
+  ])
+  const minMap = new Map(mins.map(m => [m.countryCode, m._min.sellPrice]))
+  return countries.map(c => ({ ...c, minPrice: minMap.get(c.countryCode) ?? null }))
+}
+
 // ─── Admin operations ────────────────────────────────────────────
 
 export interface GetAllProductsAdminOptions {

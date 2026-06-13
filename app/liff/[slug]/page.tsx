@@ -11,8 +11,6 @@ import { hasSeenSplash, markSplashSeen } from '@/lib/utils/splash'
 import { setCache, productsCacheKey } from '@/hooks/useCachedData'
 import type { HomeCountry } from '@/components/liff/templates/home/types'
 
-type Product = { countryCode: string; sellPrice: number }
-
 export default function LiffHomePage() {
   const { isReady, error } = useLiff()
   const router = useRouter()
@@ -47,26 +45,20 @@ export default function LiffHomePage() {
 
   useEffect(() => {
     if (!isReady) return
-    async function fetchData() {
-      try {
-        const me = await fetch('/api/auth/me').then(r => r.ok ? r.json() : null)
-        // profileComplete 在 me.user 底下（過去誤讀 me.profileComplete → 永遠 undefined
-        // → 對已填資料的人也彈設定視窗）
-        if (me?.user && !me.user.profileComplete) setShowSetup(true)
-      } catch {}
-      try {
-        const data = await fetch('/api/products').then(r => r.json())
-        // 寫入跨頁共用 cache，slug products 頁掛載時可直接吃這份、不必再打 API
-        setCache(productsCacheKey(), data)
-        const products: Product[] = data.products ?? []
-        const minMap: Record<string, number> = {}
-        for (const p of products) {
-          if (!minMap[p.countryCode] || p.sellPrice < minMap[p.countryCode]) minMap[p.countryCode] = p.sellPrice
-        }
-        setCountries((data.countries ?? []).map((c: HomeCountry) => ({ ...c, minPrice: minMap[c.countryCode] ?? null })))
-      } catch {}
-    }
-    fetchData()
+    // me（是否彈設定視窗）、countries（熱門目的地）並行；商品全量背景預熱不阻塞畫面。
+    fetch('/api/auth/me').then(r => r.ok ? r.json() : null)
+      // profileComplete 在 me.user 底下（過去誤讀 me.profileComplete → 永遠 undefined）
+      .then(me => { if (me?.user && !me.user.profileComplete) setShowSetup(true) })
+      .catch(() => {})
+    // 熱門目的地只需「國家 + 各國最低價」（約數十筆）→ 用輕量端點秒顯示，
+    // 不再等上萬筆 /api/products。
+    fetch('/api/countries').then(r => r.json())
+      .then(cd => setCountries(cd.countries ?? []))
+      .catch(() => {})
+    // 背景預熱商品頁 cache（全量），不阻塞熱門目的地；products 頁掛載時可直接吃這份。
+    fetch('/api/products').then(r => r.json())
+      .then(data => setCache(productsCacheKey(), data))
+      .catch(() => {})
   }, [isReady])
 
   function handleNavigate(path: string) {
