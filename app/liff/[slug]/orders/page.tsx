@@ -154,8 +154,10 @@ export default function OrdersPage() {
     return { active, install, history, awaitingPayment, preparing }
   }, [orders])
 
+  // 「準備 eSIM 中」(已付款開卡中) 改放到「待安裝」分頁下方低調顯示（不再佔頂部橫幅），
+  // 背景輪詢拿到卡後自動升級為「可安裝」。
   const counts: Record<OrdersTab, number> = {
-    install: buckets.install.length,
+    install: buckets.install.length + buckets.preparing.length,
     history: buckets.history.length,
   }
 
@@ -191,6 +193,18 @@ export default function OrdersPage() {
     })()
     return () => { cancelled = true }
   }, [buckets.active])
+
+  // 背景輪詢：有「等待付款確認」或「準備 eSIM 中」的訂單時，每 10 秒重抓一次，
+  // 並在切回前景時立即刷新。卡片狀態一變（拿到 eSIM）就自動移到「待安裝」，不用換頁。
+  // 兩種處理中訂單都清空後自動停止輪詢。
+  const processingActive = buckets.preparing.length > 0 || buckets.awaitingPayment.length > 0
+  useEffect(() => {
+    if (!processingActive) return
+    const id = setInterval(() => { refresh() }, 10_000)
+    const onVis = () => { if (document.visibilityState === 'visible') refresh() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
+  }, [processingActive, refresh])
 
   const now = new Date()
   const couponsAvailable = coupons.filter(c => !c.usedAt && (!c.expiresAt || new Date(c.expiresAt) > now))
@@ -282,7 +296,6 @@ export default function OrdersPage() {
   if (loading) return <PageSkeleton rows={4} />
 
   const hasAnything = orders.length > 0 || coupons.length > 0
-  const processingCount = buckets.awaitingPayment.length + buckets.preparing.length
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 16px 96px' }}>
@@ -317,27 +330,23 @@ export default function OrdersPage() {
 
       {hasAnything && (
         <>
-          {/* ── 處理中橫幅（任何分頁都看得到，瞬時狀態）── */}
-          {processingCount > 0 && (
+          {/* ── 等待付款確認橫幅：只處理「付款尚未確認」的殭屍訂單（可一鍵取消）。
+                 已付款、準備 eSIM 中的訂單不放這裡，改在「待安裝」分頁下方低調顯示。 ── */}
+          {buckets.awaitingPayment.length > 0 && (
             <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 14, padding: '12px 14px', marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: buckets.awaitingPayment.length || buckets.preparing.length ? 8 : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #fde68a', borderTopColor: '#d97706', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#a16207' }}>{processingCount} 筆訂單處理中</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#a16207' }}>{buckets.awaitingPayment.length} 筆等待付款確認</span>
                 </div>
-                {buckets.awaitingPayment.length > 0 && (
-                  <button onClick={handleCancelStuck} disabled={!!actioning}
-                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, color: '#b45309', fontWeight: 700, textDecoration: 'underline', padding: 0 }}>
-                    {actioning === 'bulk_cancel' ? '取消中…' : '全部取消'}
-                  </button>
-                )}
+                <button onClick={handleCancelStuck} disabled={!!actioning}
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, color: '#b45309', fontWeight: 700, textDecoration: 'underline', padding: 0 }}>
+                  {actioning === 'bulk_cancel' ? '取消中…' : '全部取消'}
+                </button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {buckets.awaitingPayment.map(o => (
                   <ProcessingRow key={o.id} order={o} stage="awaiting" onClick={() => router.push(`${base}/orders/${o.id}`)} />
-                ))}
-                {buckets.preparing.map(o => (
-                  <ProcessingRow key={o.id} order={o} stage="ordered" onClick={() => router.push(`${base}/orders/${o.id}`)} />
                 ))}
               </div>
               <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -394,7 +403,7 @@ export default function OrdersPage() {
 
           {/* ── 分頁內容 ── */}
           {activeTab === 'install' && (
-            buckets.install.length > 0 ? (
+            (buckets.install.length + buckets.preparing.length) > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {buckets.install.map(o => {
                   const phase = deriveEsimStatus(o).phase
@@ -413,6 +422,11 @@ export default function OrdersPage() {
                       onClick={() => router.push(`${base}/orders/${o.id}`)} />
                   )
                 })}
+                {/* 已付款、準備 eSIM 中：低調顯示在下方，背景輪詢拿到卡後自動變「可以安裝」 */}
+                {buckets.preparing.map(o => (
+                  <ProcessingRow key={o.id} order={o} stage="ordered" boxed
+                    onClick={() => router.push(`${base}/orders/${o.id}`)} />
+                ))}
               </div>
             ) : <TabEmpty text="沒有待安裝的 eSIM" />
           )}
