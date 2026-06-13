@@ -638,7 +638,9 @@ function CheckoutContent() {
   }
 
   // 多張模式但購物車空了
-  if (bundleMode && cart.items.length === 0) {
+  // 付款進行中會先清空購物車再導轉，這段時間不可閃出「購物車是空的」(submitting 時略過，
+  // 改由下方全螢幕「處理中」遮罩接手)。
+  if (bundleMode && cart.items.length === 0 && !submitting) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 14, padding: 24 }}>
         <p style={{ color: '#94a3b8', fontSize: 15 }}>購物車是空的</p>
@@ -1091,6 +1093,21 @@ function CheckoutContent() {
         </div>
 
       </div>
+
+      {/* 處理中遮罩：按下確認付款後，建單→產生回跳連結→取卡→送出需數秒，
+          全螢幕遮罩給明確回饋（避免看起來像沒反應），也蓋掉清空購物車的瞬間。 */}
+      {submitting && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1050,
+          background: 'rgba(255,255,255,0.92)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+        }}>
+          <div style={{ width: 34, height: 34, border: `3px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <p style={{ fontSize: 15, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>處理付款中…</p>
+          <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>請稍候，正在前往付款頁，勿關閉或返回</p>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        </div>
+      )}
 
       {/* 付款失敗彈窗：信用卡第一段（pay-by-prime / pay-by-token）失敗時，
           以中文原因跳窗提醒，避免被底部固定列遮住而漏看。 */}
