@@ -16,7 +16,6 @@ import { notifyOrderPaid } from '@/lib/services/notification'
 import { fireAndLog } from '@/lib/utils/fire-and-log'
 import { tapPayRefund, tapPayQueryTrade } from '@/lib/services/tappay'
 import { mapTapPayFailureReason } from '@/lib/services/tappay-failure-reason'
-import { encrypt } from '@/lib/utils/crypto'
 import { OrderStatus } from '@prisma/client'
 
 // POST /api/payment/tappay/notify
@@ -160,32 +159,8 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line no-console
   console.log('[tappay-notify] marked PAID ✅', { order_number: tapPayOrderId, paidOrderIds })
 
-  // Upsert saved card if card_secret returned (requires remember=true in the charge)
-  const cardSecret = body.card_secret as { card_key?: string; card_token?: string } | undefined
-  const card = body.card as { last_four?: string; type?: number; funding?: number; expiry_date?: string } | undefined
-
-  if (cardSecret?.card_key && cardSecret?.card_token && card?.last_four) {
-    // 拆 upsert：適配 @prisma/adapter-pg
-    const cardData = {
-      cardKeyEnc: encrypt(cardSecret.card_key),
-      cardTokenEnc: encrypt(cardSecret.card_token),
-      lastFour: card.last_four,
-      cardType: card.type ?? 1,
-      funding: card.funding ?? 0,
-      cardExpiresAt: card.expiry_date ?? null,
-    }
-    const existing = await prisma.savedCard.findUnique({ where: { userId: order.userId } })
-    if (existing) {
-      await prisma.savedCard.update({ where: { userId: order.userId }, data: cardData })
-    } else {
-      try {
-        await prisma.savedCard.create({ data: { userId: order.userId, ...cardData } })
-      } catch {
-        // 並發：同一用戶另一筆 webhook 已搶先建立（userId 唯一）→ 改為更新
-        await prisma.savedCard.update({ where: { userId: order.userId }, data: cardData })
-      }
-    }
-  }
+  // 記憶卡號：card_secret 只在 pay-by-prime「第一段回應」出現、backend_notify 不帶，
+  // 故存卡已移到扣款路由 /api/payment/tappay（拿到 charge 回應時）。此處不再處理。
 
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
   for (const oid of paidOrderIds) {

@@ -20,6 +20,7 @@ import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
 import { getUserById } from '@/lib/services/user'
 import { notifyOrderPaid } from '@/lib/services/notification'
+import { upsertSavedCard } from '@/lib/services/saved-card'
 import { fireAndLog } from '@/lib/utils/fire-and-log'
 import { prisma } from '@/lib/db/prisma'
 import { decrypt, safeDecrypt } from '@/lib/utils/crypto'
@@ -215,6 +216,25 @@ export async function POST(req: NextRequest) {
     if (isBundle) await markBundleFailed(bundleId!)
     else await markOrderFailed(anchor.id)
     return NextResponse.json({ error: charge.message }, { status: 402 })
+  }
+
+  // 記憶卡號：勾選 remember 的「新卡」付款，TapPay 在第一段回應就回了 card_secret，
+  // 在此立即加密存起來，供下次 pay-by-token 代扣（backend_notify 不帶 card_secret，
+  // 所以一定要在這裡存）。存卡失敗不可擋付款流程。
+  if (!isLinePay && !useToken && remember && charge.cardSecret) {
+    try {
+      await upsertSavedCard(session.userId, {
+        cardKey: charge.cardSecret.cardKey,
+        cardToken: charge.cardSecret.cardToken,
+        lastFour: charge.cardInfo?.lastFour,
+        cardType: charge.cardInfo?.type,
+        funding: charge.cardInfo?.funding,
+        cardExpiresAt: charge.cardInfo?.expiryDate,
+      })
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[pay] upsertSavedCard failed', e)
+    }
   }
 
   // 導轉型付款（信用卡 3DS / LINE Pay）— 付款結果由 webhook 非同步通知

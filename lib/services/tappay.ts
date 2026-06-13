@@ -37,7 +37,16 @@ export interface TapPayTokenChargeInput {
 }
 
 export type TapPayChargeResult =
-  | { ok: true; recTradeId: string; bankTransactionId: string; paymentUrl?: string }
+  | {
+      ok: true
+      recTradeId: string
+      bankTransactionId: string
+      paymentUrl?: string
+      // 記憶卡號：remember=true 時，TapPay 在 pay-by-prime「第一段回應」回 card_secret，
+      // 須在扣款路由存起來（backend_notify 不帶這個）。
+      cardSecret?: { cardKey: string; cardToken: string }
+      cardInfo?: { lastFour?: string; type?: number; funding?: number; expiryDate?: string }
+    }
   | { ok: false; message: string }
 
 // 第一段（pay-by-prime / pay-by-token）同步回應失敗時，TapPay 的 msg 多為英文。
@@ -168,11 +177,17 @@ export async function tapPayCharge(input: TapPayChargeInput, tenantAdminId?: str
     return { ok: false, message: tapPayErrorMessage(data.status, data.msg) }
   }
 
+  // 記憶卡號：remember=true 時這裡會有 card_secret / card_info（只在第一段回應）
+  const cs = data.card_secret as { card_key?: string; card_token?: string } | undefined
+  const ci = data.card_info as { last_four?: string; type?: number; funding?: number; expiry_date?: string } | undefined
+
   return {
     ok: true,
     recTradeId: data.rec_trade_id ?? '',
     bankTransactionId: data.bank_transaction_id ?? '',
     ...(data.payment_url ? { paymentUrl: data.payment_url as string } : {}),
+    ...(cs?.card_key && cs?.card_token ? { cardSecret: { cardKey: cs.card_key, cardToken: cs.card_token } } : {}),
+    ...(ci ? { cardInfo: { lastFour: ci.last_four, type: ci.type, funding: ci.funding, expiryDate: ci.expiry_date } } : {}),
   }
 }
 
@@ -207,11 +222,17 @@ export async function tapPayChargeByToken(input: TapPayTokenChargeInput, tenantA
     return { ok: false, message: tapPayErrorMessage(data.status, data.msg) }
   }
 
+  // 記憶卡號：remember=true 時這裡會有 card_secret / card_info（只在第一段回應）
+  const cs = data.card_secret as { card_key?: string; card_token?: string } | undefined
+  const ci = data.card_info as { last_four?: string; type?: number; funding?: number; expiry_date?: string } | undefined
+
   return {
     ok: true,
     recTradeId: data.rec_trade_id ?? '',
     bankTransactionId: data.bank_transaction_id ?? '',
     ...(data.payment_url ? { paymentUrl: data.payment_url as string } : {}),
+    ...(cs?.card_key && cs?.card_token ? { cardSecret: { cardKey: cs.card_key, cardToken: cs.card_token } } : {}),
+    ...(ci ? { cardInfo: { lastFour: ci.last_four, type: ci.type, funding: ci.funding, expiryDate: ci.expiry_date } } : {}),
   }
 }
 
