@@ -11,6 +11,23 @@ import { hasSeenSplash, markSplashSeen } from '@/lib/utils/splash'
 import { setCache, productsCacheKey } from '@/hooks/useCachedData'
 import type { HomeCountry } from '@/components/liff/templates/home/types'
 
+// 主頁熱門目的地的本機快取：一開就用上次存的清單瞬間顯示，再背景抓 /api/countries 更新。
+// 以 slug 分租戶（避免切品牌看到別家）；國家清單是公開資料、非個資，故不綁 LINE 使用者。
+// 版本前綴 v1 便於日後資料改版時自然作廢。
+const HOME_COUNTRIES_KEY = (slug: string) => `esim_home_countries_v1_${slug}`
+function readCachedHomeCountries(slug: string): HomeCountry[] {
+  if (typeof window === 'undefined' || !slug) return []
+  try {
+    const raw = window.localStorage.getItem(HOME_COUNTRIES_KEY(slug))
+    const arr = raw ? JSON.parse(raw) : null
+    return Array.isArray(arr) ? arr : []
+  } catch { return [] }
+}
+function writeCachedHomeCountries(slug: string, list: HomeCountry[]): void {
+  if (typeof window === 'undefined' || !slug) return
+  try { window.localStorage.setItem(HOME_COUNTRIES_KEY(slug), JSON.stringify(list)) } catch {}
+}
+
 export default function LiffHomePage() {
   const { isReady, error } = useLiff()
   const router = useRouter()
@@ -40,7 +57,8 @@ export default function LiffHomePage() {
   }, [])
 
   // ── 資料抓取 ──
-  const [countries, setCountries] = useState<HomeCountry[]>([])
+  // lazy initializer 同步讀本機快取 → 回訪時熱門目的地「一開就顯示」，不必等網路
+  const [countries, setCountries] = useState<HomeCountry[]>(() => readCachedHomeCountries(slug))
   const [showSetup, setShowSetup] = useState(false)
 
   useEffect(() => {
@@ -53,7 +71,11 @@ export default function LiffHomePage() {
     // 熱門目的地只需「國家 + 各國最低價」（約數十筆）→ 用輕量端點秒顯示，
     // 不再等上萬筆 /api/products。
     fetch('/api/countries').then(r => r.json())
-      .then(cd => setCountries(cd.countries ?? []))
+      .then(cd => {
+        const list: HomeCountry[] = cd.countries ?? []
+        setCountries(list)
+        writeCachedHomeCountries(slug, list)  // 存起來供下次「一開就顯示」
+      })
       .catch(() => {})
     // 背景預熱商品頁 cache（全量），不阻塞熱門目的地；products 頁掛載時可直接吃這份。
     fetch('/api/products').then(r => r.json())
