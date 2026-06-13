@@ -13,7 +13,7 @@ import { triggerEsimActivation } from '@/lib/services/esim'
 import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
 import { notifyOrderPaid } from '@/lib/services/notification'
-import { tapPayRefund } from '@/lib/services/tappay'
+import { tapPayRefund, tapPayQueryTrade } from '@/lib/services/tappay'
 import { mapTapPayFailureReason } from '@/lib/services/tappay-failure-reason'
 import { encrypt } from '@/lib/utils/crypto'
 import { OrderStatus } from '@prisma/client'
@@ -69,27 +69,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: 'Order not found' }, { status: 404 })
   }
 
-  // Verify partner_key header
-  const apiKey = req.headers.get('x-api-key')
+  // 真偽驗證不再靠 x-api-key header（實測 TapPay 的 backend_notify 不帶該 header，
+  // 舊版用它比對 partner_key → 每筆合法通知都被 401 擋掉、訂單永遠卡 PROCESSING）。
+  // 改在「確定要標記 PAID」前，用 rec_trade_id 向 TapPay Record API 回查驗真（見下）。
   const tenantAdminId = order.user.tenantAdminId
-  let expectedKey: string | undefined
-
-  if (tenantAdminId) {
-    const cfg = await prisma.tenantPaymentConfig.findFirst({
-      where: { adminId: tenantAdminId, gateway: 'tappay_credit', isActive: true },
-    })
-    expectedKey = cfg?.partnerKey ?? process.env.TAPPAY_PARTNER_KEY
-  } else {
-    expectedKey = process.env.TAPPAY_PARTNER_KEY
-  }
-
-  if (apiKey !== expectedKey) {
-    // eslint-disable-next-line no-console
-    console.warn('[tappay-notify] x-api-key MISMATCH → 拒絕(401)，訂單不會翻 PAID', {
-      order_number: tapPayOrderId, tenantAdminId, gotKey: !!apiKey, hasExpectedKey: !!expectedKey,
-    })
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-  }
 
   // Idempotent: skip already-completed orders
   if (order.status === OrderStatus.PAID || order.status === OrderStatus.COMPLETED) {
@@ -139,6 +122,27 @@ export async function POST(req: NextRequest) {
     if (bundleId) await markBundleFailed(bundleId, reason)
     else await markOrderFailed(order.id, reason)
     return NextResponse.json({ message: 'Payment failed' })
+  }
+
+  // ── 驗真：用 rec_trade_id 向 TapPay Record API 回查，確認交易真的存在且金額相符，
+  //    才放行標記 PAID（防偽造 notify 騙開卡）。失敗則不標記、回 400。 ──
+  const gateway = order.paymentMethod === 'LINE_PAY' ? 'tappay_linepay' : 'tappay_credit'
+  const expectedAmount = bundleId
+    ? ((await prisma.order.aggregate({ where: { bundleId }, _sum: { totalPaid: true } }))._sum.totalPaid ?? order.totalPaid)
+    : order.totalPaid
+  const verify = await tapPayQueryTrade(recTradeId, tenantAdminId, gateway)
+  if (!verify.ok || verify.amount !== expectedAmount) {
+    // 暫時性診斷：把驗真失敗（含 Record API 回應）寫進可讀表，方便排查欄位/金額。
+    try {
+      await prisma.$executeRawUnsafe(
+        `insert into tappay_notify_log (order_number, has_x_api_key, x_api_key_len, body, header_keys) values ($1,$2,$3,$4::jsonb,$5)`,
+        `VERIFY_FAIL:${tapPayOrderId}`, false, 0,
+        JSON.stringify({ recTradeId, expectedAmount, gateway, verify }), 'record-api-verify',
+      )
+    } catch { /* 診斷用 */ }
+    // eslint-disable-next-line no-console
+    console.warn('[tappay-notify] Record API 驗真失敗，不標記 PAID', { order_number: tapPayOrderId, expectedAmount, verify })
+    return NextResponse.json({ message: 'Verification failed' }, { status: 400 })
   }
 
   // Mark paid — fan out across the bundle if applicable.

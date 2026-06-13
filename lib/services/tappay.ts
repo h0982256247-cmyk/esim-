@@ -202,7 +202,50 @@ export async function tapPayChargeByToken(input: TapPayTokenChargeInput, tenantA
   }
 }
 
-// ─── Webhook 驗章 ─────────────────────────────────────────────────
+// ─── Record API：用 rec_trade_id 回查交易真偽 ───────────────────────
+// TapPay 的 backend_notify 不帶可信簽章／header（實測 x-api-key 為空），因此
+// 改用我們自己的 partner_key 主動向 TapPay 回查該筆交易是否存在、金額為何，
+// 作為 notify 的驗真依據（防偽造 notify 騙系統開卡）。
+// 文件：https://docs.tappaysdk.com/tutorial/zh/back.html#record-api
+export async function tapPayQueryTrade(
+  recTradeId: string,
+  tenantAdminId?: string | null,
+  gateway: string = 'tappay_credit',
+): Promise<
+  | { ok: true; amount: number; orderNumber: string; recordStatus: number; raw: unknown }
+  | { ok: false; message: string; raw?: unknown }
+> {
+  if (!recTradeId) return { ok: false, message: 'no rec_trade_id' }
+  const { partnerKey, baseUrl } = await getConfig(tenantAdminId, gateway)
+
+  const res = await fetch(`${baseUrl}/transaction/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': partnerKey },
+    body: JSON.stringify({
+      partner_key: partnerKey,
+      filters: { rec_trade_id: recTradeId },
+      records_per_page: 1,
+      page: 0,
+    }),
+  })
+
+  const data = await res.json()
+  if (data.status !== 0) return { ok: false, message: `query status ${data.status}: ${data.msg ?? ''}`, raw: data }
+  const rec = Array.isArray(data.trade_records) ? data.trade_records[0] : null
+  if (!rec) return { ok: false, message: 'trade record not found', raw: data }
+  return {
+    ok: true,
+    amount: Number(rec.amount),
+    orderNumber: String(rec.order_number ?? ''),
+    recordStatus: Number(rec.record_status),
+    raw: rec,
+  }
+}
+
+// ─── Webhook 驗章（已棄用：header 比對無效）─────────────────────────
+// ⚠ 實測 TapPay 的 backend_notify 不帶 x-api-key header，下面這支以 header 比對
+//   的方式永遠失敗。notify 已改用 tapPayQueryTrade（Record API）驗真。此函式僅
+//   保留相容，勿用於新流程。
 // TapPay 未提供 HMAC signature；防偽靠 partner_key header 比對
 
 export async function verifyTapPayWebhook(req: Request, tenantAdminId?: string | null): Promise<boolean> {
