@@ -6,7 +6,7 @@
  * the UI can sort, group, and badge consistently.
  */
 
-export type DataTier = 'light' | 'standard' | 'medium' | 'heavy' | 'unlimited' | 'unknown'
+export type DataTier = 'light' | 'standard' | 'medium' | 'heavy' | 'unlimited' | 'titanium' | 'highspeed' | 'unknown'
 
 export interface PlanLike {
   id: string
@@ -50,8 +50,16 @@ export function parseDataCapacity(raw: string | null): { totalGB: number; isPerD
   return { totalGB: gb, isPerDay, isUnlimited: false }
 }
 
-export function classifyTier(perDayGB: number, isUnlimited: boolean): DataTier {
-  if (isUnlimited) return 'unlimited'
+// 吃到飽家族再細分：鈦金（TI）/ 高速（HSD）/ 一般吃到飽，
+// 讓前台用不同顏色＋可分別篩選。判斷依 dataCapacity 原字串（鈦金吃到飽 / 高速吃到飽 / 吃到飽）。
+function unlimitedSubTier(raw: string): DataTier {
+  if (/鈦金/.test(raw) || /(?<![A-Za-z])TI(?![A-Za-z])/i.test(raw))  return 'titanium'
+  if (/高速/.test(raw) || /(?<![A-Za-z])HSD(?![A-Za-z])/i.test(raw)) return 'highspeed'
+  return 'unlimited'
+}
+
+export function classifyTier(perDayGB: number, isUnlimited: boolean, raw?: string | null): DataTier {
+  if (isUnlimited) return unlimitedSubTier(raw ?? '')
   if (perDayGB <= 0) return 'unknown'
   if (perDayGB < 1) return 'light'
   if (perDayGB < 3) return 'standard'
@@ -65,6 +73,8 @@ export const TIER_LABEL: Record<DataTier, string> = {
   medium:    '進階',
   heavy:     '重度',
   unlimited: '吃到飽',
+  titanium:  '鈦金吃到飽',
+  highspeed: '高速吃到飽',
   unknown:   '一般',
 }
 
@@ -74,7 +84,9 @@ export const TIER_COLOR: Record<DataTier, { bg: string; fg: string; accent: stri
   standard:  { bg: '#eff6ff', fg: '#1d4ed8', accent: '#3b82f6' },
   medium:    { bg: '#f5f3ff', fg: '#6d28d9', accent: '#8b5cf6' },
   heavy:     { bg: '#fff7ed', fg: '#c2410c', accent: '#f97316' },
-  unlimited: { bg: '#fef2f2', fg: '#b91c1c', accent: '#ef4444' },
+  unlimited: { bg: '#fef2f2', fg: '#b91c1c', accent: '#ef4444' },   // 吃到飽=紅
+  titanium:  { bg: '#fefce8', fg: '#a16207', accent: '#ca8a04' },   // 鈦金吃到飽=金
+  highspeed: { bg: '#ecfdf5', fg: '#047857', accent: '#059669' },   // 高速吃到飽=綠
   unknown:   { bg: '#f3f4f6', fg: '#4b5563', accent: '#6b7280' },
 }
 
@@ -90,7 +102,7 @@ export function buildDisplay<T extends PlanLike>(plan: T): PlanDisplay<T> {
     isPerDay,
     isUnlimited,
     perDayCost: Math.round(plan.sellPrice / days),
-    tier: classifyTier(perDay, isUnlimited),
+    tier: classifyTier(perDay, isUnlimited, plan.dataCapacity),
   }
 }
 

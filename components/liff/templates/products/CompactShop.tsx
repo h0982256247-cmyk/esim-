@@ -46,7 +46,7 @@ function StarIcon({ size = 11 }: { size?: number }) {
   )
 }
 
-const TIER_ORDER: DataTier[] = ['light', 'standard', 'medium', 'heavy', 'unlimited', 'unknown']
+const TIER_ORDER: DataTier[] = ['light', 'standard', 'medium', 'heavy', 'unlimited', 'titanium', 'highspeed', 'unknown']
 
 export default function CompactShop({
   countries, products, coupons, selectedCountry,
