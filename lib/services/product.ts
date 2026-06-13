@@ -375,9 +375,26 @@ function buildProductData(
   supplierId: string,
   tenantAdminId: string | null,
 ) {
+  // 只挑 Product 真實欄位；**不可**用 `...row`：匯入端會在 row 上臨時掛
+  // _rawProductName / _matchedByName（國家補強用），一旦被 spread 進
+  // prisma.product.createMany() 就會被當成未知參數，整批匯入失敗。
+  // （清空後全新匯入時 100% 走 create 路徑，此 bug 必現；update 路徑因為是逐欄
+  //   列出 VALUES 反而不受影響，所以平常沒被發現。）
   return {
-    ...row,
     supplierSkuId: supplierId,
+    planCode:      row.planCode ?? null,
+    countryCode:   row.countryCode,
+    countryNameZh: row.countryNameZh,
+    countryNameEn: row.countryNameEn,
+    countryFlag:   row.countryFlag ?? null,
+    displayDays:   row.displayDays,
+    dataCapacity:  row.dataCapacity ?? null,
+    description:   row.description ?? null,
+    networkType:   row.networkType ?? null,
+    isNativeSim:   row.isNativeSim ?? false,
+    sellPrice:     row.sellPrice,
+    costPrice:     row.costPrice,
+    sortOrder:     row.sortOrder ?? 0,
     tenantAdminId,
   }
 }

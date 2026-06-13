@@ -146,16 +146,14 @@ function parseMatrix(matrix: unknown[][]): { rows: CsvProductRow[]; errors: stri
     if (isNaN(displayDays) && nameSegs.days) displayDays = nameSegs.days
     if (isNaN(displayDays) && productName) displayDays = parseDaysFromName(productName) ?? NaN
 
-    // dataCapacity:
-    //   1) CSV 流量欄
-    //   2) 整段 productName regex（吃到飽 / GB/MB）
-    //   3) planCode / supplierSkuId 抓
+    // dataCapacity 只認：1) 明確的流量欄  2) C 欄商品名稱。
+    // 「不」再從 planCode / supplierSkuId 猜 —— 吃到飽方案的供應商編號天生帶 GB 字樣
+    // （例 WM-e-JP-SB-5GB-5D / JP-SB-5GB-5D 其實是「無限量吃到飽」），一旦 fallback
+    // 去讀它就會把吃到飽誤判成「總量5GB」（日本吃到飽消失的真因）。寧可留空也不要猜錯。
     // 統一正規化：每日 "1GB/天"、總量 "總量1GB"、吃到飽 鈦金/無限/高速吃到飽
     const dataCapacity = normalizeCapacity(
       get('dataCapacity')
-      || (productName    ? parseCapacityFromName(productName)    : null)
-      || (planCode       ? parseCapacityFromName(planCode)       : null)
-      || (supplierSkuId  ? parseCapacityFromName(supplierSkuId)  : null),
+      || (productName ? parseCapacityFromName(productName) : null),
     ) ?? undefined
 
     const sellPrice = parseInt(sellPriceRaw)
