@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { useTenantColors } from '@/components/liff/TenantContext'
+import { invalidateCache } from '@/hooks/useCachedData'
 
 const S = {
   ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8', line: '#e2e8f0',
@@ -19,6 +20,24 @@ export default function ProfileSetup() {
   const [form, setForm] = useState({ name: '', phone: '', email: '', birthday: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+
+  // 進頁載入現有資料預填：再打開時看得到已存的內容（而不是空白＝看起來像沒存）。
+  // 讀 /api/users/me（phone/email 已在後端解密）；首次填寫無資料則維持空白。
+  useEffect(() => {
+    fetch('/api/users/me')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        const u = d?.user
+        if (!u) return
+        setForm({
+          name: u.realName ?? '',
+          phone: u.phone ?? '',
+          email: u.email ?? '',
+          birthday: u.birthday ? String(u.birthday).slice(0, 10) : '',  // ISO → YYYY-MM-DD
+        })
+      })
+      .catch(() => { /* 預填失敗不阻擋填寫 */ })
+  }, [])
 
   function validate() {
     const e: Record<string, string> = {}
@@ -46,6 +65,8 @@ export default function ProfileSetup() {
         setErrors({ submit: error })
         return
       }
+      // 存檔成功 → 清掉 profile 快取，讓「個人資料」頁與首頁提醒立即反映已完成
+      invalidateCache('profile')
       // 若帶了 ?redirect=（例如從結帳被導來），完成後回到原頁；限同 base 防開放轉址
       const redirect = typeof window !== 'undefined'
         ? new URLSearchParams(window.location.search).get('redirect')
