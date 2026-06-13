@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import DayPicker from '@/components/liff/DayPicker'
-import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR } from '@/lib/utils/product-display'
+import { annotatePlans, sortByValue, TIER_COLOR } from '@/lib/utils/product-display'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 import type { ProductsTemplateProps } from './types'
 
@@ -26,30 +26,6 @@ const DEST_PALETTE = [
 function getAccent(code: string) {
   let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) & 0xffffffff
   return DEST_PALETTE[Math.abs(h) % DEST_PALETTE.length]
-}
-
-// GB 數字精簡格式：<1GB 顯示 MB，否則最多一位小數
-function fmtGB(gb: number): string {
-  if (gb <= 0) return ''
-  if (gb < 1) return `${Math.round(gb * 1024)}MB`
-  const v = gb < 10 ? Math.round(gb * 10) / 10 : Math.round(gb)
-  return `${v}GB`
-}
-
-// 把 dataCapacity 拆成「主要數字 + 計量方式 + 總量」，讓每日／總量方案一眼可辨
-function describeCapacity(d: { plan: { dataCapacity: string | null }; isPerDay: boolean; isUnlimited: boolean; totalGB: number }) {
-  const raw = (d.plan.dataCapacity ?? '').trim()
-  if (d.isUnlimited) {
-    // 已是「鈦金／無限／高速吃到飽」完整名稱，直接顯示，不再另貼標籤
-    return { kind: 'unlimited' as const, amount: raw || '無限吃到飽', meterLabel: '', sub: '' }
-  }
-  if (d.isPerDay) {
-    const amount = raw.replace(/\s*\/\s*(天|日|day)\s*/i, '').trim()
-    return { kind: 'perday' as const, amount: amount || '—', meterLabel: '每日', sub: d.totalGB > 0 ? `共 ${fmtGB(d.totalGB)}` : '' }
-  }
-  // 總量：去掉「總量」前綴當大字，標籤顯示「總量」，組合起來即「總量1GB」
-  const amount = raw.replace(/^總量\s*/, '').trim()
-  return { kind: 'total' as const, amount: amount || '—', meterLabel: '總量', sub: '' }
 }
 
 function BackArrow() {
@@ -374,10 +350,9 @@ export default function ClassicShop({
 
         {displays.map(d => {
           const p = d.plan
-          const { bestPrice, savedAmount, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
+          const { bestPrice, hasDiscount } = calcBestPrice(coupons, p.sellPrice)
           const inCart = cart.has(p.id)
           const tier = TIER_COLOR[d.tier]
-          const cap = describeCapacity(d)
           return (
             <div
               key={p.id}
@@ -391,7 +366,7 @@ export default function ClassicShop({
                 transition: 'box-shadow 0.2s, border 0.2s',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'stretch', padding: 14, gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'stretch', padding: 12, gap: 10 }}>
                 {/* 左側可點 → 進入詳情 */}
                 <button
                   type="button"
@@ -403,57 +378,35 @@ export default function ClassicShop({
                     cursor: 'pointer', textAlign: 'left',
                     WebkitTapHighlightColor: 'transparent',
                     touchAction: 'manipulation',
-                    display: 'flex', alignItems: 'center', gap: 12,
+                    display: 'flex', alignItems: 'center', gap: 10,
                     minWidth: 0, borderRadius: 12,
                   }}
                 >
                   {/* Day badge */}
                   <div style={{
-                    width: 60, height: 60, borderRadius: 16, flexShrink: 0,
+                    width: 46, height: 46, borderRadius: 13, flexShrink: 0,
                     background: tier.bg, color: tier.fg,
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                     boxShadow: `inset 0 0 0 1.5px ${tier.accent}1a`,
                   }}>
-                    <span style={{ fontSize: 23, fontWeight: 900, lineHeight: 1, letterSpacing: '-0.03em' }}>{p.displayDays}</span>
-                    <span style={{ fontSize: 9.5, fontWeight: 800, marginTop: 2, letterSpacing: '0.12em' }}>天</span>
+                    <span style={{ fontSize: 19, fontWeight: 900, lineHeight: 1, letterSpacing: '-0.03em' }}>{p.displayDays}</span>
+                    <span style={{ fontSize: 9, fontWeight: 800, marginTop: 1, letterSpacing: '0.1em' }}>天</span>
                   </div>
 
-                  {/* Info */}
+                  {/* Info：流量直接顯示完整字串（總量5GB / 1GB/天 / 無限吃到飽 / 鈦金吃到飽）*/}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* tier + 計量方式 */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <span style={{
-                        fontSize: 10, fontWeight: 800, color: tier.accent,
-                        background: tier.bg, borderRadius: 100, padding: '2px 8px',
-                        letterSpacing: '0.04em',
-                      }}>{TIER_LABEL[d.tier]}</span>
-                      <span style={{
-                        fontSize: 10, fontWeight: 800,
-                        color: cap.kind === 'perday' ? '#0369a1' : S.faint,
-                        background: cap.kind === 'perday' ? '#e0f2fe' : 'transparent',
-                        borderRadius: 100, padding: cap.kind === 'perday' ? '2px 8px' : '2px 0',
-                        letterSpacing: '0.04em',
-                      }}>{cap.meterLabel}</span>
-                    </div>
-                    {/* 主要流量，per-day 與 total 明顯區隔 */}
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 19, fontWeight: 900, color: S.ink, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-                        {cap.amount}
-                      </span>
-                      {cap.kind === 'perday' && (
-                        <span style={{ fontSize: 12, fontWeight: 700, color: S.faint }}>/ 天</span>
-                      )}
-                      {cap.sub && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: S.faint }}>{cap.sub}</span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
+                    {p.dataCapacity && (
+                      <p style={{ fontSize: 16, fontWeight: 900, color: S.ink, letterSpacing: '-0.02em', margin: 0, lineHeight: 1.2 }}>
+                        {p.dataCapacity}
+                      </p>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, flexWrap: 'wrap' }}>
                       <NetworkBadge networkType={p.networkType} />
                       <NativeSimBadge isNative={p.isNativeSim} />
                     </div>
                     {p.description && (
                       <p style={{
-                        fontSize: 11, color: S.muted, margin: '6px 0 0', fontWeight: 500,
+                        fontSize: 11, color: S.muted, margin: '4px 0 0', fontWeight: 500,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
                         {p.description}
@@ -488,14 +441,6 @@ export default function ClassicShop({
                     <p style={{ fontSize: 22, fontWeight: 900, color: C.primary, margin: 0, letterSpacing: '-0.035em', lineHeight: 1.1 }}>
                       <span style={{ fontSize: 12, fontWeight: 700 }}>NT$</span>{bestPrice.toLocaleString()}
                     </p>
-                    {hasDiscount && (
-                      <p style={{
-                        fontSize: 10, color: '#16a34a', margin: '3px 0 0', fontWeight: 800,
-                        background: '#dcfce7', display: 'inline-block', padding: '2px 6px', borderRadius: 100,
-                      }}>
-                        省 ${savedAmount.toLocaleString()}
-                      </p>
-                    )}
                   </div>
                   <button
                     type="button"
