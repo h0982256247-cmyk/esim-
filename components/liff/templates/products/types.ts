@@ -39,6 +39,12 @@ export interface DayFilterControls {
   totalCount: number
   /** Up to 3 nearest available day counts to suggest when no exact match. */
   nearestDays: number[]
+  /** 流量類型篩選（對應主頁搜尋）：'總量' | '每日型' | '吃到飽'；null = 全部。 */
+  dataType: string | null
+  /** 可選的流量類型按鈕。 */
+  dataOptions: string[]
+  /** 切換流量類型；傳 null 表示「全部」。 */
+  onDataType: (t: string | null) => void
 }
 
 export interface CartControls {

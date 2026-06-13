@@ -323,6 +323,30 @@ export default function ClassicShop({
         </div>
       )}
 
+      {/* 流量類型：總量 / 每日型 / 吃到飽（置中，對應主頁搜尋；不選＝全部，再點一下取消）*/}
+      {filter.availableDays.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, padding: '6px 16px 0', flexWrap: 'wrap' }}>
+          {filter.dataOptions.map(opt => {
+            const active = filter.dataType === opt
+            return (
+              <button
+                key={opt}
+                onClick={() => filter.onDataType(active ? null : opt)}
+                style={{
+                  padding: '7px 16px', borderRadius: 100, cursor: 'pointer',
+                  border: active ? `1.5px solid ${C.primary}` : '1.5px solid rgba(15,23,42,0.10)',
+                  background: active ? C.primary : '#fff',
+                  color: active ? C.onPrimary : S.muted,
+                  fontSize: 13, fontWeight: 700,
+                  WebkitTapHighlightColor: 'transparent',
+                  transition: 'background 0.15s, border 0.15s, color 0.15s',
+                }}
+              >{opt}</button>
+            )
+          })}
+        </div>
+      )}
+
       {/* Plans */}
       <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {filter.totalCount === 0 && (

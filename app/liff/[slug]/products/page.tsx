@@ -17,6 +17,9 @@ import type { Country, Product, DayFilterControls, CartControls } from '@/compon
 
 const COMMON_PRESETS = [1, 3, 5, 7, 14, 30]
 
+// 商城頁的流量類型篩選按鈕（與主頁搜尋一致）；置中、可切換、null=全部。
+const DATA_TYPE_OPTIONS = ['總量', '每日型', '吃到飽']
+
 // 把 dataCapacity 歸類成主頁搜尋的三種流量類型：吃到飽 / 每日型 / 總量。
 // 對應主頁 DATA_OPTIONS（'總量' / '每日型' / '吃到飽'）的 ?data 參數做篩選。
 function capKindOf(dc: string | null): '總量' | '每日型' | '吃到飽' | '' {
@@ -52,7 +55,8 @@ function ProductsContent() {
   const showSetup = searchParams.get('setup') === '1'
   // 主頁搜尋帶入：天數 + 流量類型（總量 / 每日型 / 吃到飽）
   const searchDays = searchParams.get('days')
-  const dataType = searchParams.get('data')
+  // 流量類型用 state：初始吃主頁搜尋帶的 ?data，使用者可在商城頁用按鈕切換（null=全部）
+  const [dataType, setDataType] = useState<string | null>(searchParams.get('data'))
   const { liff, isReady } = useLiff()
   const C = useTenantColors()
   const tenant = useTenant()
@@ -178,7 +182,10 @@ function ProductsContent() {
     filteredCount: filteredProducts.length,
     totalCount: products.length,
     nearestDays,
-  }), [pickerDays, dayFilter, availableDays, presets, filteredProducts.length, products.length, nearestDays])
+    dataType,
+    dataOptions: DATA_TYPE_OPTIONS,
+    onDataType: (t: string | null) => setDataType(t),
+  }), [pickerDays, dayFilter, availableDays, presets, filteredProducts.length, products.length, nearestDays, dataType])
 
   const cartControls: CartControls = useMemo(() => ({
     has: (id: string) => cart.has(id),
