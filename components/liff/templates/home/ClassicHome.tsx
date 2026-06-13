@@ -38,7 +38,7 @@ export default function ClassicHome({
   const [query, setQuery]       = useState('')
   const [selDays, setSelDays]   = useState<string | null>(null)
   const [selData, setSelData]   = useState<string | null>(null)
-  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(true)   // 預設展開搜尋面板
   const brandName = tenant?.brandName ?? 'eSIM'
 
   const filtered = query.trim()
