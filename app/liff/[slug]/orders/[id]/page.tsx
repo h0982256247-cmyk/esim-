@@ -765,7 +765,7 @@ export default function OrderDetailPage() {
           </div>
           {order.discountAmount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16a34a' }}>
-              <span>優惠折扣</span><span>-NT${order.discountAmount.toLocaleString()}</span>
+              <span>優惠折扣{order.bundleId ? '（多張總額折扣分攤至本張）' : ''}</span><span>-NT${order.discountAmount.toLocaleString()}</span>
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, borderTop: `1px solid ${S.line}`, paddingTop: 12, marginTop: 2 }}>

@@ -21,6 +21,8 @@ type Order = {
   orderNumber: string | null
   status: string
   totalPaid: number
+  subtotal: number
+  discountAmount: number
   createdAt: string
   userId: string
   currentOwnerId: string
@@ -587,8 +589,13 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
           )}
         </div>
         <p style={{ fontSize: 16, fontWeight: 700, color: S.ink, margin: '0 0 4px' }}>{productName}</p>
-        <p style={{ fontSize: 11, color: S.faint, margin: '0 0 12px' }}>
-          {new Date(order.createdAt).toLocaleDateString('zh-TW')} · NT${order.totalPaid.toLocaleString()}
+        <p style={{ fontSize: 11, color: S.faint, margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span>{new Date(order.createdAt).toLocaleDateString('zh-TW')}</span>
+          <span>·</span>
+          {order.discountAmount > 0 && (
+            <span style={{ textDecoration: 'line-through' }}>NT${order.subtotal.toLocaleString()}</span>
+          )}
+          <span style={{ fontWeight: 700, color: order.discountAmount > 0 ? '#16a34a' : S.faint }}>NT${order.totalPaid.toLocaleString()}</span>
         </p>
       </button>
 
