@@ -7,6 +7,11 @@ import { verifyPlatformSession, PLATFORM_COOKIE } from '@/lib/auth/platform'
 //   /api/tenant/          — Tenant 公開設定（前台讀取品牌、模板等）
 //   /api/platform/auth/   — Platform admin 登入
 //   /api/webhooks/        — 第三方 (WM 等) push 過來的 callback，由 route 內部驗證 payload
+//   /api/payment/tappay/notify — TapPay 金流結果 callback（server→server、無 cookie），
+//                          route 內部以 x-api-key (partner_key) 驗章。沒放行的話
+//                          proxy 會在 route 之前回 401，訂單永遠卡在 PROCESSING。
+//                          ⚠ 只放行 /notify 子路徑；父路徑 /api/payment/tappay（前端
+//                          發動扣款）仍需 session，不可放行。
 //   /api/cron/            — Vercel Cron，由 route 內部驗證 CRON_SECRET
 //   /api/gifts/           — 轉贈連結預覽 (GET 不需登入)；claim 子路徑由 route 內部驗 session
 const PUBLIC_API = [
@@ -14,6 +19,7 @@ const PUBLIC_API = [
   '/api/tenant/',
   '/api/platform/auth/',
   '/api/webhooks/',
+  '/api/payment/tappay/notify',
   '/api/cron/',
   '/api/gifts/',
 ]
