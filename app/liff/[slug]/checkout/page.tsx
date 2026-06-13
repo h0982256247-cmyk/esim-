@@ -67,6 +67,20 @@ const TYPE_LABEL: Record<string, string> = {
 // 使用共用版本
 const findBestCouponCombo = _findBestCouponCombo
 
+// 多張結帳：把總折扣按各筆原價比例攤回每一張（最大餘數法，與後端 allocateDiscountByWeight
+// 同邏輯），讓上方每張預覽也能顯示折後價；加總必等於總折扣。
+function allocateLineDiscounts(weights: number[], total: number): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0)
+  if (sum <= 0 || total <= 0) return weights.map(() => 0)
+  const raw = weights.map(w => (total * w) / sum)
+  const floored = raw.map(Math.floor)
+  const remainder = total - floored.reduce((a, b) => a + b, 0)
+  const byFrac = raw.map((r, i) => ({ i, frac: r - Math.floor(r) })).sort((a, b) => b.frac - a.frac)
+  const result = [...floored]
+  for (let k = 0; k < remainder && k < byFrac.length; k++) result[byFrac[k].i]++
+  return result
+}
+
 function TicketIcon({ color }: { color: string }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -660,6 +674,8 @@ function CheckoutContent() {
   const basePrice = bundleMode ? bundleSubtotal : product!.sellPrice
   const displayPrice = finalPrice ?? basePrice
   const discount = basePrice - displayPrice
+  // 多張：把總折扣攤回每一張，讓上方每張卡也顯示折後價（順序對齊 bundleItems）
+  const lineDiscounts = allocateLineDiscounts(bundleItems.map(i => i.sellPrice * i.qty), discount)
 
   const cc = paymentMethod === 'CREDIT_CARD'
   const lp = paymentMethod === 'LINE_PAY'
@@ -708,7 +724,7 @@ function CheckoutContent() {
               </span>
             </div>
 
-            {bundleItems.map(item => (
+            {bundleItems.map((item, idx) => (
               <div key={item.productId} style={{
                 display: 'flex', alignItems: 'center', gap: 12,
                 paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)',
@@ -730,9 +746,20 @@ function CheckoutContent() {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
-                    NT${(item.sellPrice * item.qty).toLocaleString()}
-                  </p>
+                  {lineDiscounts[idx] > 0 ? (
+                    <>
+                      <p style={{ fontSize: 10.5, color: '#94a3b8', margin: 0, textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+                        NT${(item.sellPrice * item.qty).toLocaleString()}
+                      </p>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: '1px 0 0', fontVariantNumeric: 'tabular-nums' }}>
+                        NT${(item.sellPrice * item.qty - lineDiscounts[idx]).toLocaleString()}
+                      </p>
+                    </>
+                  ) : (
+                    <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                      NT${(item.sellPrice * item.qty).toLocaleString()}
+                    </p>
+                  )}
                   {item.qty > 1 && (
                     <p style={{ fontSize: 10.5, color: '#94a3b8', margin: '1px 0 0', fontVariantNumeric: 'tabular-nums' }}>
                       NT${item.sellPrice.toLocaleString()} × {item.qty}
@@ -784,9 +811,16 @@ function CheckoutContent() {
                 <NetworkBadge networkType={product!.networkType} />
                 <NativeSimBadge isNative={product!.isNativeSim} />
               </div>
-              <p style={{ fontSize: 20, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
-                NT${product!.sellPrice.toLocaleString()}
-              </p>
+              {discount > 0 ? (
+                <p style={{ fontSize: 20, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', textDecoration: 'line-through' }}>NT${product!.sellPrice.toLocaleString()}</span>
+                  <span>NT${displayPrice.toLocaleString()}</span>
+                </p>
+              ) : (
+                <p style={{ fontSize: 20, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                  NT${product!.sellPrice.toLocaleString()}
+                </p>
+              )}
             </div>
           </div>
         )}
