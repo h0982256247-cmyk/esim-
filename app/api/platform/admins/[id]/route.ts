@@ -108,7 +108,23 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (body.brandName !== undefined || body.tenantSlug !== undefined || body.liffId !== undefined || body.logoUrl !== undefined || body.primaryColor !== undefined || body.lineAccessToken !== undefined) {
     const updateData: Record<string, unknown> = {}
     if (body.brandName !== undefined) updateData.brandName = body.brandName
-    if (body.tenantSlug !== undefined) updateData.tenantSlug = body.tenantSlug
+    // Slug 一經設定即鎖死：避免後續變更 URL 後 LINE LIFF endpoint、TapPay
+    // result_url、群組分享連結、使用者書籤全部失效。要更名請走客服流程。
+    if (body.tenantSlug !== undefined) {
+      const existing = await prisma.platformAdmin.findUnique({
+        where: { id },
+        select: { tenantSlug: true },
+      })
+      const currentSlug = existing?.tenantSlug ?? ''
+      const nextSlug = (body.tenantSlug as string) ?? ''
+      if (currentSlug && currentSlug !== nextSlug) {
+        return NextResponse.json(
+          { error: 'Slug 一經設定即無法變更（會讓既有 LIFF 與付款連結失效）' },
+          { status: 422 },
+        )
+      }
+      if (!currentSlug) updateData.tenantSlug = nextSlug   // 首次設定才寫入
+    }
     if (body.liffId !== undefined) updateData.liffId = body.liffId
     if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl
     if (body.primaryColor !== undefined) updateData.primaryColor = body.primaryColor

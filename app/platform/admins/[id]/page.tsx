@@ -599,6 +599,9 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
     primaryColor: admin.primaryColor ?? '#FFC107',
     lineAccessToken: admin.lineAccessToken ?? '',
   })
+  // Slug 一經設定即鎖死：避免後續變更 URL 後 LINE LIFF endpoint、TapPay
+  // result_url、群組分享連結、使用者書籤全部失效。後端也有同條 guard。
+  const slugLocked = !!admin.tenantSlug
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -659,14 +662,29 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
             />
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Slug（URL 識別碼）</label>
+            <label className="text-xs text-gray-500 block mb-1">
+              Slug（URL 識別碼）
+              {slugLocked && (
+                <span className="ml-2 text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">🔒 已鎖定</span>
+              )}
+            </label>
             <input
               type="text"
               value={form.tenantSlug}
+              disabled={slugLocked}
               onChange={e => setForm(p => ({ ...p, tenantSlug: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
               placeholder="例：bii-travel"
-              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                slugLocked ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''
+              }`}
             />
+            {slugLocked ? (
+              <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                Slug 一經設定即無法變更，避免破壞既有 LIFF 網址、TapPay 跳轉連結與已分享的邀請碼。如需變更請聯絡平台管理員手動處理 DB。
+              </p>
+            ) : (
+              <p className="text-xs text-amber-600 mt-1">⚠️ 儲存後即鎖定，無法再變更，請仔細確認字串。建議全小寫 + hyphen，例如 bii-travel。</p>
+            )}
             {form.tenantSlug && (
               <EndpointUrlRow slug={form.tenantSlug} label="LIFF 網址" />
             )}
