@@ -37,6 +37,22 @@ export async function POST(req: NextRequest) {
     status: body.status,
     rec_trade_id: body.rec_trade_id,
   })
+
+  // 暫時性診斷：把每一筆 inbound webhook 寫進可讀的表，用來確認 TapPay 到底
+  // 有沒有打進來、有沒有帶 x-api-key、order_number 對不對。查清楚後即 DROP 此表
+  // 並移除這段。best-effort，絕不可影響主流程。
+  try {
+    const xKey = req.headers.get('x-api-key')
+    await prisma.$executeRawUnsafe(
+      `insert into tappay_notify_log (order_number, has_x_api_key, x_api_key_len, body, header_keys) values ($1,$2,$3,$4::jsonb,$5)`,
+      tapPayOrderId ?? null,
+      !!xKey,
+      xKey ? xKey.length : 0,
+      JSON.stringify(body),
+      Array.from(req.headers.keys()).join(','),
+    )
+  } catch { /* 診斷用，吞掉 */ }
+
   if (!tapPayOrderId) return NextResponse.json({ message: 'Missing order_number' }, { status: 400 })
 
   const order = await prisma.order.findFirst({
