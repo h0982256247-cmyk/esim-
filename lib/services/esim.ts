@@ -1,7 +1,6 @@
 import crypto from 'crypto'
-import { OrderStatus } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { markOrderCompleted, incrementRetryCount } from './order'
+import { markOrderCompleted } from './order'
 import { notifyEsimPending } from './notification'
 import { safeDecrypt } from '@/lib/utils/crypto'
 
@@ -435,35 +434,3 @@ export async function retryEsimActivation(orderId: string): Promise<void> {
   await triggerEsimActivation(orderId)
 }
 
-// ─── Cron：自動重試「已付款卻還沒拿到 eSIM」的訂單 ──────────────────
-// 付款成功後 placeWmOrder 可能因瞬時錯誤（WM 暫時不可用 / 網路）失敗，訂單會停在
-// PAID 但無 esimRcode。此函式由 cron 定期撈出這些單重試，以 retryCount 設上限避免
-// 對 WM 無限重打（資料型錯誤如假 wmproductId 重試也不會好，達上限後就停、留待人工）。
-const MAX_ESIM_RETRY = 5
-
-export async function retryStuckEsimActivations(): Promise<{ scanned: number; retried: number }> {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000) // 只重試近 24h 的，更舊的留待人工補發
-  const stuck = await prisma.order.findMany({
-    where: {
-      status: { in: [OrderStatus.PAID, OrderStatus.ESIM_PENDING] },
-      esimRcode: null,
-      retryCount: { lt: MAX_ESIM_RETRY },
-      createdAt: { gte: since },
-    },
-    select: { id: true },
-    take: 100,
-  })
-
-  let retried = 0
-  for (const o of stuck) {
-    await incrementRetryCount(o.id).catch(() => {})
-    try {
-      await retryEsimActivation(o.id)
-      retried++
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[esim] retryStuckEsimActivations 單筆失敗', { orderId: o.id, err: err instanceof Error ? err.message : String(err) })
-    }
-  }
-  return { scanned: stuck.length, retried }
-}
