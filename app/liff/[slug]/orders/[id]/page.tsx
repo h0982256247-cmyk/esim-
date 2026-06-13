@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useTenantColors } from '@/components/liff/TenantContext'
+import { deriveEsimStatus, daysLeftOf, TONE_STYLE } from '@/lib/esimStatus'
 
 type GiftInfo = {
   token: string
@@ -49,17 +50,6 @@ type EsimUsage = {
   usedData: number
   remainingData: number
   unit: string
-}
-
-const STATUS_META: Record<string, { text: string; bg: string; color: string }> = {
-  PENDING:      { text: '待付款',       bg: '#fef9c3', color: '#a16207' },
-  PROCESSING:   { text: '待付款',       bg: '#fef9c3', color: '#a16207' },
-  PAID:         { text: '付款成功',     bg: '#dcfce7', color: '#15803d' },
-  COMPLETED:    { text: '已完成發送',   bg: '#d1fae5', color: '#065f46' },
-  FAILED:       { text: '付款失敗',     bg: '#fee2e2', color: '#b91c1c' },
-  ESIM_PENDING: { text: '待發送',      bg: '#ffedd5', color: '#c2410c' },
-  REFUNDED:     { text: '已退款',       bg: '#f1f5f9', color: '#475569' },
-  CANCELLED:    { text: '已取消',       bg: '#f1f5f9', color: '#94a3b8' },
 }
 
 const S = {
@@ -347,6 +337,17 @@ export default function OrderDetailPage() {
     }
   }
 
+  // 開啟「已激活」的訂單時，自動查一次流量（免得使用者還要手動點「查詢流量」）
+  const usageAutoRef = useRef(false)
+  useEffect(() => {
+    if (usageAutoRef.current) return
+    if (order?.activatedAt && order?.esimIccid && order.status === 'COMPLETED') {
+      usageAutoRef.current = true
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 一次性開卡查詢，非渲染同步
+      fetchUsage()
+    }
+  }, [order]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
       <div style={{ width: 28, height: 28, border: `2.5px solid ${C.light}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
@@ -363,7 +364,8 @@ export default function OrderDetailPage() {
     </div>
   )
 
-  const s = STATUS_META[order.status] ?? { text: order.status, bg: '#f1f5f9', color: '#475569' }
+  const sv = deriveEsimStatus(order)
+  const sTone = TONE_STYLE[sv.tone]
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '20px 16px 96px' }}>
@@ -380,10 +382,10 @@ export default function OrderDetailPage() {
           <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.02em' }}>訂單詳情</h1>
           <span style={{
             fontSize: 11, fontWeight: 700,
-            background: s.bg, color: s.color,
+            background: sTone.bg, color: sTone.fg,
             padding: '3px 10px', borderRadius: 100,
           }}>
-            {s.text}
+            {sv.icon} {sv.label}
           </span>
         </div>
         <p style={{ fontSize: 12, color: S.faint, marginTop: 4 }}>{order.orderNumber ?? `#${order.id.slice(-8).toUpperCase()}`}</p>
@@ -542,14 +544,31 @@ export default function OrderDetailPage() {
           {/* 已激活提示（只有在 QR 已展示 + 已激活時出現在這個 block） */}
           {order.activatedAt && (
             <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-              <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 12, padding: '12px 14px' }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#15803d', margin: '0 0 4px' }}>
-                  ✅ 已激活使用中
-                </p>
-                <p style={{ fontSize: 11, color: '#166534', margin: 0, lineHeight: 1.5 }}>
-                  已於 {new Date(order.activatedAt).toLocaleDateString('zh-TW')} 激活
-                </p>
-              </div>
+              {(() => {
+                const dl = daysLeftOf(order.activationEnd)
+                const expiring = dl !== null && dl >= 0 && dl <= 3
+                const expired = dl !== null && dl < 0
+                const box = expired
+                  ? { bg: '#f8fafc', border: '#e2e8f0', fg: '#64748b', sub: '#94a3b8', title: '⌛ 已結束' }
+                  : expiring
+                    ? { bg: '#fff7ed', border: '#fed7aa', fg: '#c2410c', sub: '#9a3412', title: '⚠️ 即將到期' }
+                    : { bg: '#f0fdf4', border: '#86efac', fg: '#15803d', sub: '#166534', title: '✅ 已激活使用中' }
+                const remain = dl === null ? null : dl < 0 ? '使用期間已過' : dl === 0 ? '今天到期' : `剩 ${dl} 天`
+                return (
+                  <div style={{ background: box.bg, border: `1px solid ${box.border}`, borderRadius: 12, padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: box.fg, margin: 0 }}>{box.title}</p>
+                      {remain && (
+                        <span style={{ fontSize: 12, fontWeight: 700, color: box.fg }}>{remain}</span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 11, color: box.sub, margin: '4px 0 0', lineHeight: 1.5 }}>
+                      已於 {new Date(order.activatedAt).toLocaleDateString('zh-TW')} 激活
+                      {order.activationEnd ? ` · ${new Date(order.activationEnd).toLocaleDateString('zh-TW')} 到期` : ''}
+                    </p>
+                  </div>
+                )
+              })()}
             </div>
           )}
 

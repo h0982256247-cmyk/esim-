@@ -476,6 +476,9 @@ export async function getUserOrders(userId: string) {
       cancelReason: true,
       esimRcode: true,
       esimQrcode: true,
+      esimIccid: true,
+      activationStart: true,
+      activationEnd: true,
       redeemedAt: true,
       activatedAt: true,
       orderItems: {
