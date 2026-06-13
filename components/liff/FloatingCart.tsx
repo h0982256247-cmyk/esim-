@@ -89,9 +89,10 @@ export default function FloatingCart() {
     return () => { document.body.style.overflow = prev }
   }, [open])
 
-  // 載入可用優惠券（折總額預覽用）
+  // 載入可用優惠券（折總額預覽用）。每次「打開抽屜」就重抓一次 —— 取消訂單把券
+  // 退回後、或在別頁領到新券，打開購物車就會即時反映，不會停在舊的快取狀態。
   useEffect(() => {
-    if (!hydrated) return
+    if (!open || !hydrated) return
     fetch('/api/coupons').then(r => r.json()).then(cd => {
       const now = new Date()
       setCoupons(
@@ -100,7 +101,7 @@ export default function FloatingCart() {
           .map((c: { id: string; discount: number }) => ({ id: c.id, discount: c.discount }))
       )
     }).catch(() => {})
-  }, [hydrated])
+  }, [open, hydrated])
 
   if (!hydrated) return null
   if (HIDE_ON.some(p => pathname.includes(p))) return null
