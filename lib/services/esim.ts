@@ -115,6 +115,18 @@ async function fetchEsimCodes(wmOrderId: string, tenantAdminId?: string | null):
 // 但 email 欄位仍是必填（WM 要求），用戶 email 解密後傳入；無 email 則用 lineUid 組 placeholder。
 
 async function placeWmOrder(orderId: string, tenantAdminId?: string | null): Promise<string | null> {
+  // 暫時性診斷：把 WM 下單每一步寫進 wm_order_log（可讀），確認為何取不到 eSIM。
+  // 查清後 DROP 表並移除。best-effort，絕不可影響主流程。
+  const wmlog = async (stage: string, f: { wmProductId?: string | null; httpStatus?: number | null; response?: unknown; note?: string } = {}) => {
+    try {
+      await prisma.$executeRawUnsafe(
+        `insert into wm_order_log (order_id, stage, wm_product_id, http_status, response, note) values ($1,$2,$3,$4,$5::jsonb,$6)`,
+        orderId, stage, f.wmProductId ?? null, f.httpStatus ?? null,
+        JSON.stringify(f.response ?? null), f.note ?? null,
+      )
+    } catch { /* 診斷用 */ }
+  }
+
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
@@ -122,11 +134,11 @@ async function placeWmOrder(orderId: string, tenantAdminId?: string | null): Pro
       user:       { select: { lineUid: true, email: true } },
     },
   })
-  if (!order || !order.orderItems[0]) return null
+  if (!order || !order.orderItems[0]) { await wmlog('no_order_item'); return null }
 
   const item = order.orderItems[0]
   const wmproductId = item.product.supplierProduct?.wmProductId
-  if (!wmproductId) return null
+  if (!wmproductId) { await wmlog('no_wmproductid'); return null }
 
   // 取用戶 email（可能加密）；沒有就用 lineUid 組 placeholder（systemMail=false 不會真的寄）
   const rawEmail = order.user.email
@@ -153,11 +165,14 @@ async function placeWmOrder(orderId: string, tenantAdminId?: string | null): Pro
         encStr,
       }),
     })
+    let data: Record<string, unknown> | null = null
+    try { data = await res.json() as Record<string, unknown> } catch { /* 非 JSON */ }
+    await wmlog('wm_response', { wmProductId: wmproductId, httpStatus: res.status, response: data })
     if (!res.ok) return null
-    const data = await res.json() as Record<string, unknown>
-    if (data.code !== 0) return null
+    if (!data || data.code !== 0) return null
     return (data.orderId as string) ?? null
-  } catch {
+  } catch (err) {
+    await wmlog('exception', { wmProductId: wmproductId, note: err instanceof Error ? err.message : String(err) })
     return null
   }
 }

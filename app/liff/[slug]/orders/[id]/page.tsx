@@ -772,6 +772,18 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {/* 導頁：回首頁 / 查看我的 eSIM */}
+      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+        <button onClick={() => router.push(`${base}`)}
+          style={{ flex: 1, padding: '12px 0', border: `1px solid ${S.line}`, borderRadius: 12, background: S.white, color: S.muted, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          回首頁
+        </button>
+        <button onClick={() => router.push(`${base}/orders`)}
+          style={{ flex: 1, padding: '12px 0', border: 'none', borderRadius: 12, background: C.primary, color: C.onPrimary, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          查看我的 eSIM
+        </button>
+      </div>
+
       {/* 客服 */}
       <div style={{ textAlign: 'center', marginTop: 12 }}>
         <button onClick={() => router.push(`${base}/support`)} style={{ fontSize: 13, color: S.faint, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
