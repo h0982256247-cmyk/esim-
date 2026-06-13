@@ -14,6 +14,7 @@ import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
 import { notifyOrderPaid } from '@/lib/services/notification'
 import { fireAndLog } from '@/lib/utils/fire-and-log'
+import { recordAlert } from '@/lib/services/alert'
 import { tapPayRefund, tapPayQueryTrade } from '@/lib/services/tappay'
 import { mapTapPayFailureReason } from '@/lib/services/tappay-failure-reason'
 import { OrderStatus } from '@prisma/client'
@@ -37,21 +38,6 @@ export async function POST(req: NextRequest) {
     status: body.status,
     rec_trade_id: body.rec_trade_id,
   })
-
-  // 暫時性診斷：把每一筆 inbound webhook 寫進可讀的表，用來確認 TapPay 到底
-  // 有沒有打進來、有沒有帶 x-api-key、order_number 對不對。查清楚後即 DROP 此表
-  // 並移除這段。best-effort，絕不可影響主流程。
-  try {
-    const xKey = req.headers.get('x-api-key')
-    await prisma.$executeRawUnsafe(
-      `insert into tappay_notify_log (order_number, has_x_api_key, x_api_key_len, body, header_keys) values ($1,$2,$3,$4::jsonb,$5)`,
-      tapPayOrderId ?? null,
-      !!xKey,
-      xKey ? xKey.length : 0,
-      JSON.stringify(body),
-      Array.from(req.headers.keys()).join(','),
-    )
-  } catch { /* 診斷用，吞掉 */ }
 
   if (!tapPayOrderId) return NextResponse.json({ message: 'Missing order_number' }, { status: 400 })
 
@@ -134,16 +120,15 @@ export async function POST(req: NextRequest) {
   // record_status 0 = 已授權（即使尚未請款 is_captured=false 也算付款成立，TapPay
   // 會在 cap_millis 自動請款）。金額需與訂單相符。
   if (!verify.ok || verify.amount !== expectedAmount || verify.recordStatus !== 0) {
-    // 暫時性診斷：把驗真失敗（含 Record API 回應）寫進可讀表，方便排查欄位/金額。
-    try {
-      await prisma.$executeRawUnsafe(
-        `insert into tappay_notify_log (order_number, has_x_api_key, x_api_key_len, body, header_keys) values ($1,$2,$3,$4::jsonb,$5)`,
-        `VERIFY_FAIL:${tapPayOrderId}`, false, 0,
-        JSON.stringify({ recTradeId, expectedAmount, gateway, verify }), 'record-api-verify',
-      )
-    } catch { /* 診斷用 */ }
     // eslint-disable-next-line no-console
     console.warn('[tappay-notify] Record API 驗真失敗，不標記 PAID', { order_number: tapPayOrderId, expectedAmount, verify })
+    await recordAlert('payment_verify_failed', {
+      orderId: order.id, tenantAdminId,
+      orderNumber: tapPayOrderId, expectedAmount,
+      gotAmount: verify.ok ? verify.amount : null,
+      recordStatus: verify.ok ? verify.recordStatus : null,
+      reason: verify.ok ? null : verify.message, gateway,
+    })
     return NextResponse.json({ message: 'Verification failed' }, { status: 400 })
   }
 
@@ -172,6 +157,7 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('[pay-notify] triggerEsimActivation failed', oid, e)
+      await recordAlert('esim_activation_failed', { orderId: oid, tenantAdminId, error: e instanceof Error ? e.message : String(e) })
     }
     fireAndLog('calculateAndSaveCommission', oid, calculateAndSaveCommission(oid))
     fireAndLog('issueRepurchaseCouponForOrder', oid, issueRepurchaseCouponForOrder(oid))

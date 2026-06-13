@@ -102,16 +102,32 @@ export async function getAllAdmins(callerId: string, callerRole: string) {
 
 // ─── Dashboard 統計 ───────────────────────────────────────────────
 
-// ─── 風險警示：虧損訂單 + 低毛利商品（後台儀表板紅色警示區）──────────
+// ─── 風險警示：虧損訂單 + 低毛利商品 + 系統異常（後台儀表板紅色警示區）──────────
 // 毛利定義 = (售價 − 成本) / 售價。低於 40% → 成本 > 售價 × 0.6 即示警。
 const LOW_MARGIN_THRESHOLD = 0.40
+
+// system_alerts.label → 後台可讀標題
+const ALERT_LABEL: Record<string, string> = {
+  esim_activation_failed:        '開卡失敗',
+  triggerEsimActivation:         '開卡失敗',
+  wm_order_failed:               '世界移動下單失敗',
+  wm_order_exception:            '世界移動連線異常',
+  wm_order_no_wmproductid:       '商品缺世界移動編號',
+  wm_order_no_item:              '訂單缺品項',
+  payment_verify_failed:         '金流驗真失敗',
+  calculateAndSaveCommission:    '分潤計算失敗',
+  issueRepurchaseCouponForOrder: '回購券發放失敗',
+  notifyOrderPaid:               '付款通知失敗',
+}
 
 export async function getRiskAlerts(tenantAdminId: string | null) {
   const tenantOrders = tenantAdminId ? Prisma.sql`AND u.tenant_admin_id = ${tenantAdminId}` : Prisma.empty
   const tenantProducts = tenantAdminId ? Prisma.sql`AND tenant_admin_id = ${tenantAdminId}` : Prisma.empty
+  // 系統告警可能無 tenant 歸屬（解析不到），一併顯示給租戶比漏掉好
+  const tenantAlerts = tenantAdminId ? Prisma.sql`AND (tenant_admin_id = ${tenantAdminId} OR tenant_admin_id IS NULL)` : Prisma.empty
   const costFactor = 1 - LOW_MARGIN_THRESHOLD  // 成本 / 售價 的上限（0.6）
 
-  const [lossRows, lossCount, lowMarginExamples, lowMarginCount] = await Promise.all([
+  const [lossRows, lossCount, lowMarginExamples, lowMarginCount, alertRows, alertCount] = await Promise.all([
     // 虧損訂單：已付款、所有品項皆有成本快照，且實付 < 成本。取虧最多的前 8 筆。
     prisma.$queryRaw<Array<{ id: string; orderNumber: string | null; totalPaid: number; cost: number }>>`
       SELECT o.id, o.order_number AS "orderNumber", o.total_paid AS "totalPaid",
@@ -144,10 +160,27 @@ export async function getRiskAlerts(tenantAdminId: string | null) {
     prisma.$queryRaw<Array<{ n: number }>>`
       SELECT COUNT(*)::int AS n FROM products
       WHERE status = 'ACTIVE' ${tenantProducts} AND sell_price > 0 AND cost_price > sell_price * ${costFactor}`,
+    // 系統異常（近 24h 未處理）：開卡/金流驗真/分潤/WM 等失敗
+    prisma.$queryRaw<Array<{ label: string; orderId: string | null; createdAt: Date }>>`
+      SELECT label, order_id AS "orderId", created_at AS "createdAt"
+      FROM system_alerts
+      WHERE resolved_at IS NULL AND created_at > now() - interval '24 hours' ${tenantAlerts}
+      ORDER BY created_at DESC LIMIT 8`,
+    prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT COUNT(*)::int AS n FROM system_alerts
+      WHERE resolved_at IS NULL AND created_at > now() - interval '24 hours' ${tenantAlerts}`,
   ])
 
   return {
     threshold: LOW_MARGIN_THRESHOLD,
+    systemAlerts: {
+      count: alertCount[0]?.n ?? 0,
+      examples: alertRows.map(a => ({
+        title: ALERT_LABEL[a.label] ?? a.label,
+        orderNo: a.orderId ? a.orderId.slice(-8).toUpperCase() : '—',
+        at: a.createdAt.toISOString(),
+      })),
+    },
     lossOrders: {
       count: lossCount[0]?.n ?? 0,
       examples: lossRows.map(r => ({

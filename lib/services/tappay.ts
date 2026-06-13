@@ -160,19 +160,6 @@ export async function tapPayCharge(input: TapPayChargeInput, tenantAdminId?: str
 
   const data = await res.json()
 
-  // 暫時診斷（記憶卡號）：pay-by-prime 回應是否帶 card_secret（card_key/card_token）。
-  // 記卡片要靠它；若它在這個同步回應、而我們只在 notify 找 → 就是漏接。查清後移除。
-  try {
-    await prisma.$executeRawUnsafe(
-      `insert into tappay_notify_log (order_number, has_x_api_key, x_api_key_len, body, header_keys) values ($1,$2,$3,$4::jsonb,$5)`,
-      `CHARGE_RESP:${input.orderId}`,
-      !!data.card_secret,
-      0,
-      JSON.stringify({ status: data.status, remember: body.remember, has_card_secret: !!data.card_secret, has_card: !!data.card, keys: Object.keys(data ?? {}) }),
-      'tappay-charge-response',
-    )
-  } catch { /* 診斷用 */ }
-
   if (data.status !== 0) {
     return { ok: false, message: tapPayErrorMessage(data.status, data.msg) }
   }

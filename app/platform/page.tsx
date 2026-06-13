@@ -35,6 +35,7 @@ type Stats = {
   ordersExcluded: number
   riskAlerts: {
     threshold: number
+    systemAlerts: { count: number; examples: { title: string; orderNo: string; at: string }[] }
     lossOrders: { count: number; examples: { id: string; orderNo: string; totalPaid: number; cost: number; loss: number }[] }
     lowMarginProducts: { count: number; examples: { id: string; name: string; sellPrice: number; costPrice: number; marginRate: number }[] }
   }
@@ -163,8 +164,8 @@ export default function PlatformDashboard() {
         </div>
       </div>
 
-      {/* 風險警示區：虧損訂單 + 低毛利商品（毛利<40%）。兩者皆 0 時整區不顯示。 */}
-      {(stats.riskAlerts.lossOrders.count > 0 || stats.riskAlerts.lowMarginProducts.count > 0) && (
+      {/* 風險警示區：系統異常 + 虧損訂單 + 低毛利商品。皆 0 時整區不顯示。 */}
+      {(stats.riskAlerts.systemAlerts.count > 0 || stats.riskAlerts.lossOrders.count > 0 || stats.riskAlerts.lowMarginProducts.count > 0) && (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -172,6 +173,26 @@ export default function PlatformDashboard() {
             </svg>
             <h2 className="text-sm font-bold text-red-700">需注意</h2>
           </div>
+          {/* 系統異常最優先：開卡/金流驗真/分潤/WM 失敗（近 24h）*/}
+          {stats.riskAlerts.systemAlerts.count > 0 && (
+            <div className="bg-white rounded-xl border border-red-200 p-3 mb-4">
+              <div className="flex items-baseline justify-between mb-2">
+                <p className="text-sm font-semibold text-red-700">系統異常（近 24 小時）</p>
+                <span className="text-lg font-bold text-red-600">{stats.riskAlerts.systemAlerts.count} 筆</span>
+              </div>
+              <ul className="space-y-1">
+                {stats.riskAlerts.systemAlerts.examples.map((a, i) => (
+                  <li key={i} className="flex items-center justify-between text-xs text-gray-600">
+                    <span className="font-semibold text-red-600">{a.title}</span>
+                    <span className="text-gray-400">訂單 {a.orderNo} · {new Date(a.at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  </li>
+                ))}
+                {stats.riskAlerts.systemAlerts.count > stats.riskAlerts.systemAlerts.examples.length && (
+                  <li className="text-xs text-gray-400">…還有 {stats.riskAlerts.systemAlerts.count - stats.riskAlerts.systemAlerts.examples.length} 筆</li>
+                )}
+              </ul>
+            </div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {stats.riskAlerts.lossOrders.count > 0 && (
               <div className="bg-white rounded-xl border border-red-100 p-3">
