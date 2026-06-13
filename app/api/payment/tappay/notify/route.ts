@@ -131,7 +131,9 @@ export async function POST(req: NextRequest) {
     ? ((await prisma.order.aggregate({ where: { bundleId }, _sum: { totalPaid: true } }))._sum.totalPaid ?? order.totalPaid)
     : order.totalPaid
   const verify = await tapPayQueryTrade(recTradeId, tenantAdminId, gateway)
-  if (!verify.ok || verify.amount !== expectedAmount) {
+  // record_status 0 = 已授權（即使尚未請款 is_captured=false 也算付款成立，TapPay
+  // 會在 cap_millis 自動請款）。金額需與訂單相符。
+  if (!verify.ok || verify.amount !== expectedAmount || verify.recordStatus !== 0) {
     // 暫時性診斷：把驗真失敗（含 Record API 回應）寫進可讀表，方便排查欄位/金額。
     try {
       await prisma.$executeRawUnsafe(

@@ -230,9 +230,12 @@ export async function tapPayQueryTrade(
   })
 
   const data = await res.json()
-  if (data.status !== 0) return { ok: false, message: `query status ${data.status}: ${data.msg ?? ''}`, raw: data }
-  const rec = Array.isArray(data.trade_records) ? data.trade_records[0] : null
-  if (!rec) return { ok: false, message: 'trade record not found', raw: data }
+  // ⚠ Record API 即使「查到資料」也常回 status=2 ("End of list")——那是分頁結尾的
+  //   正常標記、不是錯誤。所以不能用 data.status 判斷成敗，要直接看 trade_records
+  //   裡有沒有對應 rec_trade_id 的那筆。
+  const records: Array<Record<string, unknown>> = Array.isArray(data.trade_records) ? data.trade_records : []
+  const rec = records.find(r => String(r.rec_trade_id) === recTradeId) ?? records[0]
+  if (!rec) return { ok: false, message: `trade record not found (query status ${data.status} ${data.msg ?? ''})`, raw: data }
   return {
     ok: true,
     amount: Number(rec.amount),
