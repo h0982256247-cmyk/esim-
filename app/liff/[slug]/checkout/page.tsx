@@ -159,7 +159,12 @@ function CheckoutContent() {
   const [sdkReady, setSdkReady] = useState(false)
   const [canPay, setCanPay] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const tapPayConfigRef = useRef<{ appId: number; appKey: string; env: string } | null>(null)
+  // TapPay 前端設定要用 state（非 ref）：config 由 /api/liff/payment-config 非同步
+  // 取回，若存進 ref 則到貨時不會觸發 re-render，initTapPay 的 effect 不會重跑，
+  // 一旦它在 config 到貨前先跑過一次（appId=0 → ensureSetup 回 false、跳過
+  // card.setup）信用卡欄位就永遠初始化不了、無法填寫。改 state 後 config 一到
+  // 就重跑 effect 並成功 setup。
+  const [tapPayConfig, setTapPayConfig] = useState<{ appId: number; appKey: string; env: string } | null>(null)
   const setupDoneRef = useRef(false)
 
   // 單張：載入商品 + 優惠券；多張：直接用購物車內容，不需打 API
@@ -218,7 +223,7 @@ function CheckoutContent() {
         const qs = params.toString()
         const url = qs ? `/api/liff/payment-config?${qs}` : '/api/liff/payment-config'
         const res = await fetch(url).then(r => r.json())
-        tapPayConfigRef.current = res
+        setTapPayConfig(res)
       } catch { /* fallback handled server-side */ }
     }
     fetchConfig()
@@ -235,7 +240,7 @@ function CheckoutContent() {
   // 呼叫端必須立即報錯給使用者，不要繼續呼叫 card.setup（會炸 contentWindow）。
   const ensureSetup = (): boolean => {
     if (setupDoneRef.current) return true
-    const cfg = tapPayConfigRef.current
+    const cfg = tapPayConfig
     const appId = cfg?.appId ?? parseInt(process.env.NEXT_PUBLIC_TAPPAY_APP_ID ?? '0')
     const appKey = cfg?.appKey ?? process.env.NEXT_PUBLIC_TAPPAY_APP_KEY ?? ''
     const env = cfg?.env ?? (process.env.NEXT_PUBLIC_TAPPAY_ENV === 'production' ? 'production' : 'sandbox')
@@ -291,14 +296,14 @@ function CheckoutContent() {
     if (sdkReady) return
     initTapPay()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sdkLoaded, bundleMode, cart.hydrated, loading, product, paymentMethod, showCardForm, sdkReady])
+  }, [sdkLoaded, bundleMode, cart.hydrated, loading, product, paymentMethod, showCardForm, sdkReady, tapPayConfig])
 
   // LINE Pay：只需 setupSDK（不需 card.setup），備妥後即可取得 LINE Pay prime
   useEffect(() => {
     if (!sdkLoaded || paymentMethod !== 'LINE_PAY') return
     ensureSetup()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sdkLoaded, paymentMethod])
+  }, [sdkLoaded, paymentMethod, tapPayConfig])
 
   // 優惠券試算（僅單張模式）
   useEffect(() => {
@@ -351,6 +356,21 @@ function CheckoutContent() {
       setErrorMsg(res.error ?? '付款失敗，請重試')
       setSubmitting(false)
     }
+  }
+
+  // 把站內成功路徑轉成「能跳回 LINE/LIFF 內」的永久連結，交給 TapPay 當
+  // frontend_redirect_url。若用一般 https URL，3DS / LINE Pay 完成後 LINE 會在
+  // 外部瀏覽器開啟（使用者「被另開網頁」、且脫離 LINE 登入狀態）。轉成
+  // liff.line.me 永久連結後，銀行頁完成會 deep-link 回 LINE 內的 LIFF。
+  // liff 不可用（桌面測試）時 fallback 一般 URL。
+  const buildReturnUrl = async (href: string): Promise<string> => {
+    const full = `${window.location.origin}${href}`
+    try {
+      if (liff?.permanentLink?.createUrlBy) {
+        return await liff.permanentLink.createUrlBy(full)
+      }
+    } catch { /* fallback below */ }
+    return full
   }
 
   const handleSubmit = async () => {
@@ -422,7 +442,7 @@ function CheckoutContent() {
         return
       }
       successHref = `${base}/orders?bundleId=${res.bundleId}`
-      chargeBody = { bundleId: res.bundleId, returnUrl: `${window.location.origin}${successHref}` }
+      chargeBody = { bundleId: res.bundleId, returnUrl: await buildReturnUrl(successHref) }
     } else {
       // ── 單張：建立單筆訂單 ──
       if (!product || !productId || comboError) { stopWatchdog(); setSubmitting(false); return }
@@ -451,7 +471,7 @@ function CheckoutContent() {
         return
       }
       successHref = `${base}/orders/${orderRes.orderId}`
-      chargeBody = { orderId: orderRes.orderId, returnUrl: `${window.location.origin}${successHref}` }
+      chargeBody = { orderId: orderRes.orderId, returnUrl: await buildReturnUrl(successHref) }
     }
     dbg('order created', { successHref })
 

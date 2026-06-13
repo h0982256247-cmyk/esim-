@@ -29,6 +29,14 @@ export async function POST(req: NextRequest) {
   }
 
   const tapPayOrderId = body.order_number as string | undefined
+  // 診斷：webhook 一進來就記，方便在 Vercel logs 確認 TapPay 到底有沒有打回來、
+  // 以及卡在哪一關（找不到訂單 / 401 / 付款失敗 / 成功）。
+  // eslint-disable-next-line no-console
+  console.log('[tappay-notify] received', {
+    order_number: tapPayOrderId,
+    status: body.status,
+    rec_trade_id: body.rec_trade_id,
+  })
   if (!tapPayOrderId) return NextResponse.json({ message: 'Missing order_number' }, { status: 400 })
 
   const order = await prisma.order.findFirst({
@@ -39,7 +47,11 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  if (!order) return NextResponse.json({ message: 'Order not found' }, { status: 404 })
+  if (!order) {
+    // eslint-disable-next-line no-console
+    console.warn('[tappay-notify] order NOT FOUND for order_number', tapPayOrderId)
+    return NextResponse.json({ message: 'Order not found' }, { status: 404 })
+  }
 
   // Verify partner_key header
   const apiKey = req.headers.get('x-api-key')
@@ -56,6 +68,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (apiKey !== expectedKey) {
+    // eslint-disable-next-line no-console
+    console.warn('[tappay-notify] x-api-key MISMATCH → 拒絕(401)，訂單不會翻 PAID', {
+      order_number: tapPayOrderId, tenantAdminId, gotKey: !!apiKey, hasExpectedKey: !!expectedKey,
+    })
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
   }
 
@@ -102,6 +118,8 @@ export async function POST(req: NextRequest) {
       status,
       msg: (body.msg as string | undefined) ?? null,
     })
+    // eslint-disable-next-line no-console
+    console.warn('[tappay-notify] payment FAILED', { order_number: tapPayOrderId, status, reason })
     if (bundleId) await markBundleFailed(bundleId, reason)
     else await markOrderFailed(order.id, reason)
     return NextResponse.json({ message: 'Payment failed' })
@@ -116,6 +134,8 @@ export async function POST(req: NextRequest) {
     await markOrderPaid(order.id, recTradeId)
     paidOrderIds = [order.id]
   }
+  // eslint-disable-next-line no-console
+  console.log('[tappay-notify] marked PAID ✅', { order_number: tapPayOrderId, paidOrderIds })
 
   // Upsert saved card if card_secret returned (requires remember=true in the charge)
   const cardSecret = body.card_secret as { card_key?: string; card_token?: string } | undefined
