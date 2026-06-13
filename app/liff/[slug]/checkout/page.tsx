@@ -150,6 +150,7 @@ function CheckoutContent() {
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [profileComplete, setProfileComplete] = useState<boolean | null>(null)  // null = 載入中
 
   // ── TapPay 信用卡（內嵌於本頁，按「確認付款」直接發動交易）──
   const [savedCard, setSavedCard] = useState<SavedCard | null | undefined>(undefined)
@@ -198,6 +199,16 @@ function CheckoutContent() {
       .then(r => r.json())
       .then(d => setSavedCard(d.savedCard ?? null))
       .catch(() => setSavedCard(null))
+  }, [])
+
+  // 結帳前需完成基本資料；未完成則把「確認付款」換成「前往填寫」。
+  // 後端 /api/orders(/bundle) 也會擋（PROFILE_INCOMPLETE），這裡只是提前提示。
+  // 取值失敗時預設 true（不擋），交給後端把關。
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setProfileComplete(d?.user?.profileComplete ?? true))
+      .catch(() => setProfileComplete(true))
   }, [])
 
   // 沒有已儲存卡片 → 直接顯示輸入欄位
@@ -1119,24 +1130,43 @@ function CheckoutContent() {
               <p style={{ fontSize: 11, color: '#16a34a', margin: '2px 0 0', fontWeight: 600 }}>省 NT${discount.toLocaleString()}</p>
             )}
           </div>
-          <button
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            style={{
-              flex: 1,
-              background: !canSubmit ? '#94a3b8' : C.primary,
-              color: C.onPrimary,
-              border: 'none', borderRadius: 100,
-              padding: '15px 24px',
-              fontSize: 16, fontWeight: 800,
-              cursor: !canSubmit ? 'not-allowed' : 'pointer',
-              letterSpacing: '0.02em',
-              transition: 'background 0.15s',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {submitting ? '付款中…' : '確認付款 →'}
-          </button>
+          {profileComplete === false ? (
+            <button
+              onClick={() => router.push(`${base}/profile/setup?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)}
+              style={{
+                flex: 1,
+                background: C.primary,
+                color: C.onPrimary,
+                border: 'none', borderRadius: 100,
+                padding: '15px 24px',
+                fontSize: 16, fontWeight: 800,
+                cursor: 'pointer',
+                letterSpacing: '0.02em',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              前往填寫基本資料 →
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              style={{
+                flex: 1,
+                background: !canSubmit ? '#94a3b8' : C.primary,
+                color: C.onPrimary,
+                border: 'none', borderRadius: 100,
+                padding: '15px 24px',
+                fontSize: 16, fontWeight: 800,
+                cursor: !canSubmit ? 'not-allowed' : 'pointer',
+                letterSpacing: '0.02em',
+                transition: 'background 0.15s',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {submitting ? '付款中…' : '確認付款 →'}
+            </button>
+          )}
         </div>
       </div>
     </div>

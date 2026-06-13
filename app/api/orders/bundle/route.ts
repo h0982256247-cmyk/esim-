@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 import { createBundleOrders, type BundleCartLine } from '@/lib/services/order'
+import { isUserProfileComplete } from '@/lib/services/user'
 import { PaymentMethod } from '@prisma/client'
 
 // 多品項結帳要逐筆寫入 N 張訂單，走 PgBouncer 的遠端連線一多就超過 Vercel
@@ -41,6 +42,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '商品資料格式錯誤' }, { status: 400 })
     }
     cleaned.push({ productId: l.productId, qty: Math.max(1, Math.min(9, Math.floor(Number(l.qty) || 1))) })
+  }
+
+  // 結帳前需完成基本資料（姓名/手機/Email/生日）
+  if (!(await isUserProfileComplete(session.userId))) {
+    return NextResponse.json({ error: '請先完成基本資料填寫', code: 'PROFILE_INCOMPLETE' }, { status: 422 })
   }
 
   // Wrap the service call so an unexpected DB/transaction throw still returns

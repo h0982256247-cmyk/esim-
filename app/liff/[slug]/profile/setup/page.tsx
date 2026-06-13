@@ -46,7 +46,11 @@ export default function ProfileSetup() {
         setErrors({ submit: error })
         return
       }
-      router.replace(`${base}/products`)
+      // 若帶了 ?redirect=（例如從結帳被導來），完成後回到原頁；限同 base 防開放轉址
+      const redirect = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('redirect')
+        : null
+      router.replace(redirect && redirect.startsWith(`${base}/`) ? redirect : `${base}/products`)
     } catch {
       setErrors({ submit: '送出失敗，請稍後再試' })
     } finally {

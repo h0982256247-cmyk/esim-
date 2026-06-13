@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 import { createOrder, getUserOrders } from '@/lib/services/order'
+import { isUserProfileComplete } from '@/lib/services/user'
 import { PaymentMethod } from '@prisma/client'
 
 // GET /api/orders — 我的訂單列表
@@ -34,6 +35,11 @@ export async function POST(req: NextRequest) {
   if (!productId) return NextResponse.json({ error: 'productId 必填' }, { status: 400 })
   if (!Object.values(PaymentMethod).includes(paymentMethod)) {
     return NextResponse.json({ error: 'paymentMethod 無效' }, { status: 400 })
+  }
+
+  // 結帳前需完成基本資料（姓名/手機/Email/生日）
+  if (!(await isUserProfileComplete(session.userId))) {
+    return NextResponse.json({ error: '請先完成基本資料填寫', code: 'PROFILE_INCOMPLETE' }, { status: 422 })
   }
 
   const result = await createOrder({

@@ -50,7 +50,9 @@ export default function LiffHomePage() {
     async function fetchData() {
       try {
         const me = await fetch('/api/auth/me').then(r => r.ok ? r.json() : null)
-        if (me && !me.profileComplete) setShowSetup(true)
+        // profileComplete 在 me.user 底下（過去誤讀 me.profileComplete → 永遠 undefined
+        // → 對已填資料的人也彈設定視窗）
+        if (me?.user && !me.user.profileComplete) setShowSetup(true)
       } catch {}
       try {
         const data = await fetch('/api/products').then(r => r.json())

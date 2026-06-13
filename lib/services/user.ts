@@ -84,3 +84,13 @@ export async function getUserById(userId: string) {
 export function isProfileComplete(user: { realName?: string | null; phone: string | null; email: string | null; birthday: Date | null }) {
   return !!(user.realName && user.phone && user.email && user.birthday)
 }
+
+// 結帳/下單前的後端強制檢查：基本資料（姓名/手機/Email/生日）需填齊。
+// phone/email 已加密但只看 truthiness，密文照樣 truthy，判斷不受影響。
+export async function isUserProfileComplete(userId: string): Promise<boolean> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { realName: true, phone: true, email: true, birthday: true },
+  })
+  return !!u && isProfileComplete(u)
+}
