@@ -189,6 +189,7 @@ export async function triggerEsimRedemption(orderId: string): Promise<{ ok: bool
       redeemedAt: true, activatedAt: true,
       user: {
         select: {
+          tenantAdminId: true,
           groupMembership: { select: { group: { select: { tenantAdminId: true } } } },
           ownedGroup:      { select: { tenantAdminId: true } },
         },
@@ -202,7 +203,11 @@ export async function triggerEsimRedemption(orderId: string): Promise<{ ok: bool
   // redeemedAt 已設但 QR 未到 → 視為已觸發過，等 callback；前端會 polling
   if (order.redeemedAt)        return { ok: true }
 
-  const tenantAdminId = order.user.groupMembership?.group.tenantAdminId
+  // 直接租戶用戶（user.tenantAdminId）優先；社群成員/社群主再 fallback。
+  // 過去只看 group → 非社群的一般租戶用戶 tenantAdminId 永遠 null、getWmConfig
+  // 找不到租戶 WM 設定 → placeWmOrder throw、eSIM 發不出。與 payment-config 一致。
+  const tenantAdminId = order.user.tenantAdminId
+    ?? order.user.groupMembership?.group.tenantAdminId
     ?? order.user.ownedGroup?.tenantAdminId
     ?? null
 
@@ -255,6 +260,7 @@ export async function triggerEsimActivation(orderId: string): Promise<void> {
       orderItems: { select: { productName: true } },
       user: {
         select: {
+          tenantAdminId: true,
           groupMembership: { select: { group: { select: { tenantAdminId: true } } } },
           ownedGroup: { select: { tenantAdminId: true } },
         },
@@ -267,7 +273,9 @@ export async function triggerEsimActivation(orderId: string): Promise<void> {
   if (orderInfo?.wmOrderId) return
   const userId = orderInfo?.userId ?? ''
   const productName = orderInfo?.orderItems[0]?.productName ?? 'eSIM'
-  const tenantAdminId = orderInfo?.user?.groupMembership?.group?.tenantAdminId
+  // 直接租戶用戶優先（見 triggerEsimRedemption 同款修正）
+  const tenantAdminId = orderInfo?.user?.tenantAdminId
+    ?? orderInfo?.user?.groupMembership?.group?.tenantAdminId
     ?? orderInfo?.user?.ownedGroup?.tenantAdminId
     ?? null
 
@@ -398,11 +406,25 @@ export async function fetchSupplierProductMap(tenantAdminId?: string | null): Pr
 export async function retryEsimActivation(orderId: string): Promise<void> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { wmOrderId: true },
+    select: {
+      wmOrderId: true,
+      user: {
+        select: {
+          tenantAdminId: true,
+          groupMembership: { select: { group: { select: { tenantAdminId: true } } } },
+          ownedGroup: { select: { tenantAdminId: true } },
+        },
+      },
+    },
   })
 
   if (order?.wmOrderId) {
-    const esimData = await fetchEsimCodes(order.wmOrderId)
+    // 直接租戶用戶優先（否則 fetchEsimCodes 走 env fallback、找不到租戶 WM 設定）
+    const tenantAdminId = order.user?.tenantAdminId
+      ?? order.user?.groupMembership?.group?.tenantAdminId
+      ?? order.user?.ownedGroup?.tenantAdminId
+      ?? null
+    const esimData = await fetchEsimCodes(order.wmOrderId, tenantAdminId)
     if (esimData) {
       await markOrderCompleted(orderId, esimData)
       return
