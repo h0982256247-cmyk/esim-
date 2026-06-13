@@ -33,6 +33,11 @@ type Stats = {
   marginRate: number
   ordersIncluded: number
   ordersExcluded: number
+  riskAlerts: {
+    threshold: number
+    lossOrders: { count: number; examples: { id: string; orderNo: string; totalPaid: number; cost: number; loss: number }[] }
+    lowMarginProducts: { count: number; examples: { id: string; name: string; sellPrice: number; costPrice: number; marginRate: number }[] }
+  }
 }
 
 const ORDER_STATUS: Record<string, { label: string; cls: string }> = {
@@ -157,6 +162,58 @@ export default function PlatformDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* 風險警示區：虧損訂單 + 低毛利商品（毛利<40%）。兩者皆 0 時整區不顯示。 */}
+      {(stats.riskAlerts.lossOrders.count > 0 || stats.riskAlerts.lowMarginProducts.count > 0) && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <h2 className="text-sm font-bold text-red-700">需注意</h2>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {stats.riskAlerts.lossOrders.count > 0 && (
+              <div className="bg-white rounded-xl border border-red-100 p-3">
+                <div className="flex items-baseline justify-between mb-2">
+                  <p className="text-sm font-semibold text-gray-700">虧損訂單（實付 &lt; 成本）</p>
+                  <span className="text-lg font-bold text-red-600">{stats.riskAlerts.lossOrders.count} 筆</span>
+                </div>
+                <ul className="space-y-1">
+                  {stats.riskAlerts.lossOrders.examples.map(o => (
+                    <li key={o.id} className="flex items-center justify-between text-xs text-gray-500">
+                      <span className="font-mono">{o.orderNo}</span>
+                      <span>實付 NT${o.totalPaid.toLocaleString()} · 成本 NT${o.cost.toLocaleString()} · <span className="text-red-600 font-semibold">虧 NT${o.loss.toLocaleString()}</span></span>
+                    </li>
+                  ))}
+                  {stats.riskAlerts.lossOrders.count > stats.riskAlerts.lossOrders.examples.length && (
+                    <li className="text-xs text-gray-400">…還有 {stats.riskAlerts.lossOrders.count - stats.riskAlerts.lossOrders.examples.length} 筆</li>
+                  )}
+                </ul>
+              </div>
+            )}
+            {stats.riskAlerts.lowMarginProducts.count > 0 && (
+              <div className="bg-white rounded-xl border border-red-100 p-3">
+                <div className="flex items-baseline justify-between mb-2">
+                  <p className="text-sm font-semibold text-gray-700">毛利 &lt; {(stats.riskAlerts.threshold * 100).toFixed(0)}% 商品</p>
+                  <span className="text-lg font-bold text-red-600">{stats.riskAlerts.lowMarginProducts.count} 項</span>
+                </div>
+                <ul className="space-y-1">
+                  {stats.riskAlerts.lowMarginProducts.examples.map(p => (
+                    <li key={p.id} className="flex items-center justify-between text-xs text-gray-500 gap-2">
+                      <span className="truncate">{p.name}</span>
+                      <span className="whitespace-nowrap">售 NT${p.sellPrice.toLocaleString()} / 成本 NT${p.costPrice.toLocaleString()} · <span className={p.marginRate < 0 ? 'text-red-600 font-semibold' : 'text-orange-600 font-semibold'}>{(p.marginRate * 100).toFixed(0)}%</span></span>
+                    </li>
+                  ))}
+                  {stats.riskAlerts.lowMarginProducts.count > stats.riskAlerts.lowMarginProducts.examples.length && (
+                    <li className="text-xs text-gray-400">…還有 {stats.riskAlerts.lowMarginProducts.count - stats.riskAlerts.lowMarginProducts.examples.length} 項，請見商品管理</li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Top KPI row: 毛利為核心 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
