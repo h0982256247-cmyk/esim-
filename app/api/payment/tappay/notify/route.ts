@@ -189,7 +189,15 @@ export async function POST(req: NextRequest) {
 
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
   for (const oid of paidOrderIds) {
-    fireAndLog('triggerEsimActivation', oid, triggerEsimActivation(oid))
+    // 開卡必須在 webhook 回 200「之前」await 完成：Vercel serverless 在回應後會凍結/
+    // 終止函式，未 await 的背景工作（fire-and-forget）可能根本沒跑完。X6S4GW 即如此
+    // ——付款成功卻完全沒有 placeWmOrder 紀錄。commission/coupon 非時間敏感、維持背景。
+    try {
+      await triggerEsimActivation(oid)
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[pay-notify] triggerEsimActivation failed', oid, e)
+    }
     fireAndLog('calculateAndSaveCommission', oid, calculateAndSaveCommission(oid))
     fireAndLog('issueRepurchaseCouponForOrder', oid, issueRepurchaseCouponForOrder(oid))
   }
