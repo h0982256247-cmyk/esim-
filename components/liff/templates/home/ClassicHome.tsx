@@ -192,13 +192,13 @@ export default function ClassicHome({
           position: 'relative', overflow: 'hidden', minHeight: 180,
           backgroundImage: 'url(https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=800&q=80)',
           backgroundSize: 'cover', backgroundPosition: 'center 40%',
-          boxShadow: '6px 8px 0 rgba(109,40,217,0.22)',
-          border: '2px solid rgba(109,40,217,0.18)',
+          boxShadow: `6px 8px 0 ${C.primary}38`,
+          border: `2px solid ${C.primary}2e`,
         }}>
-          {/* 紫色漸層遮罩 */}
+          {/* 品牌色漸層遮罩（隨租戶主色換皮） */}
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(120deg, rgba(109,40,217,0.82) 0%, rgba(124,58,237,0.68) 50%, rgba(139,92,246,0.30) 100%)',
+            background: `linear-gradient(120deg, ${C.primary}d1 0%, ${C.primary}ad 50%, ${C.primary}4d 100%)`,
             borderRadius: 26,
           }}/>
 
@@ -215,7 +215,7 @@ export default function ClassicHome({
             <button onClick={() => onNavigate('products')} style={{
               background: '#fff', border: '2px solid rgba(255,255,255,0.8)', borderRadius: 22,
               padding: '9px 20px', cursor: 'pointer',
-              fontSize: 13, fontWeight: 800, color: '#7C3AED',
+              fontSize: 13, fontWeight: 800, color: C.primary,
               boxShadow: '3px 4px 0 rgba(0,0,0,0.15)',
             }}>
               立即選購 →
@@ -260,13 +260,13 @@ export default function ClassicHome({
             <span style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               width: 4, height: 18, borderRadius: 3,
-              background: 'linear-gradient(180deg, #7C3AED, #C4B5FD)',
+              background: `linear-gradient(180deg, ${C.primary}, ${C.primary}80)`,
             }} />
             <p style={{ fontSize: 19, fontWeight: 900, color: '#1a1a1a', margin: 0, letterSpacing: '-0.025em' }}>熱門目的地</p>
           </div>
           <button onClick={() => onNavigate('products')} style={{
-            background: 'rgba(124,58,237,0.08)', border: 'none', cursor: 'pointer',
-            fontSize: 12, color: '#7C3AED', fontWeight: 700,
+            background: `${C.primary}14`, border: 'none', cursor: 'pointer',
+            fontSize: 12, color: C.primary, fontWeight: 700,
             display: 'flex', alignItems: 'center', gap: 3,
             padding: '6px 12px', borderRadius: 100,
           }}>
