@@ -114,6 +114,8 @@ const ALERT_LABEL: Record<string, string> = {
   wm_order_exception:            '世界移動連線異常',
   wm_order_no_wmproductid:       '商品缺世界移動編號',
   wm_order_no_item:              '訂單缺品項',
+  esim_activation_exhausted:     '開卡多次重試仍失敗（需人工）',
+  esim_retry_exception:          '開卡自動重試異常',
   payment_verify_failed:         '金流驗真失敗',
   calculateAndSaveCommission:    '分潤計算失敗',
   issueRepurchaseCouponForOrder: '回購券發放失敗',

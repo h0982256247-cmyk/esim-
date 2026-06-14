@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { Agent } from 'undici'
+import { OrderStatus } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { markOrderCompleted } from './order'
 import { notifyEsimPending } from './notification'
@@ -449,5 +450,79 @@ export async function retryEsimActivation(orderId: string): Promise<void> {
 
   // 重新下單
   await triggerEsimActivation(orderId)
+}
+
+// ─── 自動重試：掃描卡住的開卡訂單並重試（cron 呼叫）──────────────────
+// 「卡住」＝ 已付款的 eSIM 訂單但尚未 COMPLETED：
+//   (A) PAID 且 wmOrderId 為 null → placeWmOrder 曾失敗，需重新下單
+//   (B) PAID 且 wmOrderId 有值但 callback 未到 → 主動 fetchEsimCodes 補完
+// 兩種都交給 retryEsimActivation（內部依 wmOrderId 走對應路徑、且具冪等守門）。
+// 退避：以 lastRetryAt 設兩次重試最小間隔；上限：retryCount 超過後停止自動重試、
+// 改升級為人工告警，避免無止盡狂打世界移動。
+export const ESIM_RETRY = {
+  firstDelayMs: 3 * 60 * 1000,   // 付款後先給正常流程 3 分鐘，再介入重試
+  gapMs: 10 * 60 * 1000,         // 兩次自動重試至少間隔 10 分鐘
+  maxRetries: 6,                 // 連續失敗 6 次後停止自動重試、轉人工
+}
+
+export async function retryStuckEsimActivations(limit = 20): Promise<{
+  scanned: number; retried: number; completed: number; exhausted: number
+}> {
+  const now = Date.now()
+  const firstCutoff = new Date(now - ESIM_RETRY.firstDelayMs)
+  const gapCutoff = new Date(now - ESIM_RETRY.gapMs)
+
+  const candidates = await prisma.order.findMany({
+    where: {
+      // 與後台手動補發鈕相同的判定：付款成功但未發卡（PAID / 歷史 ESIM_PENDING）。
+      status: { in: [OrderStatus.PAID, OrderStatus.ESIM_PENDING] },
+      paidAt: { lt: firstCutoff },
+      retryCount: { lt: ESIM_RETRY.maxRetries },
+      OR: [{ lastRetryAt: null }, { lastRetryAt: { lt: gapCutoff } }],
+    },
+    orderBy: { paidAt: 'asc' },
+    take: limit,
+    select: { id: true, retryCount: true, user: { select: { tenantAdminId: true } } },
+  })
+
+  let retried = 0, completed = 0, exhausted = 0
+  for (const o of candidates) {
+    // 原子搶佔：只有把 retryCount 從目前值 +1 成功的那個 runner 才處理這筆，避免
+    // 兩個 cron 實例同時重試同一張單而對世界移動重複下單（count===1 守門）。
+    const claim = await prisma.order.updateMany({
+      where: {
+        id: o.id,
+        retryCount: o.retryCount,
+        status: { in: [OrderStatus.PAID, OrderStatus.ESIM_PENDING] },
+      },
+      data: { retryCount: { increment: 1 }, lastRetryAt: new Date() },
+    })
+    if (claim.count !== 1) continue   // 已被別的 runner 搶走或狀態已變 → 跳過
+    retried++
+
+    const tenantAdminId = o.user?.tenantAdminId ?? null
+    try {
+      await retryEsimActivation(o.id)
+    } catch (err) {
+      await recordAlert('esim_retry_exception', {
+        orderId: o.id, tenantAdminId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+
+    const after = await prisma.order.findUnique({ where: { id: o.id }, select: { status: true } })
+    if (after?.status === OrderStatus.COMPLETED) {
+      completed++
+    } else if (o.retryCount + 1 >= ESIM_RETRY.maxRetries) {
+      // 達上限仍未發卡 → 升級人工。只在「跨過上限」那一次發；之後該單因 retryCount
+      // 不再 < maxRetries 而被排除，不會重複告警。
+      exhausted++
+      await recordAlert('esim_activation_exhausted', {
+        orderId: o.id, tenantAdminId, retryCount: o.retryCount + 1, level: 'error',
+      })
+    }
+  }
+
+  return { scanned: candidates.length, retried, completed, exhausted }
 }
 
