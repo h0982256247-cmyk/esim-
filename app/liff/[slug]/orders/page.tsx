@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useLiffBase } from '@/hooks/useLiffBase'
@@ -9,11 +9,12 @@ import { useCachedData } from '@/hooks/useCachedData'
 import PageSkeleton from '@/components/liff/PageSkeleton'
 import { EmptyOrdersIllustration } from '@/components/liff/LiffIllustrations'
 import {
-  deriveEsimStatus, groupOf, daysLeftOf,
+  deriveEsimStatus, groupOf,
   TAB_ORDER, TAB_LABEL, type OrdersTab,
 } from '@/lib/esimStatus'
 import { IconSim, IconQr, IconInstall, IconShare, IconClock, IconGift } from '@/components/liff/EsimIcons'
 import ConfirmDialog from '@/components/liff/ConfirmDialog'
+import Toast from '@/components/liff/Toast'
 import type { ReactNode } from 'react'
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -108,15 +109,6 @@ function formatData(mb: number, unit: string): string {
   return `${mb.toLocaleString()} MB`
 }
 
-function expiryLabel(o: Order): string | null {
-  const dl = daysLeftOf(o.activationEnd)
-  if (dl === null) return null
-  const end = o.activationEnd ? new Date(o.activationEnd).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' }) : ''
-  if (dl < 0)  return `已於 ${end} 到期`
-  if (dl === 0) return `今天到期`
-  return `剩 ${dl} 天 · ${end} 到期`
-}
-
 // ─── Page ──────────────────────────────────────────────────────
 
 export default function OrdersPage() {
@@ -137,6 +129,9 @@ export default function OrdersPage() {
     title: string; lines: string[]; confirmLabel: string;
     tone?: 'primary' | 'danger'; icon?: ReactNode; onConfirm: () => void
   }>(null)
+  // 輕量提示（取代 alert）
+  const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'error' | 'info' } | null>(null)
+  const dismissToast = useCallback(() => setToast(null), [])
 
   const { data, loading, refresh } = useCachedData('orders', async () => {
     const [o, c] = await Promise.all([
@@ -229,9 +224,18 @@ export default function OrdersPage() {
   // ─── Handlers ────────────────────────────────────────────────
 
   // 一鍵取消所有卡在等待付款的訂單（特別處理使用者在 LINE Pay 取消後留下的殭屍訂單）
-  const handleCancelStuck = async () => {
+  const handleCancelStuck = () => {
     if (actioning) return
-    if (!window.confirm(`確定要取消這 ${buckets.awaitingPayment.length} 筆等待付款的訂單？\n\n若您剛在 LINE Pay 或銀行頁取消了付款，可一鍵清掉。`)) return
+    setDialog({
+      title: `取消 ${buckets.awaitingPayment.length} 筆未完成付款的訂單？`,
+      lines: ['若你剛在 LINE Pay 或銀行頁取消了付款，', '可一鍵清掉這些等待中的訂單。'],
+      confirmLabel: '取消訂單',
+      tone: 'danger',
+      onConfirm: () => { setDialog(null); doCancelStuck() },
+    })
+  }
+
+  const doCancelStuck = async () => {
     setActioning('bulk_cancel')
     await Promise.all(
       buckets.awaitingPayment.map(o => fetch(`/api/orders/${o.id}/cancel`, { method: 'POST' }).catch(() => null))
@@ -256,7 +260,7 @@ export default function OrdersPage() {
     const r = await fetch(`/api/orders/${o.id}/redeem`, { method: 'POST' }).then(x => x.json())
     setActioning(null)
     if (r.error) {
-      alert(`兌換失敗：${r.error}`)
+      setToast({ message: `兌換失敗：${r.error}`, tone: 'error' })
       return
     }
     // 兌換觸發成功 → 導去詳情頁等 QR
@@ -264,9 +268,9 @@ export default function OrdersPage() {
   }
 
   const handleShare = (o: Order) => {
-    if (!liff?.isLoggedIn()) { alert('請先登入 LINE'); return }
+    if (!liff?.isLoggedIn()) { setToast({ message: '請先登入 LINE', tone: 'error' }); return }
     if (!liff.isApiAvailable('shareTargetPicker')) {
-      alert('您的 LINE 版本不支援分享功能')
+      setToast({ message: '您的 LINE 版本不支援分享功能', tone: 'error' })
       return
     }
     setDialog({
@@ -284,7 +288,7 @@ export default function OrdersPage() {
     setActioning(o.id)
     try {
       const r = await fetch(`/api/orders/${o.id}/gift`, { method: 'POST' }).then(x => x.json())
-      if (!r.ok) { alert(`分享失敗：${r.error}`); setActioning(null); return }
+      if (!r.ok) { setToast({ message: `分享失敗：${r.error}`, tone: 'error' }); setActioning(null); return }
 
       const giftPath = `${base}/gift/${r.token}`
       const fullUrl = `${window.location.origin}${giftPath}`
@@ -293,8 +297,9 @@ export default function OrdersPage() {
 
       const item = o.orderItems[0]
       const productName = item?.productName ?? 'eSIM'
-      // 完整方案：國家 N天 + 流量（不要只有國家跟天數）
-      const planLabel = item?.product?.dataCapacity ? `${productName} · ${item.product.dataCapacity}` : productName
+      // 完整方案：國家 N天 + 流量（新訂單快照已含流量，舊訂單靠 join 補、避免重複）
+      const cap = item?.product?.dataCapacity
+      const planLabel = cap && !productName.includes(cap) ? `${productName} · ${cap}` : productName
       const brandName = tenant?.brandName ?? 'eSIM'
       const flex = {
         type: 'flex' as const,
@@ -324,7 +329,7 @@ export default function OrdersPage() {
       await liff.shareTargetPicker([flex])
       await refresh()
     } catch (err) {
-      alert(err instanceof Error ? err.message : '分享失敗')
+      setToast({ message: err instanceof Error ? err.message : '分享失敗', tone: 'error' })
     }
     setActioning(null)
   }
@@ -509,6 +514,7 @@ export default function OrdersPage() {
         onConfirm={() => dialog?.onConfirm()}
         onCancel={() => setDialog(null)}
       />
+      <Toast message={toast?.message ?? null} tone={toast?.tone} onDone={dismissToast} />
     </div>
   )
 }
@@ -538,7 +544,6 @@ function ActiveCard({ order, usage, primary, onClick }: {
   const view = deriveEsimStatus(order)
   const expiring = view.phase === 'expiringSoon'
   const gift = giftBadge(order)
-  const expiry = expiryLabel(order)
 
   const accent  = expiring ? '#c2410c' : '#047857'
   const deepInk = expiring ? '#7c2d12' : '#064e3b'
@@ -564,24 +569,38 @@ function ActiveCard({ order, usage, primary, onClick }: {
       <p style={{ fontSize: 18, fontWeight: 800, color: deepInk, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
         {productName}
       </p>
-      {expiry && (
-        <p style={{ fontSize: 13, fontWeight: 600, color: expiring ? accent : subInk, margin: '0 0 12px' }}>
-          {expiry}
-        </p>
-      )}
-
-      {/* 流量（best-effort，抓到才顯示） */}
-      {usage ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-          <UsageBar used={usage.usedData} total={usage.totalData} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: subInk }}>
-            <span>剩 <strong>{formatData(usage.remainingData, usage.unit)}</strong></span>
-            <span style={{ opacity: 0.7 }}>共 {formatData(usage.totalData, usage.unit)}</span>
-          </div>
+      {/* 用量總覽：剩餘流量 + 剩餘天數放大（使用者最常回來看的兩個數字一眼可見） */}
+      <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+        <div style={{ flex: 1, background: 'rgba(255,255,255,0.78)', borderRadius: 14, padding: '12px 14px' }}>
+          <p style={{ fontSize: 11, color: subInk, fontWeight: 600, margin: '0 0 3px' }}>剩餘流量</p>
+          {usage ? (
+            <>
+              <p style={{ fontSize: 23, fontWeight: 900, color: deepInk, letterSpacing: '-0.02em', lineHeight: 1, margin: 0 }}>
+                {formatData(usage.remainingData, usage.unit)}
+              </p>
+              <div style={{ marginTop: 9 }}><UsageBar used={usage.usedData} total={usage.totalData} /></div>
+              <p style={{ fontSize: 10.5, color: subInk, opacity: 0.65, margin: '5px 0 0' }}>共 {formatData(usage.totalData, usage.unit)}</p>
+            </>
+          ) : (
+            <p style={{ fontSize: 14, fontWeight: 700, color: subInk, opacity: 0.7, margin: '4px 0 0' }}>
+              {order.esimIccid ? '查詢中…' : '安裝後顯示'}
+            </p>
+          )}
         </div>
-      ) : usage === undefined && order.esimIccid ? (
-        <div style={{ height: 7, background: 'rgba(255,255,255,0.5)', borderRadius: 100, marginTop: 4 }} />
-      ) : null}
+        {view.daysLeft != null && view.daysLeft >= 0 && (
+          <div style={{ flex: '0 0 100px', background: 'rgba(255,255,255,0.78)', borderRadius: 14, padding: '12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <p style={{ fontSize: 11, color: subInk, fontWeight: 600, margin: '0 0 3px' }}>剩餘天數</p>
+            <p style={{ fontSize: 23, fontWeight: 900, color: expiring ? accent : deepInk, lineHeight: 1, margin: 0 }}>
+              {view.daysLeft}<span style={{ fontSize: 13, fontWeight: 700, marginLeft: 2 }}>天</span>
+            </p>
+            {order.activationEnd && (
+              <p style={{ fontSize: 10.5, color: subInk, opacity: 0.65, margin: '6px 0 0' }}>
+                {new Date(order.activationEnd).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} 到期
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       <p style={{ fontSize: 11, color: primary, fontWeight: 700, margin: '12px 0 0' }}>
         查看 QR、流量與安裝資訊 →
@@ -603,7 +622,7 @@ function InstallableCard({ order, primary, onClick }: { order: Order; primary: s
           </span>
           <p style={{ fontSize: 15, fontWeight: 700, color: S.ink, margin: '8px 0 2px' }}>
             {productName}
-            {dataCapacity && <span style={{ fontSize: 12.5, fontWeight: 600, color: S.muted, marginLeft: 6 }}>· {dataCapacity}</span>}
+            {dataCapacity && !productName.includes(dataCapacity) && <span style={{ fontSize: 12.5, fontWeight: 600, color: S.muted, marginLeft: 6 }}>· {dataCapacity}</span>}
           </p>
           <p style={{ fontSize: 11, color: S.muted, margin: 0 }}>點擊查看 QR 與一鍵安裝</p>
         </div>
@@ -637,7 +656,7 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
         </div>
         <p style={{ fontSize: 16, fontWeight: 700, color: S.ink, margin: '0 0 4px' }}>
           {productName}
-          {dataCapacity && <span style={{ fontSize: 13, fontWeight: 600, color: S.muted, marginLeft: 6 }}>· {dataCapacity}</span>}
+          {dataCapacity && !productName.includes(dataCapacity) && <span style={{ fontSize: 13, fontWeight: 600, color: S.muted, marginLeft: 6 }}>· {dataCapacity}</span>}
         </p>
         <p style={{ fontSize: 11, color: S.faint, margin: '0 0 12px' }}>
           {new Date(order.createdAt).toLocaleDateString('zh-TW')}

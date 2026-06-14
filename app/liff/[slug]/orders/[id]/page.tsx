@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { useLiff } from '@/components/liff/LiffProvider'
@@ -8,6 +8,7 @@ import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
 import { deriveEsimStatus, daysLeftOf, TONE_STYLE } from '@/lib/esimStatus'
 import { IconSim, IconInstall, IconShare, IconCheck, IconClock, IconAlert } from '@/components/liff/EsimIcons'
 import ConfirmDialog from '@/components/liff/ConfirmDialog'
+import Toast from '@/components/liff/Toast'
 import type { ReactNode } from 'react'
 
 type GiftInfo = {
@@ -117,6 +118,9 @@ export default function OrderDetailPage() {
     title: string; lines: string[]; confirmLabel: string;
     tone?: 'primary' | 'danger'; icon?: ReactNode; onConfirm: () => void
   }>(null)
+  // 輕量提示（取代 alert）
+  const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'error' | 'info' } | null>(null)
+  const dismissToast = useCallback(() => setToast(null), [])
 
   useEffect(() => { setCanOneClick(supportsOneClickEsim()) }, [])
 
@@ -220,14 +224,14 @@ export default function OrderDetailPage() {
   }
 
   // 建立分享連結並開啟 LINE 的 shareTargetPicker
-  const handleShare = async () => {
+  const handleShare = () => {
     if (!order) return
     if (!liff || !liff.isLoggedIn()) {
-      alert('請先登入 LINE')
+      setToast({ message: '請先登入 LINE', tone: 'error' })
       return
     }
     if (!liff.isApiAvailable('shareTargetPicker')) {
-      alert('您的 LINE 版本不支援分享功能，請更新 LINE App')
+      setToast({ message: '您的 LINE 版本不支援分享功能，請更新 LINE App', tone: 'error' })
       return
     }
     setDialog({
@@ -247,7 +251,7 @@ export default function OrderDetailPage() {
       // 1. 建立 gift token
       const r = await fetch(`/api/orders/${order.id}/gift`, { method: 'POST' }).then(x => x.json())
       if (!r.ok) {
-        alert(`分享失敗：${r.error}`)
+        setToast({ message: `分享失敗：${r.error}`, tone: 'error' })
         return
       }
 
@@ -264,8 +268,9 @@ export default function OrderDetailPage() {
       // 3. 開啟分享面板，秀 Flex Message
       const item = order.orderItems[0]
       const productName = item?.productName ?? 'eSIM'
-      // 完整方案：國家 N天 + 流量（不要只有國家跟天數）
-      const planLabel = item?.product?.dataCapacity ? `${productName} · ${item.product.dataCapacity}` : productName
+      // 完整方案：國家 N天 + 流量（新訂單快照已含流量，舊訂單靠 join 補、避免重複）
+      const cap = item?.product?.dataCapacity
+      const planLabel = cap && !productName.includes(cap) ? `${productName} · ${cap}` : productName
       const brandName = tenant?.brandName ?? 'eSIM'
       const flexMessage = {
         type: 'flex' as const,
@@ -341,22 +346,30 @@ export default function OrderDetailPage() {
       }
       // status 'cancel' → 用戶取消，gift 已建立但沒人收到。下次點分享會 reuse 同一個 token。
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '分享失敗'
-      alert(msg)
+      setToast({ message: err instanceof Error ? err.message : '分享失敗', tone: 'error' })
     } finally {
       setSharing(false)
     }
   }
 
-  const handleCancelShare = async () => {
+  const handleCancelShare = () => {
     if (!order) return
-    if (!window.confirm('取消分享後，連結將失效，對方無法再領取。確定取消嗎？')) return
+    setDialog({
+      title: '確定要取消分享嗎？',
+      lines: ['取消後分享連結會失效，', '對方將無法再領取這張 eSIM。'],
+      confirmLabel: '取消分享',
+      tone: 'danger',
+      onConfirm: () => { setDialog(null); doCancelShare() },
+    })
+  }
 
+  const doCancelShare = async () => {
+    if (!order) return
     setSharing(true)
     const r = await fetch(`/api/orders/${order.id}/gift`, { method: 'DELETE' }).then(x => x.json())
     setSharing(false)
     if (r.error) {
-      alert(`取消失敗：${r.error}`)
+      setToast({ message: `取消失敗：${r.error}`, tone: 'error' })
       return
     }
     const fresh = await fetch(`/api/orders/${order.id}`).then(x => x.json())
@@ -742,17 +755,23 @@ export default function OrderDetailPage() {
           <p style={{ fontSize: 12, color: '#a16207', margin: 0, lineHeight: 1.6 }}>
             若您剛在 LINE Pay 或銀行頁面取消了付款，可
             <button
-              onClick={async () => {
-                if (!window.confirm('確定要取消這筆訂單嗎？\n\n若您剛取消了付款，按確定可立即釋出此訂單，不必等候系統自動處理。')) return
-                try {
-                  const r = await fetch(`/api/orders/${order.id}/cancel`, { method: 'POST' }).then(x => x.json())
-                  if (!r.ok) { alert(r.error ?? '取消失敗，請稍候再試'); return }
-                  // 立即重抓一次訂單，UI 就會切到 CANCELLED banner
-                  await fetch(`/api/orders/${order.id}`).then(r => r.json()).then(d => d.order && setOrder(d.order))
-                } catch {
-                  alert('網路錯誤，請稍候再試')
-                }
-              }}
+              onClick={() => setDialog({
+                title: '確定要取消這筆訂單嗎？',
+                lines: ['若你剛取消了付款，按確定可立即釋出此訂單，', '不必等候系統自動處理。'],
+                confirmLabel: '取消訂單',
+                tone: 'danger',
+                onConfirm: async () => {
+                  setDialog(null)
+                  try {
+                    const r = await fetch(`/api/orders/${order.id}/cancel`, { method: 'POST' }).then(x => x.json())
+                    if (!r.ok) { setToast({ message: r.error ?? '取消失敗，請稍候再試', tone: 'error' }); return }
+                    // 立即重抓一次訂單，UI 就會切到 CANCELLED banner
+                    await fetch(`/api/orders/${order.id}`).then(r => r.json()).then(d => d.order && setOrder(d.order))
+                  } catch {
+                    setToast({ message: '網路錯誤，請稍候再試', tone: 'error' })
+                  }
+                },
+              })}
               style={{
                 background: 'none', border: 'none', padding: 0,
                 color: '#b45309', fontWeight: 700, fontSize: 12,
@@ -848,6 +867,7 @@ export default function OrderDetailPage() {
         onConfirm={() => dialog?.onConfirm()}
         onCancel={() => setDialog(null)}
       />
+      <Toast message={toast?.message ?? null} tone={toast?.tone} onDone={dismissToast} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
