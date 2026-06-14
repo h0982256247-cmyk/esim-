@@ -69,6 +69,9 @@ export default function ClassicShop({
   colors: C, onSelectCountry, onSelectProduct, onBack,
   filter, cart,
 }: ProductsTemplateProps) {
+  // Hooks 一律在任何 early return 之前呼叫（react-hooks/rules-of-hooks）
+  const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
+
   // Country selection screen — 機票/登機證主視覺
   if (!selectedCountry) {
     return (
@@ -197,9 +200,6 @@ export default function ClassicShop({
   const country = countries.find(c => c.countryCode === selectedCountry)
   const showNoMatch = filter.dayFilter > 0 && filter.filteredCount === 0
   const countryAccent = country ? getAccent(country.countryCode) : DEST_PALETTE[0]
-
-  // Annotate + sort by per-day value
-  const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96, background: S.bg, minHeight: '100vh' }}>

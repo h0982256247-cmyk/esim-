@@ -55,6 +55,18 @@ export default function CompactShop({
 }: ProductsTemplateProps) {
   const [tierFilter, setTierFilter] = useState<DataTier | 'all'>('all')
 
+  // Hooks 一律在任何 early return 之前呼叫（react-hooks/rules-of-hooks）
+  const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
+  const availableTiers = useMemo(() => {
+    const set = new Set<DataTier>()
+    displays.forEach(d => set.add(d.tier))
+    return TIER_ORDER.filter(t => set.has(t))
+  }, [displays])
+  const visible = useMemo(() => {
+    if (tierFilter === 'all') return displays
+    return displays.filter(d => d.tier === tierFilter)
+  }, [displays, tierFilter])
+
   if (!selectedCountry) {
     return (
       <div style={{ paddingBottom: 96, background: S.white, minHeight: '100vh' }}>
@@ -113,21 +125,6 @@ export default function CompactShop({
 
   const country = countries.find(c => c.countryCode === selectedCountry)
   const showNoMatch = filter.dayFilter > 0 && filter.filteredCount === 0
-
-  // Annotate + sort
-  const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
-
-  // Available tiers in the current results
-  const availableTiers = useMemo(() => {
-    const set = new Set<DataTier>()
-    displays.forEach(d => set.add(d.tier))
-    return TIER_ORDER.filter(t => set.has(t))
-  }, [displays])
-
-  const visible = useMemo(() => {
-    if (tierFilter === 'all') return displays
-    return displays.filter(d => d.tier === tierFilter)
-  }, [displays, tierFilter])
 
   return (
     <div style={{ paddingBottom: 96, background: S.bg, minHeight: '100vh' }}>

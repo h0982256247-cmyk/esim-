@@ -65,6 +65,9 @@ export default function MagazineShop({
   colors: C, onSelectCountry, onSelectProduct, onBack,
   filter, cart,
 }: ProductsTemplateProps) {
+  // Hooks 一律在任何 early return 之前呼叫（react-hooks/rules-of-hooks）
+  const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
+
   if (!selectedCountry) {
     return (
       <div style={{ paddingBottom: 96, background: '#fafafa', minHeight: '100vh' }}>
@@ -153,7 +156,6 @@ export default function MagazineShop({
   const country = countries.find(c => c.countryCode === selectedCountry)
   const gradient = getGradient(selectedCountry)
   const showNoMatch = filter.dayFilter > 0 && filter.filteredCount === 0
-  const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
   const featured = displays.find(d => d.recommended)
   const rest = displays.filter(d => d !== featured)
 
