@@ -180,6 +180,34 @@ export default function CompactShop({
         </div>
       )}
 
+      {/* 流量類型：總量 / 每日型 / 吃到飽（對應主頁搜尋；不選＝全部，再點一下取消）。
+          與下方「容量分級」是兩個維度：先粗分流量類型，再細分容量。*/}
+      {filter.availableDays.length > 0 && (
+        <div style={{
+          display: 'flex', justifyContent: 'center', gap: 8,
+          padding: '10px 16px 0', background: S.white, flexWrap: 'wrap',
+        }}>
+          {filter.dataOptions.map(opt => {
+            const active = filter.dataType === opt
+            return (
+              <button
+                key={opt}
+                onClick={() => filter.onDataType(active ? null : opt)}
+                style={{
+                  padding: '6px 14px', borderRadius: 100, cursor: 'pointer',
+                  border: active ? `1.5px solid ${C.primary}` : '1.5px solid rgba(15,23,42,0.08)',
+                  background: active ? C.primary : '#fff',
+                  color: active ? C.onPrimary : S.muted,
+                  fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
+                  WebkitTapHighlightColor: 'transparent',
+                  transition: 'all 0.12s',
+                }}
+              >{opt}</button>
+            )
+          })}
+        </div>
+      )}
+
       {/* Tier filter chips */}
       {availableTiers.length > 1 && (
         <div style={{

@@ -231,6 +231,50 @@ export default function MagazineShop({
         </div>
       )}
 
+      {/* 流量類型：總量 / 每日型 / 吃到飽（對應主頁搜尋；不選＝全部，再點一下取消）*/}
+      {filter.availableDays.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, padding: '14px 16px 0', flexWrap: 'wrap' }}>
+          {filter.dataOptions.map(opt => {
+            const active = filter.dataType === opt
+            return (
+              <button
+                key={opt}
+                onClick={() => filter.onDataType(active ? null : opt)}
+                style={{
+                  padding: '7px 16px', borderRadius: 100, cursor: 'pointer',
+                  border: active ? `1.5px solid ${C.primary}` : `1.5px solid ${S.line}`,
+                  background: active ? C.primary : '#fff',
+                  color: active ? C.onPrimary : S.muted,
+                  fontSize: 13, fontWeight: 700,
+                  WebkitTapHighlightColor: 'transparent',
+                  transition: 'background 0.15s, border 0.15s, color 0.15s',
+                }}
+              >{opt}</button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* 選的天數沒有方案時，提示相近天數（對齊 ClassicShop）*/}
+      {showNoMatch && filter.nearestDays.length > 0 && (
+        <div style={{ padding: '16px' }}>
+          <p style={{ fontSize: 13, color: S.muted, margin: '0 0 8px' }}>您也可以選擇相近天數：</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {filter.nearestDays.map(n => (
+              <button
+                key={n}
+                onClick={() => filter.onChange(n)}
+                style={{
+                  padding: '7px 14px', borderRadius: 100,
+                  border: `1px solid ${C.border}`, background: C.light, color: C.primary,
+                  fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                }}
+              >{n} 天</button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Featured "best value" card */}
       {featured && (
         <div style={{ padding: '20px 16px 8px' }}>
