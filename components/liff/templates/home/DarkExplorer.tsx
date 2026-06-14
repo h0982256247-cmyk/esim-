@@ -15,7 +15,7 @@ const QUICK_ACTIONS = [
 ]
 
 const DAY_OPTIONS  = ['3天','5天','7天','10天','15天']
-const DATA_OPTIONS = ['1GB','3GB','5GB','不限流量']
+const DATA_OPTIONS = ['總量','每日型','吃到飽']
 
 const DARK_GRADS = [
   ['#1a1a2e','#16213e'],['#0d1b2a','#1b4332'],['#1e1b4b','#312e81'],
@@ -34,6 +34,8 @@ export default function DarkExplorer({
   const [query, setQuery]     = useState('')
   const [selDays, setSelDays] = useState<string | null>(null)
   const [selData, setSelData] = useState<string | null>(null)
+  // 點下拉先「記住」國家而不直接跳頁，讓使用者接著選天數/流量再按搜尋（對齊 ClassicHome）
+  const [selCountry, setSelCountry] = useState<{ code: string; name: string } | null>(null)
   const brandName = tenant?.brandName ?? 'eSIM'
   const primary = tenant?.primaryColor ?? '#6366f1'
 
@@ -46,10 +48,12 @@ export default function DarkExplorer({
   const hot = countries.slice(0, 8)
 
   function handleSearch() {
+    // 國家：優先用下拉點選的；沒點則用輸入字串比對到的第一個
+    const country = selCountry ?? (filtered[0] ? { code: filtered[0].countryCode, name: filtered[0].countryNameZh } : null)
     const params = new URLSearchParams()
-    if (query.trim()) params.set('q', query.trim())
+    if (country) params.set('country', country.code)
     if (selDays) params.set('days', selDays.replace('天', ''))
-    if (selData) params.set('data', selData)
+    if (selData) params.set('data', selData)   // 總量 / 每日型 / 吃到飽
     onSearch(params.toString() ? `?${params}` : '')
   }
 
@@ -99,7 +103,7 @@ export default function DarkExplorer({
                 <input
                   type="text" placeholder="搜尋目的地..."
                   value={query}
-                  onChange={e => setQuery(e.target.value)}
+                  onChange={e => { setQuery(e.target.value); setSelCountry(null) }}
                   onKeyDown={e => e.key === 'Enter' && handleSearch()}
                   style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 16, color: '#fff', padding: '13px 0', minWidth: 0 }}
                 />
@@ -109,11 +113,11 @@ export default function DarkExplorer({
                   </button>
                 )}
               </div>
-              {/* 搜尋下拉 */}
-              {filtered.length > 0 && (
+              {/* 搜尋下拉（已選定國家後收起，讓使用者接著選天數/流量）*/}
+              {filtered.length > 0 && !selCountry && (
                 <div style={{ position: 'absolute', left: 0, right: 0, top: 'calc(100% + 4px)', zIndex: 30, background: '#1a1a2e', borderRadius: 14, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 12px 32px rgba(0,0,0,0.5)', overflow: 'hidden', animation: 'dropIn 0.15s ease' }}>
                   {filtered.map((c, i) => (
-                    <button key={c.countryCode} onClick={() => { setQuery(''); onSelectCountry(c.countryCode) }} style={{ width: '100%', background: 'none', border: 'none', borderBottom: i < filtered.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none', padding: '12px 16px', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button key={c.countryCode} onClick={() => { setSelCountry({ code: c.countryCode, name: c.countryNameZh }); setQuery(c.countryNameZh) }} style={{ width: '100%', background: 'none', border: 'none', borderBottom: i < filtered.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none', padding: '12px 16px', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12 }}>
                       <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={26} />
                       <div style={{ flex: 1 }}><p style={{ fontSize: 14, fontWeight: 600, color: '#fff', margin: 0 }}>{c.countryNameZh}</p><p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{c.countryNameEn}</p></div>
                       {c.minPrice && <span style={{ fontSize: 13, fontWeight: 700, color: primary }}>NT${c.minPrice}起</span>}

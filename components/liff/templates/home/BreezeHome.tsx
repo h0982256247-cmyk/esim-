@@ -15,7 +15,7 @@ const QUICK_ACTIONS = [
 ]
 
 const DAY_OPTIONS  = ['3天','5天','7天','10天','15天']
-const DATA_OPTIONS = ['1GB','3GB','5GB','不限流量']
+const DATA_OPTIONS = ['總量','每日型','吃到飽']
 
 const BREEZE_GRADS = ['#FFF7ED','#F0FDF4','#EFF6FF','#FDF4FF','#F0FDFA','#FFFBEB']
 function getBreezeGrad(code: string) {
@@ -29,6 +29,8 @@ export default function BreezeHome({
   const [query, setQuery] = useState('')
   const [selDays, setSelDays] = useState<string | null>(null)
   const [selData, setSelData] = useState<string | null>(null)
+  // 點下拉先「記住」國家而不直接跳頁，讓使用者接著選天數/流量再按搜尋（對齊 ClassicHome）
+  const [selCountry, setSelCountry] = useState<{ code: string; name: string } | null>(null)
   const brandName = tenant?.brandName ?? 'eSIM'
 
   const filtered = query.trim()
@@ -40,10 +42,12 @@ export default function BreezeHome({
   const hot = countries.slice(0, 6)
 
   function handleSearch() {
+    // 國家：優先用下拉點選的；沒點則用輸入字串比對到的第一個
+    const country = selCountry ?? (filtered[0] ? { code: filtered[0].countryCode, name: filtered[0].countryNameZh } : null)
     const params = new URLSearchParams()
-    if (query.trim()) params.set('q', query.trim())
+    if (country) params.set('country', country.code)
     if (selDays) params.set('days', selDays.replace('天', ''))
-    if (selData) params.set('data', selData)
+    if (selData) params.set('data', selData)   // 總量 / 每日型 / 吃到飽
     onSearch(params.toString() ? `?${params}` : '')
   }
 
@@ -82,7 +86,7 @@ export default function BreezeHome({
               <input
                 type="text" placeholder="你要去哪裡？"
                 value={query}
-                onChange={e => setQuery(e.target.value)}
+                onChange={e => { setQuery(e.target.value); setSelCountry(null) }}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 16, color: '#111', padding: '13px 0', minWidth: 0 }}
               />
@@ -95,15 +99,15 @@ export default function BreezeHome({
               )}
             </div>
 
-            {/* 搜尋下拉 */}
-            {filtered.length > 0 && (
+            {/* 搜尋下拉（已選定國家後收起，讓使用者接著選天數/流量）*/}
+            {filtered.length > 0 && !selCountry && (
               <div style={{
                 position: 'absolute', left: 0, right: 0, top: 'calc(100% + 4px)', zIndex: 30,
                 background: '#fff', borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
                 border: '1px solid rgba(0,0,0,0.06)', overflow: 'hidden', animation: 'dropIn 0.15s ease',
               }}>
                 {filtered.map((c, i) => (
-                  <button key={c.countryCode} onClick={() => { setQuery(''); onSelectCountry(c.countryCode) }}
+                  <button key={c.countryCode} onClick={() => { setSelCountry({ code: c.countryCode, name: c.countryNameZh }); setQuery(c.countryNameZh) }}
                     style={{
                       width: '100%', background: 'none', border: 'none',
                       borderBottom: i < filtered.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none',
