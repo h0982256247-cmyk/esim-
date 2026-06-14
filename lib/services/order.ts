@@ -514,9 +514,15 @@ export async function markOrderCompleted(orderId: string, esimData: {
 // ─── 查詢 ─────────────────────────────────────────────────────────
 
 export async function getUserOrders(userId: string) {
-  // 用 currentOwnerId 取「目前擁有的訂單」（含轉贈進來的）
-  return prisma.order.findMany({
-    where: { currentOwnerId: userId },
+  // 目前擁有的訂單（含轉贈進來的，用 currentOwnerId）+ 自己轉贈出去且已被領取的訂單
+  // （userId 仍是原買家、但 currentOwnerId 已變對方）→ 保留在歷史顯示「已轉贈給 ○○○」。
+  const orders = await prisma.order.findMany({
+    where: {
+      OR: [
+        { currentOwnerId: userId },
+        { userId, NOT: { currentOwnerId: userId }, gift: { is: { claimedAt: { not: null } } } },
+      ],
+    },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -557,6 +563,8 @@ export async function getUserOrders(userId: string) {
       },
     },
   })
+  // transferredAway：這張是「我買的、已轉贈出去」的訂單（currentOwnerId 已非我）
+  return orders.map(o => ({ ...o, transferredAway: o.currentOwnerId !== userId }))
 }
 
 export async function getOrderById(orderId: string) {
@@ -610,6 +618,7 @@ export async function getOrderByIdForUser(orderId: string, userId: string) {
           cancelledAt: true,
           recipientName: true,
           toUser: { select: { displayName: true } },
+          fromUser: { select: { displayName: true } },
         },
       },
     },

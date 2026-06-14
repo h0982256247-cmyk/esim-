@@ -39,6 +39,7 @@ type Order = {
   activationEnd: string | null
   redeemedAt: string | null
   activatedAt: string | null
+  transferredAway?: boolean   // 我買的、已轉贈出去（擁有權已轉移），僅保留在歷史顯示
   orderItems: { productName: string; qty: number; unitPrice: number; product?: { dataCapacity: string | null } | null }[]
   gift: {
     claimedAt: string | null
@@ -151,6 +152,8 @@ export default function OrdersPage() {
     const awaitingPayment: Order[] = [] // 處理中橫幅：等付款確認
     const preparing: Order[] = []       // 處理中橫幅：已付款開卡中
     for (const o of orders) {
+      // 已轉贈出去的訂單一律歸到歷史（顯示「已轉贈給 ○○○」，無任何操作）
+      if (o.transferredAway) { history.push(o); continue }
       const phase = deriveEsimStatus(o).phase
       switch (groupOf(phase)) {
         case 'active':  active.push(o); break
@@ -640,6 +643,7 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
   const dataCapacity = order.orderItems[0]?.product?.dataCapacity
   const gift = giftBadge(order)
   const hasPendingGift = order.gift && !order.gift.claimedAt && !order.gift.cancelledAt && new Date(order.gift.expiresAt) > new Date()
+  const isReceived = !!order.gift?.claimedAt   // 轉贈進來的卡（已領取）→ 不可再轉贈
 
   return (
     <div style={{ background: S.white, border: `1.5px solid ${primary}`, borderRadius: 16, padding: '16px', boxShadow: `0 2px 10px ${primary}22` }}>
@@ -664,16 +668,26 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
       </button>
 
       {!hasPendingGift ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
-          <button onClick={onRedeem} disabled={actioning}
-            style={{ background: primary, color: onPrimary, border: 'none', borderRadius: 100, padding: '11px', fontSize: 14, fontWeight: 700, cursor: actioning ? 'wait' : 'pointer', opacity: actioning ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            {actioning ? '處理中…' : <><IconInstall size={15} /> 我要安裝</>}
-          </button>
-          <button onClick={onShare} disabled={actioning}
-            style={{ background: S.white, color: primary, border: `1.5px solid ${primary}`, borderRadius: 100, padding: '11px', fontSize: 13, fontWeight: 700, cursor: actioning ? 'wait' : 'pointer', opacity: actioning ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-            <IconShare size={14} /> 轉贈
-          </button>
-        </div>
+        // 轉贈進來（已領取）的卡不能再轉贈出去 → 只顯示「我要安裝」整排，並加註說明
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: isReceived ? '1fr' : '2fr 1fr', gap: 8 }}>
+            <button onClick={onRedeem} disabled={actioning}
+              style={{ background: primary, color: onPrimary, border: 'none', borderRadius: 100, padding: '11px', fontSize: 14, fontWeight: 700, cursor: actioning ? 'wait' : 'pointer', opacity: actioning ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              {actioning ? '處理中…' : <><IconInstall size={15} /> 我要安裝</>}
+            </button>
+            {!isReceived && (
+              <button onClick={onShare} disabled={actioning}
+                style={{ background: S.white, color: primary, border: `1.5px solid ${primary}`, borderRadius: 100, padding: '11px', fontSize: 13, fontWeight: 700, cursor: actioning ? 'wait' : 'pointer', opacity: actioning ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                <IconShare size={14} /> 轉贈
+              </button>
+            )}
+          </div>
+          {isReceived && (
+            <p style={{ fontSize: 11, color: S.faint, textAlign: 'center', margin: '10px 0 0', lineHeight: 1.5 }}>
+              此 eSIM 由 {order.gift?.fromUser?.displayName ?? '朋友'} 轉贈給你，安裝後即可使用，無法再轉贈出去
+            </p>
+          )}
+        </>
       ) : (
         <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '8px 10px' }}>
           <p style={{ fontSize: 11, color: '#9a3412', margin: 0, lineHeight: 1.5 }}>
@@ -714,14 +728,18 @@ function ProcessingRow({ order, stage, boxed, onClick }: {
 
 function CompactRow({ order, onClick }: { order: Order; onClick: () => void }) {
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
+  // 已轉贈出去：顯示「已轉贈給 ○○○」而非一般狀態
+  const gifted = order.transferredAway
+  const giftedTo = order.gift?.toUser?.displayName ?? order.gift?.recipientName ?? '朋友'
   const view = deriveEsimStatus(order)
-  const color = view.phase === 'failed' ? '#b91c1c' : view.phase === 'ended' ? '#15803d' : S.faint
+  const label = gifted ? `已轉贈給 ${giftedTo}` : view.label
+  const color = gifted ? '#6d28d9' : view.phase === 'failed' ? '#b91c1c' : view.phase === 'ended' ? '#15803d' : S.faint
   return (
     <button onClick={onClick}
       style={{ width: '100%', textAlign: 'left', cursor: 'pointer', background: S.white, border: `1px solid ${S.line}`, borderRadius: 12, padding: '12px 14px', opacity: 0.85 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <span style={{ fontSize: 11, fontWeight: 600, color }}>{view.label}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color }}>{label}</span>
           <p style={{ fontSize: 13, fontWeight: 600, color: S.ink, margin: '2px 0 0' }}>{productName}</p>
         </div>
         <span style={{ fontSize: 11, color: S.faint }}>{new Date(order.createdAt).toLocaleDateString('zh-TW')}</span>

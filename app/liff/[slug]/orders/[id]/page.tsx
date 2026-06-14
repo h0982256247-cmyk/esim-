@@ -19,6 +19,7 @@ type GiftInfo = {
   cancelledAt: string | null
   recipientName: string | null
   toUser: { displayName: string } | null
+  fromUser: { displayName: string } | null
 }
 
 type OrderDetail = {
@@ -449,8 +450,16 @@ export default function OrderDetailPage() {
       {order.status === 'COMPLETED' && order.esimRcode && !order.redeemedAt && !order.activatedAt && (() => {
         const gift = order.gift
         const isPendingGift = gift && !gift.claimedAt && !gift.cancelledAt && new Date(gift.expiresAt) > new Date()
+        const isReceived = !!gift?.claimedAt   // 轉贈進來的卡（已領取）→ 不可再轉贈
         return (
           <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px', marginBottom: 12 }}>
+            {isReceived && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, background: '#ede9fe', color: '#6d28d9', padding: '5px 12px', borderRadius: 100 }}>
+                  <IconShare size={12} /> 由 {gift?.fromUser?.displayName ?? '朋友'} 轉贈給你
+                </span>
+              </div>
+            )}
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
               <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#fff', border: `1px solid ${C.border}`, color: C.primary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
                 <IconSim size={24} />
@@ -459,7 +468,9 @@ export default function OrderDetailPage() {
               <p style={{ fontSize: 13, color: S.muted, margin: 0, lineHeight: 1.6 }}>
                 {isPendingGift
                   ? '已分享給朋友，等待對方領取。如要自己使用，請先取消分享。'
-                  : '可以選擇自己安裝，或分享給朋友使用'}
+                  : isReceived
+                    ? '這張是朋友轉贈給你的，安裝後即可使用、無法再轉贈'
+                    : '可以選擇自己安裝，或分享給朋友使用'}
               </p>
             </div>
 
