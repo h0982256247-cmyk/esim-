@@ -539,7 +539,9 @@ export async function getUserOrders(userId: string) {
       redeemedAt: true,
       activatedAt: true,
       orderItems: {
-        select: { productName: true, qty: true, unitPrice: true },
+        // product_name 快照只存「國家 N天」（不含流量），同天數不同流量會看起來一樣，
+        // 故另 join 目前商品的流量(dataCapacity) 供列表卡片區分方案。
+        select: { productName: true, qty: true, unitPrice: true, product: { select: { dataCapacity: true } } },
       },
       gift: {
         select: {

@@ -13,6 +13,8 @@ import {
   TAB_ORDER, TAB_LABEL, type OrdersTab,
 } from '@/lib/esimStatus'
 import { IconSim, IconQr, IconInstall, IconShare, IconClock, IconGift } from '@/components/liff/EsimIcons'
+import ConfirmDialog from '@/components/liff/ConfirmDialog'
+import type { ReactNode } from 'react'
 
 // ─── Types ─────────────────────────────────────────────────────
 
@@ -36,7 +38,7 @@ type Order = {
   activationEnd: string | null
   redeemedAt: string | null
   activatedAt: string | null
-  orderItems: { productName: string; qty: number; unitPrice: number }[]
+  orderItems: { productName: string; qty: number; unitPrice: number; product?: { dataCapacity: string | null } | null }[]
   gift: {
     claimedAt: string | null
     cancelledAt: string | null
@@ -129,6 +131,11 @@ export default function OrdersPage() {
   const [tab, setTab] = useState<OrdersTab | null>(null)            // null = 用 defaultTab
   const [usageMap, setUsageMap] = useState<Record<string, EsimUsage | null>>({})
   const usageFetchedRef = useRef<Set<string>>(new Set())
+  // 自訂確認彈窗（取代 window.confirm，避免 LINE 內建瀏覽器露出網址）
+  const [dialog, setDialog] = useState<null | {
+    title: string; lines: string[]; confirmLabel: string;
+    tone?: 'primary' | 'danger'; icon?: ReactNode; onConfirm: () => void
+  }>(null)
 
   const { data, loading, refresh } = useCachedData('orders', async () => {
     const [o, c] = await Promise.all([
@@ -232,10 +239,18 @@ export default function OrdersPage() {
     await refresh()
   }
 
-  const handleRedeem = async (o: Order) => {
-    const ok = window.confirm('按下後將立即生成 QR 碼，僅可用於一張裝置且無法再轉贈。\n\n確定要安裝嗎？')
-    if (!ok) return
+  const handleRedeem = (o: Order) => {
+    setDialog({
+      title: '確定要安裝這張 eSIM 嗎？',
+      lines: ['安裝後會立即產生 QR 碼並綁定這支手機，', '綁定後就無法再轉贈給別人。'],
+      confirmLabel: '確定安裝',
+      tone: 'primary',
+      icon: <IconInstall size={24} />,
+      onConfirm: () => { setDialog(null); doRedeem(o) },
+    })
+  }
 
+  const doRedeem = async (o: Order) => {
     setActioning(o.id)
     const r = await fetch(`/api/orders/${o.id}/redeem`, { method: 'POST' }).then(x => x.json())
     setActioning(null)
@@ -247,14 +262,24 @@ export default function OrdersPage() {
     router.push(`${base}/orders/${o.id}`)
   }
 
-  const handleShare = async (o: Order) => {
+  const handleShare = (o: Order) => {
     if (!liff?.isLoggedIn()) { alert('請先登入 LINE'); return }
     if (!liff.isApiAvailable('shareTargetPicker')) {
       alert('您的 LINE 版本不支援分享功能')
       return
     }
-    if (!window.confirm('分享後此 eSIM 將由對方使用，您將無法自行啟用。\n\n確定要分享嗎？')) return
+    setDialog({
+      title: '確定要轉贈這張 eSIM 嗎？',
+      lines: ['轉贈後這張 eSIM 將由對方使用，', '你就無法自己安裝了。'],
+      confirmLabel: '確定轉贈',
+      tone: 'primary',
+      icon: <IconShare size={22} />,
+      onConfirm: () => { setDialog(null); doShare(o) },
+    })
+  }
 
+  const doShare = async (o: Order) => {
+    if (!liff) return   // handleShare 已驗過；此處再守一次讓型別收斂
     setActioning(o.id)
     try {
       const r = await fetch(`/api/orders/${o.id}/gift`, { method: 'POST' }).then(x => x.json())
@@ -467,6 +492,18 @@ export default function OrdersPage() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={!!dialog}
+        title={dialog?.title ?? ''}
+        lines={dialog?.lines}
+        confirmLabel={dialog?.confirmLabel ?? '確定'}
+        tone={dialog?.tone}
+        icon={dialog?.icon}
+        colors={C}
+        onConfirm={() => dialog?.onConfirm()}
+        onCancel={() => setDialog(null)}
+      />
     </div>
   )
 }
@@ -550,6 +587,7 @@ function ActiveCard({ order, usage, primary, onClick }: {
 
 function InstallableCard({ order, primary, onClick }: { order: Order; primary: string; onClick: () => void }) {
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
+  const dataCapacity = order.orderItems[0]?.product?.dataCapacity
   return (
     <button onClick={onClick}
       style={{ width: '100%', textAlign: 'left', cursor: 'pointer', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 16, padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -558,7 +596,10 @@ function InstallableCard({ order, primary, onClick }: { order: Order; primary: s
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, background: '#dbeafe', color: '#1d4ed8', padding: '3px 8px', borderRadius: 100 }}>
             <IconQr size={11} /> QR 已就緒
           </span>
-          <p style={{ fontSize: 15, fontWeight: 700, color: S.ink, margin: '8px 0 2px' }}>{productName}</p>
+          <p style={{ fontSize: 15, fontWeight: 700, color: S.ink, margin: '8px 0 2px' }}>
+            {productName}
+            {dataCapacity && <span style={{ fontSize: 12.5, fontWeight: 600, color: S.muted, marginLeft: 6 }}>· {dataCapacity}</span>}
+          </p>
           <p style={{ fontSize: 11, color: S.muted, margin: 0 }}>點擊查看 QR 與一鍵安裝</p>
         </div>
         <span style={{ fontSize: 14, color: primary, fontWeight: 700 }}>→</span>
@@ -572,6 +613,7 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
   onRedeem: () => void; onShare: () => void; onClick: () => void
 }) {
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
+  const dataCapacity = order.orderItems[0]?.product?.dataCapacity
   const gift = giftBadge(order)
   const hasPendingGift = order.gift && !order.gift.claimedAt && !order.gift.cancelledAt && new Date(order.gift.expiresAt) > new Date()
 
@@ -588,14 +630,12 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
             </span>
           )}
         </div>
-        <p style={{ fontSize: 16, fontWeight: 700, color: S.ink, margin: '0 0 4px' }}>{productName}</p>
-        <p style={{ fontSize: 11, color: S.faint, margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span>{new Date(order.createdAt).toLocaleDateString('zh-TW')}</span>
-          <span>·</span>
-          {order.discountAmount > 0 && (
-            <span style={{ textDecoration: 'line-through' }}>NT${order.subtotal.toLocaleString()}</span>
-          )}
-          <span style={{ fontWeight: 700, color: order.discountAmount > 0 ? '#16a34a' : S.faint }}>NT${order.totalPaid.toLocaleString()}</span>
+        <p style={{ fontSize: 16, fontWeight: 700, color: S.ink, margin: '0 0 4px' }}>
+          {productName}
+          {dataCapacity && <span style={{ fontSize: 13, fontWeight: 600, color: S.muted, marginLeft: 6 }}>· {dataCapacity}</span>}
+        </p>
+        <p style={{ fontSize: 11, color: S.faint, margin: '0 0 12px' }}>
+          {new Date(order.createdAt).toLocaleDateString('zh-TW')}
         </p>
       </button>
 

@@ -7,6 +7,8 @@ import { useLiff } from '@/components/liff/LiffProvider'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { deriveEsimStatus, daysLeftOf, TONE_STYLE } from '@/lib/esimStatus'
 import { IconSim, IconInstall, IconShare, IconCheck, IconClock, IconAlert } from '@/components/liff/EsimIcons'
+import ConfirmDialog from '@/components/liff/ConfirmDialog'
+import type { ReactNode } from 'react'
 
 type GiftInfo = {
   token: string
@@ -109,6 +111,11 @@ export default function OrderDetailPage() {
   const [redeemError, setRedeemError] = useState<string | null>(null)
   const [redeemTimeout, setRedeemTimeout] = useState(false)
   const [canOneClick, setCanOneClick] = useState(false)
+  // 自訂確認彈窗（取代 window.confirm，避免 LINE 內建瀏覽器露出網址）
+  const [dialog, setDialog] = useState<null | {
+    title: string; lines: string[]; confirmLabel: string;
+    tone?: 'primary' | 'danger'; icon?: ReactNode; onConfirm: () => void
+  }>(null)
 
   useEffect(() => { setCanOneClick(supportsOneClickEsim()) }, [])
 
@@ -183,13 +190,20 @@ export default function OrderDetailPage() {
     }
   }, [id])
 
-  const handleRedeem = async () => {
+  const handleRedeem = () => {
     if (!order) return
-    const ok = window.confirm(
-      '按下後將立即生成 QR 碼，僅可用於一張裝置且無法再轉贈。\n\n確定要安裝嗎？',
-    )
-    if (!ok) return
+    setDialog({
+      title: '確定要安裝這張 eSIM 嗎？',
+      lines: ['安裝後會立即產生 QR 碼並綁定這支手機，', '綁定後就無法再轉贈給別人。'],
+      confirmLabel: '確定安裝',
+      tone: 'primary',
+      icon: <IconInstall size={24} />,
+      onConfirm: () => { setDialog(null); doRedeem() },
+    })
+  }
 
+  const doRedeem = async () => {
+    if (!order) return
     setRedeeming(true)
     setRedeemError(null)
     setRedeemTimeout(false)
@@ -215,10 +229,18 @@ export default function OrderDetailPage() {
       alert('您的 LINE 版本不支援分享功能，請更新 LINE App')
       return
     }
+    setDialog({
+      title: '確定要轉贈這張 eSIM 嗎？',
+      lines: ['轉贈後這張 eSIM 將由對方使用，', '你就無法自己安裝了。'],
+      confirmLabel: '確定轉贈',
+      tone: 'primary',
+      icon: <IconShare size={22} />,
+      onConfirm: () => { setDialog(null); doShare() },
+    })
+  }
 
-    const confirmMsg = `分享後，此 eSIM 將由對方使用，您將無法自行啟用。\n\n確定要分享嗎？`
-    if (!window.confirm(confirmMsg)) return
-
+  const doShare = async () => {
+    if (!order || !liff) return
     setSharing(true)
     try {
       // 1. 建立 gift token
@@ -809,6 +831,17 @@ export default function OrderDetailPage() {
           需要協助？聯絡客服
         </button>
       </div>
+      <ConfirmDialog
+        open={!!dialog}
+        title={dialog?.title ?? ''}
+        lines={dialog?.lines}
+        confirmLabel={dialog?.confirmLabel ?? '確定'}
+        tone={dialog?.tone}
+        icon={dialog?.icon}
+        colors={C}
+        onConfirm={() => dialog?.onConfirm()}
+        onCancel={() => setDialog(null)}
+      />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
