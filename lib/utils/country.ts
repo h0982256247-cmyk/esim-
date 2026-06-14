@@ -28,6 +28,8 @@ export const COUNTRY_NAME_TO_CODE: Record<string, string> = {
   // 美洲
   '美國': 'US', '美国': 'US', '加拿大': 'CA', '墨西哥': 'MX',
   '巴西': 'BR', '阿根廷': 'AR', '智利': 'CL', '哥倫比亞': 'CO', '秘魯': 'PE',
+  // 南美（多國 region：對應供應商「南美」整區方案，顯示用 globe 圖示，比照非洲 AFR）
+  '南美': 'SAM', '南美洲': 'SAM', '南美州': 'SAM',
   // 非洲（單國）
   '南非': 'ZA', '埃及': 'EG', '摩洛哥': 'MA', '肯亞': 'KE', '奈及利亞': 'NG',
   // 非洲（多國 region：對應 supplier SKU 的 AFR/AFR-A/AFR-B... 各 zone）

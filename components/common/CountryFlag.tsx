@@ -3,13 +3,13 @@
  *
  * 來源策略：
  *   1) 2 碼 ISO（含 EU）→ https://flagcdn.com/{code}.svg（高解析向量）
- *   2) 自訂多國代碼（ANZ/SEA/HKM/CNT/MEA/WW/AFR）→ 本地 /flags/globe.svg
+ *   2) 自訂多國代碼（ANZ/SEA/HKM/CNT/MEA/WW/AFR/SAM）→ 本地 /flags/globe.svg
  *   3) 找不到 code → 顯示 fallbackEmoji（若有）或地球 SVG
  *
  * 視覺：1px 邊線 + 圓角 + 微陰影 → 質感
  */
 
-const MULTI_REGION_CODES = new Set(['ANZ', 'SEA', 'HKM', 'CNT', 'MEA', 'WW', 'AFR'])
+const MULTI_REGION_CODES = new Set(['ANZ', 'SEA', 'HKM', 'CNT', 'MEA', 'WW', 'AFR', 'SAM'])
 
 function resolveSrc(code: string | null | undefined): string | null {
   if (!code) return null

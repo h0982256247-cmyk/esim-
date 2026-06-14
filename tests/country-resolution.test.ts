@@ -40,3 +40,26 @@ describe('country resolution — Africa / AFR region', () => {
     expect(matchCountryInText('南非 30GB')?.code).toBe('ZA')
   })
 })
+
+describe('country resolution — 南美 / SAM region', () => {
+  it('exposes 南美 → SAM in COUNTRY_NAME_TO_CODE', () => {
+    expect(COUNTRY_NAME_TO_CODE['南美']).toBe('SAM')
+    expect(COUNTRY_NAME_TO_CODE['南美洲']).toBe('SAM')
+  })
+
+  it('CODE_TO_NAME_ZH derives SAM → 南美 (regression: 之前無 mapping → 存成 XX、flag 顯示破圖)', () => {
+    expect(CODE_TO_NAME_ZH['SAM']).toBe('南美')
+  })
+
+  it('matchCountryInText 抓得到現有「南美A」資料（substring，免重上傳也能重算成 SAM）', () => {
+    expect(matchCountryInText('南美A')?.code).toBe('SAM')
+    expect(matchCountryInText('南美A')?.zh).toBe('南美')
+    expect(matchCountryInText('南美A 30GB吃到飽')?.code).toBe('SAM')
+    expect(matchCountryInText('南美, 10天, 每日1GB')?.code).toBe('SAM')
+  })
+
+  it('不會把 南美 誤抓成 南非 / 美國', () => {
+    expect(matchCountryInText('南美')?.code).toBe('SAM')
+    expect(matchCountryInText('南非')?.code).toBe('ZA')
+  })
+})
