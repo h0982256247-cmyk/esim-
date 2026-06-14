@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLiff } from '@/components/liff/LiffProvider'
 import { useLiffBase } from '@/hooks/useLiffBase'
-import { useTenantColors } from '@/components/liff/TenantContext'
+import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
 import { useCachedData } from '@/hooks/useCachedData'
 import PageSkeleton from '@/components/liff/PageSkeleton'
 import { EmptyOrdersIllustration } from '@/components/liff/LiffIllustrations'
@@ -123,6 +123,7 @@ export default function OrdersPage() {
   const router = useRouter()
   const base = useLiffBase()
   const C = useTenantColors()
+  const tenant = useTenant()
   const { liff } = useLiff()
   const searchParams = useSearchParams()
   const bundleIdParam = searchParams.get('bundleId')
@@ -290,17 +291,21 @@ export default function OrdersPage() {
       let giftLink: string = fullUrl
       try { giftLink = await liff.permanentLink.createUrlBy(fullUrl) } catch {}
 
-      const productName = o.orderItems[0]?.productName ?? 'eSIM'
+      const item = o.orderItems[0]
+      const productName = item?.productName ?? 'eSIM'
+      // 完整方案：國家 N天 + 流量（不要只有國家跟天數）
+      const planLabel = item?.product?.dataCapacity ? `${productName} · ${item.product.dataCapacity}` : productName
+      const brandName = tenant?.brandName ?? 'eSIM'
       const flex = {
         type: 'flex' as const,
-        altText: `你收到一張 eSIM：${productName}`,
+        altText: `你收到一張來自「${brandName}」的 eSIM：${planLabel}`,
         contents: {
           type: 'bubble' as const,
           body: {
             type: 'box' as const, layout: 'vertical' as const, spacing: 'md',
             contents: [
-              { type: 'text' as const, text: '🎁 你收到一張 eSIM', weight: 'bold' as const, size: 'lg' as const, color: '#1a1a1a' },
-              { type: 'text' as const, text: productName, size: 'md' as const, weight: 'bold' as const, wrap: true, color: C.primary },
+              { type: 'text' as const, text: `你收到一張來自「${brandName}」的 eSIM`, weight: 'bold' as const, size: 'lg' as const, color: '#1a1a1a', wrap: true },
+              { type: 'text' as const, text: planLabel, size: 'md' as const, weight: 'bold' as const, wrap: true, color: C.primary },
               { type: 'text' as const, text: '點下方按鈕完成領取，即可開始使用', size: 'sm' as const, color: '#475569', wrap: true },
               { type: 'separator' as const, margin: 'md' as const },
               { type: 'text' as const, text: '⚠ 連結 7 天內有效，請盡快領取', size: 'xs' as const, color: '#94a3b8', wrap: true },

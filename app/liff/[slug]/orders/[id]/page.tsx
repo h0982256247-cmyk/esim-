@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { useLiff } from '@/components/liff/LiffProvider'
-import { useTenantColors } from '@/components/liff/TenantContext'
+import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
 import { deriveEsimStatus, daysLeftOf, TONE_STYLE } from '@/lib/esimStatus'
 import { IconSim, IconInstall, IconShare, IconCheck, IconClock, IconAlert } from '@/components/liff/EsimIcons'
 import ConfirmDialog from '@/components/liff/ConfirmDialog'
@@ -43,7 +43,7 @@ type OrderDetail = {
   activationEnd: string | null
   redeemedAt: string | null
   activatedAt: string | null
-  orderItems: { productName: string; qty: number; unitPrice: number }[]
+  orderItems: { productName: string; qty: number; unitPrice: number; product?: { dataCapacity: string | null } | null }[]
   gift: GiftInfo | null
 }
 
@@ -99,6 +99,7 @@ export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>()
   const searchParams = useSearchParams()
   const C = useTenantColors()
+  const tenant = useTenant()
   const { liff } = useLiff()
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [usage, setUsage] = useState<EsimUsage | null>(null)
@@ -261,10 +262,14 @@ export default function OrderDetailPage() {
       }
 
       // 3. 開啟分享面板，秀 Flex Message
-      const productName = order.orderItems[0]?.productName ?? 'eSIM'
+      const item = order.orderItems[0]
+      const productName = item?.productName ?? 'eSIM'
+      // 完整方案：國家 N天 + 流量（不要只有國家跟天數）
+      const planLabel = item?.product?.dataCapacity ? `${productName} · ${item.product.dataCapacity}` : productName
+      const brandName = tenant?.brandName ?? 'eSIM'
       const flexMessage = {
         type: 'flex' as const,
-        altText: `你收到一張 eSIM：${productName}`,
+        altText: `你收到一張來自「${brandName}」的 eSIM：${planLabel}`,
         contents: {
           type: 'bubble' as const,
           body: {
@@ -274,14 +279,15 @@ export default function OrderDetailPage() {
             contents: [
               {
                 type: 'text' as const,
-                text: '🎁 你收到一張 eSIM',
+                text: `你收到一張來自「${brandName}」的 eSIM`,
                 weight: 'bold' as const,
                 size: 'lg' as const,
                 color: '#1a1a1a',
+                wrap: true,
               },
               {
                 type: 'text' as const,
-                text: productName,
+                text: planLabel,
                 size: 'md' as const,
                 weight: 'bold' as const,
                 wrap: true,

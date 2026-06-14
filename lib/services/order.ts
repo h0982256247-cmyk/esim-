@@ -596,7 +596,8 @@ export async function getOrderByIdForUser(orderId: string, userId: string) {
       redeemedAt: true,
       activatedAt: true,
       orderItems: {
-        select: { productName: true, qty: true, unitPrice: true },
+        // 另 join 商品流量(dataCapacity)，供詳情顯示與轉贈 Flex 訊息標示完整方案
+        select: { productName: true, qty: true, unitPrice: true, product: { select: { dataCapacity: true } } },
       },
       gift: {
         select: {
