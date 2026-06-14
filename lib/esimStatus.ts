@@ -84,7 +84,7 @@ export function deriveEsimStatus(o: EsimStatusInput): EsimStatusView {
     return v('readyToInstall', '可以安裝', '點「我要安裝」或轉贈好友', 'action', true)
   if (o.status === 'PROCESSING')
     return v('awaitingPayment', '等待付款', '正在確認付款結果', 'wait')
-  return v('preparing', '開卡中', '正在為你準備 eSIM', 'wait')
+  return v('preparing', '開卡中', '正在向供應商開卡，約 1–3 分鐘，可先離開稍後再回來', 'wait')
 }
 
 /** tone → 固定配色。'action' 留給元件用品牌色覆蓋（這裡給藍色 fallback）。 */
