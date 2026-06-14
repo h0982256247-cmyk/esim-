@@ -78,7 +78,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           orderItems: {
             create: {
               productId: input.productId,
-              productName: `${product.countryNameZh} ${product.displayDays}天`,
+              // 快照存完整方案（國家 N天 + 流量），供應商改規格/下架不影響歷史訂單顯示
+              productName: `${product.countryNameZh} ${product.displayDays}天${product.dataCapacity ? ` ${product.dataCapacity}` : ''}`,
               qty: 1,
               unitPrice: subtotal,
               unitCost: product.costPrice,   // 鎖死成本快照，後續供應商改價不影響歷史訂單
@@ -265,7 +266,8 @@ export async function createBundleOrders(input: CreateBundleOrdersInput): Promis
             orderItems: {
               create: {
                 productId: p.id,
-                productName: `${p.countryNameZh} ${p.displayDays}天`,
+                // 快照存完整方案（國家 N天 + 流量），供應商改規格/下架不影響歷史訂單顯示
+                productName: `${p.countryNameZh} ${p.displayDays}天${p.dataCapacity ? ` ${p.dataCapacity}` : ''}`,
                 qty: 1,
                 unitPrice: p.sellPrice,
                 unitCost: p.costPrice,
