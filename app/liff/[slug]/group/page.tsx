@@ -80,7 +80,6 @@ export default function GroupPage() {
   const [joinedInfo, setJoinedInfo] = useState<{ groupName: string; couponDiscount: number | null } | null>(null)
 
   const [sharing, setSharing] = useState(false)
-  const [copied, setCopied] = useState(false)
 
   // 邀請連結單一來源：永久連結（liff.line.me）才會在 LINE 內開啟，一般 https 會被外部瀏覽器接走。
   const buildInviteUrl = async () => {
@@ -141,19 +140,6 @@ export default function GroupPage() {
       window.alert(err instanceof Error ? err.message : '分享失敗')
     }
     setSharing(false)
-  }
-
-  // 複製邀請連結：給想用其他管道（IG / 簡訊 / 其他群組）轉發的社群主。
-  const copyInviteLink = async () => {
-    if (!ownedGroup) return
-    const inviteUrl = await buildInviteUrl()
-    try {
-      await navigator.clipboard.writeText(inviteUrl)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
-    } catch {
-      window.prompt('複製這個邀請連結分享給朋友：', inviteUrl)
-    }
   }
 
   const reload = async () => {
@@ -263,29 +249,17 @@ export default function GroupPage() {
                   {ownedGroup.inviteCode}
                 </p>
               </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button
-                  onClick={handleInvite}
-                  disabled={sharing}
-                  style={{
-                    flex: 1, border: 'none', borderRadius: 100, padding: '13px',
-                    fontSize: 14, fontWeight: 800, cursor: sharing ? 'not-allowed' : 'pointer',
-                    background: C.primary, color: C.onPrimary, opacity: sharing ? 0.6 : 1,
-                  }}
-                >
-                  {sharing ? '開啟分享…' : '分享好友'}
-                </button>
-                <button
-                  onClick={copyInviteLink}
-                  style={{
-                    flexShrink: 0, borderRadius: 100, padding: '13px 18px',
-                    fontSize: 14, fontWeight: 800, cursor: 'pointer',
-                    background: S.white, color: C.primary, border: `1.5px solid ${C.border}`,
-                  }}
-                >
-                  {copied ? '已複製' : '複製連結'}
-                </button>
-              </div>
+              <button
+                onClick={handleInvite}
+                disabled={sharing}
+                style={{
+                  width: '100%', border: 'none', borderRadius: 100, padding: '13px',
+                  fontSize: 14, fontWeight: 800, cursor: sharing ? 'not-allowed' : 'pointer',
+                  background: C.primary, color: C.onPrimary, opacity: sharing ? 0.6 : 1,
+                }}
+              >
+                {sharing ? '開啟分享…' : '分享好友'}
+              </button>
             </div>
 
             {/* 社群成員名單 */}
