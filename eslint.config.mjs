@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // app-src 是死碼（獨立巢狀 git repo、不在 build 內）；scripts 為一次性節點腳本。
+    // 不該汙染 lint（否則 `eslint .` 多出數千筆雜訊 → 永遠無法把 lint 改成硬閘門）。
+    "app-src/**",
+    "scripts/**",
   ]),
 ]);
 
