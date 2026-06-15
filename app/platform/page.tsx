@@ -115,13 +115,13 @@ export default function PlatformDashboard() {
         if (!r.ok) {
           // 後端 500 等錯誤時不要靜默變空白：把訊息顯示出來、可重試。
           let msg = `伺服器回應錯誤（${r.status}）`
-          try { const e = await r.json(); if (e?.error) msg = e.error } catch { /* 非 JSON 回應 */ }
+          try { const e = await r.json(); if (e?.error) msg = `${e.error}${e.detail ? `\n${e.detail}` : ''}` } catch { /* 非 JSON 回應 */ }
           throw new Error(msg)
         }
         const d = await r.json()
         if (!cancelled) setStats(d)
       })
-      .catch(() => { if (!cancelled) setError('儀表板載入失敗，請重新整理；若持續發生請重新登入。') })
+      .catch(e => { if (!cancelled) setError(e?.message || '儀表板載入失敗，請重新整理；若持續發生請重新登入。') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [router])
@@ -145,7 +145,7 @@ export default function PlatformDashboard() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
           </div>
-          <p className="text-sm text-gray-700">{error}</p>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap break-words text-left">{error}</p>
           <button
             onClick={() => window.location.reload()}
             className="mt-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition"
