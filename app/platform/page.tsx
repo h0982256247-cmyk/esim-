@@ -17,12 +17,14 @@ type RecentOrder = {
 }
 
 type Stats = {
+  role: string
   totalUsers: number
   totalOrders: number
   totalRevenue: number
   pendingGroups: number
   totalGroupOwners: number
   totalProducts: number
+  paymentConfigured: boolean
   pendingCommissions: number
   esimPendingOrders: number
   monthlyRevenue: MonthlyRevenue[]
@@ -115,7 +117,7 @@ export default function PlatformDashboard() {
         if (!r.ok) {
           // 後端 500 等錯誤時不要靜默變空白：把訊息顯示出來、可重試。
           let msg = `伺服器回應錯誤（${r.status}）`
-          try { const e = await r.json(); if (e?.error) msg = `${e.error}${e.detail ? `\n${e.detail}` : ''}` } catch { /* 非 JSON 回應 */ }
+          try { const e = await r.json(); if (e?.error) msg = e.error } catch { /* 非 JSON 回應 */ }
           throw new Error(msg)
         }
         const d = await r.json()
@@ -169,6 +171,15 @@ export default function PlatformDashboard() {
     : Math.round(((thisMonthRevenue - prevMonthRevenue) / prevMonthRevenue) * 100)
   const currentMonth = stats.monthlyRevenue[stats.monthlyRevenue.length - 1]?.month ?? ''
 
+  // 開站進度：每個白牌（平台商）開站要做的三步。Super Admin 不顯示（這些是租戶層的設定）。
+  const setupSteps = [
+    { label: '匯入商品',       done: stats.totalProducts > 0,     href: '/platform/products', cta: '前往匯入' },
+    { label: '升級社群主',     done: stats.totalGroupOwners > 0,  href: '/platform/users',    cta: '前往設定' },
+    { label: '設定金流 / 外觀', done: stats.paymentConfigured,     href: '/platform/liff',     cta: '前往設定' },
+  ]
+  const setupDone = setupSteps.filter(s => s.done).length
+  const showSetup = stats.role !== 'SUPER_ADMIN' && setupDone < setupSteps.length
+
   return (
     <div className="space-y-5">
       {/* Page Header */}
@@ -196,35 +207,45 @@ export default function PlatformDashboard() {
         </div>
       </div>
 
-      {/* 開站總覽：尚無交易資料時，把空白儀表板換成「現況 + 下一步」引導。 */}
-      {stats.totalOrders === 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 shadow-sm">
-          <p className="text-base font-semibold text-gray-800">平台運行總覽</p>
-          <p className="text-sm text-gray-500 mt-0.5 mb-4">目前還沒有交易資料；完成下面幾步就會開始有營收數字。</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: '會員', value: stats.totalUsers, href: '/platform/users' },
-              { label: '上架商品', value: stats.totalProducts, href: '/platform/products' },
-              { label: '社群主', value: stats.totalGroupOwners, href: '/platform/groups' },
-              { label: '訂單', value: stats.totalOrders, href: '/platform/orders' },
-            ].map(s => (
-              <Link key={s.label} href={s.href} className="bg-white rounded-xl border border-gray-100 p-3 hover:border-blue-300 transition">
-                <p className="text-xs text-gray-400">{s.label}</p>
-                <p className="text-xl font-bold text-gray-800 mt-0.5">{s.value.toLocaleString()}</p>
-              </Link>
+      {/* 開站進度：平台商開站三步，做完打勾、全部完成後自動隱藏。Super Admin 不顯示。 */}
+      {showSetup && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-base font-semibold text-gray-800">開站進度</p>
+            <span className="text-sm font-semibold text-blue-600">{setupDone}/{setupSteps.length} 完成</span>
+          </div>
+          <p className="text-sm text-gray-500 mt-0.5 mb-3">完成這幾步就能正式開始營業。</p>
+          {/* 進度條 */}
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-4">
+            <div
+              className="h-full bg-blue-600 rounded-full transition-all"
+              style={{ width: `${(setupDone / setupSteps.length) * 100}%` }}
+            />
+          </div>
+          {/* 步驟清單 */}
+          <ul className="space-y-2.5">
+            {setupSteps.map((s, i) => (
+              <li key={s.label} className="flex items-center gap-3">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${s.done ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                  {s.done ? (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <span className="text-xs font-bold">{i + 1}</span>
+                  )}
+                </span>
+                <span className={`flex-1 text-sm ${s.done ? 'text-gray-400 line-through' : 'text-gray-700 font-medium'}`}>{s.label}</span>
+                {s.done ? (
+                  <span className="text-xs font-medium text-emerald-600">已完成</span>
+                ) : (
+                  <Link href={s.href} className="text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition">
+                    {s.cta}
+                  </Link>
+                )}
+              </li>
             ))}
-          </div>
-          <div className="flex flex-wrap gap-2 mt-4">
-            <Link href="/platform/products" className="text-sm font-medium text-blue-700 bg-white border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-100 transition">
-              {stats.totalProducts === 0 ? '① 匯入商品' : '管理商品'}
-            </Link>
-            <Link href="/platform/users" className="text-sm font-medium text-blue-700 bg-white border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-100 transition">
-              {stats.totalGroupOwners === 0 ? '② 升級社群主' : '管理社群'}
-            </Link>
-            <Link href="/platform/liff" className="text-sm font-medium text-blue-700 bg-white border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-100 transition">
-              ③ 設定金流 / 外觀
-            </Link>
-          </div>
+          </ul>
         </div>
       )}
 

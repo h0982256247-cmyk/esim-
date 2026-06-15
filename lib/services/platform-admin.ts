@@ -235,6 +235,7 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     esimPendingOrders,
     margin,
     riskAlerts,
+    paymentConfigCount,
   ] = await Promise.all([
     prisma.user.count({ where: userTenantWhere }),
     prisma.order.count({ where: orderTenantWhere }),
@@ -259,6 +260,10 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     prisma.order.count({ where: { status: 'PAID', ...orderTenantWhere } }),
     aggregateMargin(paidOrderWhere),
     getRiskAlerts(tenantAdminId),
+    // 金流是否已設定（開站進度用）。Super Admin 無租戶歸屬，回 0（前端也不顯示開站進度）。
+    tenantAdminId != null
+      ? prisma.tenantPaymentConfig.count({ where: { adminId: tenantAdminId, isActive: true } })
+      : Promise.resolve(0),
   ])
 
   // Recent 6 months: revenue + grossProfit
@@ -311,6 +316,7 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     pendingGroups,
     totalGroupOwners,
     totalProducts,
+    paymentConfigured: paymentConfigCount > 0,
     pendingCommissions: pendingCommissions._sum.commissionAmount ?? 0,
     esimPendingOrders,
     monthlyRevenue,

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { getDashboardStats } from '@/lib/services/platform-admin'
-import { prisma } from '@/lib/db/prisma'
 
 export async function GET(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
@@ -9,19 +8,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const stats = await getDashboardStats(auth.tenantAdminId)
-    return NextResponse.json(stats)
+    // role 給前端判斷是否顯示「開站進度」（Super Admin 不顯示）。
+    return NextResponse.json({ ...stats, role: auth.role })
   } catch (e) {
-    // 暫時診斷：把真實錯誤寫到 system_alerts（可用 SQL 讀）＋回傳前端，釐清後移除。
-    const message = e instanceof Error ? e.message : String(e)
-    const stack = e instanceof Error ? (e.stack ?? '') : ''
-    try {
-      await prisma.$executeRaw`
-        INSERT INTO system_alerts (label, context)
-        VALUES ('dashboard_debug', ${JSON.stringify({ message, stack: stack.slice(0, 4000) })}::jsonb)`
-    } catch { /* 寫入失敗也別讓診斷再丟錯 */ }
-    return NextResponse.json(
-      { error: message, detail: stack.split('\n').slice(0, 6).join('\n') },
-      { status: 500 },
-    )
+    // 不靜默吞錯：記到伺服器日誌、回傳可見錯誤（前端顯示錯誤卡＋重試），不再讓頁面變空白。
+    console.error('[platform/dashboard] getDashboardStats failed:', e)
+    return NextResponse.json({ error: '儀表板暫時無法載入，請稍後再試' }, { status: 500 })
   }
 }
