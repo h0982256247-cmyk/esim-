@@ -64,7 +64,8 @@ export default function ProfilePage() {
   const { data, loading } = useCachedData('profile', async () => {
     const d = await fetch('/api/auth/me').then(r => r.ok ? r.json() : null)
     if (!d?.user) return { user: null as UserInfo | null }
-    return { user: { ...d.user, ownedGroup: d.ownedGroup ?? null, membership: d.membership ?? null } as UserInfo }
+    // /api/auth/me 回傳的會員社群欄位叫 `group`（非 membership）；包成 { group } 對應 UI。
+    return { user: { ...d.user, ownedGroup: d.ownedGroup ?? null, membership: d.group ? { group: d.group } : null } as UserInfo }
   })
   const user = data?.user ?? null
 
