@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
-import { resolveTenantAdminIdFromToken } from '@/lib/auth/resolve-tenant'
+import { requireLiffAuth } from '@/lib/auth/liff'
 import { createOrder, getUserOrders } from '@/lib/services/order'
 import { isUserProfileComplete } from '@/lib/services/user'
 import { checkRateLimit } from '@/lib/utils/rate-limit'
@@ -8,31 +7,21 @@ import { PaymentMethod } from '@prisma/client'
 
 // GET /api/orders — 我的訂單列表
 export async function GET(req: NextRequest) {
-  const token = req.cookies.get(SESSION_COOKIE)?.value
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await requireLiffAuth(req)
+  if (auth instanceof NextResponse) return auth
 
-  let session
-  try { session = await verifySession(token) } catch {
-    return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
-  }
-
-  const orders = await getUserOrders(session.userId)
+  const orders = await getUserOrders(auth.userId)
   return NextResponse.json({ orders })
 }
 
 // POST /api/orders — 建立訂單
 // Body: { productId, couponIds?, paymentMethod }
 export async function POST(req: NextRequest) {
-  const token = req.cookies.get(SESSION_COOKIE)?.value
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  let session
-  try { session = await verifySession(token) } catch {
-    return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
-  }
+  const auth = await requireLiffAuth(req)
+  if (auth instanceof NextResponse) return auth
 
   // 限流：同一使用者短時間內過多建單請求 → 擋（防濫用）。fail-open。
-  if (!(await checkRateLimit(`order:${session.userId}`, 30, 60))) {
+  if (!(await checkRateLimit(`order:${auth.userId}`, 30, 60))) {
     return NextResponse.json({ error: '操作過於頻繁，請稍後再試' }, { status: 429 })
   }
 
@@ -45,19 +34,18 @@ export async function POST(req: NextRequest) {
   }
 
   // 結帳前需完成基本資料（姓名/手機/Email/生日）
-  if (!(await isUserProfileComplete(session.userId))) {
+  if (!(await isUserProfileComplete(auth.userId))) {
     return NextResponse.json({ error: '請先完成基本資料填寫', code: 'PROFILE_INCOMPLETE' }, { status: 422 })
   }
 
   // 多租戶隔離：帶入買家租戶，商品必須屬於同租戶才能下單
-  const tenantAdminId = await resolveTenantAdminIdFromToken(token)
   const result = await createOrder({
-    userId: session.userId,
-    lineUid: session.lineUid,
+    userId: auth.userId,
+    lineUid: auth.lineUid,
     productId,
     couponIds,
     paymentMethod,
-    tenantAdminId,
+    tenantAdminId: auth.tenantAdminId,
   })
 
   if (!result.ok) {

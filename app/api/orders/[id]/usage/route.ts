@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
+import { requireLiffAuth } from '@/lib/auth/liff'
 import { prisma } from '@/lib/db/prisma'
 import { queryEsimUsage } from '@/lib/services/esim'
 
 // GET /api/orders/:id/usage — 查詢 eSIM 剩餘流量（即時向世界移動查詢）
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const token = req.cookies.get(SESSION_COOKIE)?.value
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  let session
-  try { session = await verifySession(token) } catch {
-    return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
-  }
+  const auth = await requireLiffAuth(req)
+  if (auth instanceof NextResponse) return auth
 
   const { id } = await params
 
   const order = await prisma.order.findFirst({
-    where: { id, userId: session.userId },
+    where: { id, userId: auth.userId },
     select: {
       esimIccid: true,
       status: true,

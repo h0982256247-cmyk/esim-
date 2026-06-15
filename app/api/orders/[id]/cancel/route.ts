@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
+import { requireLiffAuth } from '@/lib/auth/liff'
 import { getOrderByIdForUser, markOrderCancelled, markBundleFailed } from '@/lib/services/order'
 import { prisma } from '@/lib/db/prisma'
 import { OrderStatus } from '@prisma/client'
@@ -16,16 +16,11 @@ import { OrderStatus } from '@prisma/client'
 //
 // 不允許取消已 PAID/ESIM_PENDING/COMPLETED/REFUNDED 的訂單。
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const token = req.cookies.get(SESSION_COOKIE)?.value
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  let session
-  try { session = await verifySession(token) } catch {
-    return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
-  }
+  const auth = await requireLiffAuth(req)
+  if (auth instanceof NextResponse) return auth
 
   const { id } = await params
-  const order = await getOrderByIdForUser(id, session.userId)
+  const order = await getOrderByIdForUser(id, auth.userId)
   if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
 
   const CANCELLABLE: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.PROCESSING]
@@ -42,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // 共用 schema 語意）— bundle 用 markBundleFailed 內已 reset coupons
   if (order.bundleId) {
     const bundleOrders = await prisma.order.findMany({
-      where: { bundleId: order.bundleId, currentOwnerId: session.userId },
+      where: { bundleId: order.bundleId, currentOwnerId: auth.userId },
       select: { id: true, status: true },
     })
     if (bundleOrders.some(o => !(CANCELLABLE as readonly string[]).includes(o.status))) {

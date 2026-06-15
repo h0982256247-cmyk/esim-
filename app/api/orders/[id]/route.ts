@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
+import { requireLiffAuth } from '@/lib/auth/liff'
 import { getOrderByIdForUser, markOrderCancelled, isOrderExpired } from '@/lib/services/order'
 import { OrderStatus } from '@prisma/client'
 
 // GET /api/orders/:id — 訂單詳情（PENDING 逾時自動取消）
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const token = req.cookies.get(SESSION_COOKIE)?.value
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  let session
-  try { session = await verifySession(token) } catch {
-    return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
-  }
+  const auth = await requireLiffAuth(req)
+  if (auth instanceof NextResponse) return auth
 
   const { id } = await params
-  const order = await getOrderByIdForUser(id, session.userId)
+  const order = await getOrderByIdForUser(id, auth.userId)
 
   if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
 
