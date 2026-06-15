@@ -221,11 +221,9 @@ const WM_API_HOSTS = {
   test: 'https://tfmshippingsys.fastmove.com.tw',
   prod: 'https://fmshippingsys.fastmove.com.tw',
 } as const
-type WmEnv = 'test' | 'prod' | 'custom'
+type WmEnv = 'test' | 'prod'
 function inferWmEnv(apiUrl: string): WmEnv {
-  if (apiUrl === WM_API_HOSTS.test) return 'test'
-  if (apiUrl === WM_API_HOSTS.prod) return 'prod'
-  return apiUrl ? 'custom' : 'test'
+  return apiUrl === WM_API_HOSTS.prod ? 'prod' : 'test'
 }
 
 function EsimConfigTab({
@@ -287,27 +285,14 @@ function EsimConfigTab({
               onChange={e => {
                 const v = e.target.value as WmEnv
                 setEnv(v)
-                if (v === 'test') setForm(p => ({ ...p, apiUrl: WM_API_HOSTS.test }))
-                else if (v === 'prod') setForm(p => ({ ...p, apiUrl: WM_API_HOSTS.prod }))
+                setForm(p => ({ ...p, apiUrl: v === 'prod' ? WM_API_HOSTS.prod : WM_API_HOSTS.test }))
               }}
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="test">測試（tfmshippingsys）</option>
               <option value="prod">正式（fmshippingsys）</option>
-              <option value="custom">自訂網址</option>
             </select>
-            {env === 'custom' ? (
-              <input
-                type="text"
-                value={form.apiUrl}
-                onChange={e => setForm(p => ({ ...p, apiUrl: e.target.value }))}
-                placeholder="https://..."
-                required
-                className="w-full border rounded-lg px-3 py-2 text-sm font-mono mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            ) : (
-              <p className="text-xs font-mono text-gray-500 mt-1 break-all">{form.apiUrl}</p>
-            )}
+            <p className="text-xs font-mono text-gray-500 mt-1 break-all">{form.apiUrl}</p>
             <p className="text-xs text-gray-400 mt-1 leading-relaxed">切換環境只會改 API 主機網址。商品（wmproductId）測試與正式共用，不需重新匯入。若兩環境的 Merchant ID / Dept ID / Token 不同，記得一併更新。</p>
           </div>
           {[
