@@ -326,7 +326,7 @@ export async function getGroupByInviteCode(inviteCode: string) {
 export async function getUserGroup(userId: string) {
   return prisma.groupMember.findUnique({
     where: { userId },
-    include: { group: { select: { id: true, name: true, description: true, inviteCode: true } } },
+    include: { group: { select: { id: true, name: true, description: true, inviteCode: true, rebateRate: true } } },
   })
 }
 

@@ -8,7 +8,7 @@ import PageSkeleton from '@/components/liff/PageSkeleton'
 
 type GroupMemberInfo = { id: string; joinedAt: string; user: { id: string; displayName: string; avatarUrl: string | null } }
 type GroupInfo  = { id: string; name: string; description: string | null; status: string; inviteCode: string; members: GroupMemberInfo[] }
-type Membership = { group: { id: string; name: string; description: string | null }; joinedAt: string }
+type Membership = { group: { id: string; name: string; description: string | null; rebateRate: number }; joinedAt: string }
 
 const S = {
   white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
@@ -312,7 +312,19 @@ export default function GroupPage() {
           <p style={{ fontSize: 14, color: S.muted, lineHeight: 1.6 }}>{membership.group.description}</p>
         )}
 
-        <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* 會員回饋：讓會員知道「每次購買都會拿到回購券」 */}
+        {Number(membership.group.rebateRate) > 0 && (
+          <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px', marginTop: 20 }}>
+            <p style={{ fontSize: 13, fontWeight: 800, color: C.primary, margin: 0 }}>🎁 社群會員專屬回饋</p>
+            <p style={{ fontSize: 13, color: S.muted, margin: '6px 0 0', lineHeight: 1.7 }}>
+              每次在本社群購買 eSIM，結帳完成後都會自動獲得下次可用的
+              <span style={{ fontWeight: 800, color: C.primary }}>「{zheLabel(Math.round((1 - Number(membership.group.rebateRate)) * 100) / 100)} 回購券」</span>
+              ——買越多、省越多！
+            </p>
+          </div>
+        )}
+
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <button
             onClick={() => router.push(`${base}/coupons`)}
             style={{ width: '100%', background: S.white, border: `1px solid ${S.line}`, borderRadius: 14, padding: '15px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
