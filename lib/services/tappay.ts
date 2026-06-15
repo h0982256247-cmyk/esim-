@@ -1,7 +1,7 @@
 // TapPay Pay by Prime / Pay by Token API
 
-import { prisma } from '@/lib/db/prisma'
-import { safeDecrypt } from '@/lib/utils/crypto'
+// 金鑰一律經 tenant-config service 解密讀取（單一來源，route/service 不各寫一套）
+import { getPaymentConfig } from '@/lib/services/tenant-config'
 
 export interface TapPayChargeInput {
   prime: string
@@ -86,13 +86,10 @@ export function tapPayErrorMessage(status: number, msg?: string): string {
 
 async function getConfig(tenantAdminId?: string | null, gateway: string = 'tappay_credit') {
   if (tenantAdminId) {
-    const cfg = await prisma.tenantPaymentConfig.findFirst({
-      where: { adminId: tenantAdminId, gateway, isActive: true },
-    })
-    if (cfg) {
+    const cfg = await getPaymentConfig(tenantAdminId, gateway)  // partnerKey 已解密
+    if (cfg && cfg.isActive) {
       return {
-        // partnerKey 在 DB 為加密儲存；safeDecrypt 對舊明文值會原樣回傳（遷移容錯）
-        partnerKey: safeDecrypt(cfg.partnerKey),
+        partnerKey: cfg.partnerKey,
         merchantId: cfg.merchantId,
         baseUrl: cfg.env === 'production'
           ? 'https://prod.tappaysdk.com/tpc'
@@ -278,10 +275,8 @@ export async function verifyTapPayWebhook(req: Request, tenantAdminId?: string |
   const key = req.headers.get('x-api-key')
 
   if (tenantAdminId) {
-    const cfg = await prisma.tenantPaymentConfig.findFirst({
-      where: { adminId: tenantAdminId, gateway: 'tappay_credit', isActive: true },
-    })
-    if (cfg) {
+    const cfg = await getPaymentConfig(tenantAdminId, 'tappay_credit')  // partnerKey 已解密
+    if (cfg && cfg.isActive) {
       return key === cfg.partnerKey
     }
   }

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
-import { safeDecrypt } from '@/lib/utils/crypto'
 import { SESSION_COOKIE } from '@/lib/auth/session'
 import { resolveTenantAdminIdFromToken } from '@/lib/auth/resolve-tenant'
 import { getTenantBySlug } from '@/lib/services/tenant'
+import { getPaymentConfig } from '@/lib/services/tenant-config'
 
 // GET /api/liff/payment-config[?lineUid=...]
 // Returns TapPay frontend SDK config for the user's tenant.
@@ -47,14 +47,12 @@ export async function GET(req: NextRequest) {
   }
 
   if (tenantAdminId) {
-    const cfg = await prisma.tenantPaymentConfig.findFirst({
-      where: { adminId: tenantAdminId, gateway: 'tappay_credit' },
-      select: { appId: true, appKey: true, env: true },
-    })
+    // service 統一回解密值；appKey 是前端 client key，可回傳給 SDK（partnerKey 不在此回）
+    const cfg = await getPaymentConfig(tenantAdminId, 'tappay_credit')
     if (cfg?.appId && cfg?.appKey) {
       return NextResponse.json({
         appId: parseInt(cfg.appId),
-        appKey: safeDecrypt(cfg.appKey),   // decrypt before sending to frontend SDK
+        appKey: cfg.appKey,
         env: cfg.env === 'production' ? 'production' : 'sandbox',
       })
     }

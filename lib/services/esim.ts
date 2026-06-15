@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db/prisma'
 import { markOrderCompleted } from './order'
 import { notifyEsimPending } from './notification'
 import { recordAlert } from './alert'
+import { getEsimConfig } from './tenant-config'
 import { safeDecrypt } from '@/lib/utils/crypto'
 
 // ─── 世界移動 API 簽章 ────────────────────────────────────────────
@@ -27,13 +28,9 @@ function wmFetchInit(apiUrl: string, init: RequestInit): RequestInit {
 
 async function getWmConfig(tenantAdminId?: string | null) {
   if (tenantAdminId) {
-    const cfg = await prisma.tenantEsimConfig.findUnique({
-      where: { adminId: tenantAdminId },
-      select: { apiUrl: true, merchantId: true, deptId: true, token: true, isActive: true },
-    })
+    const cfg = await getEsimConfig(tenantAdminId)  // token 已解密
     if (cfg && cfg.isActive) {
-      // token 在 DB 為加密儲存；safeDecrypt 對舊明文值原樣回傳（遷移容錯）
-      return { apiUrl: cfg.apiUrl, merchantId: cfg.merchantId, deptId: cfg.deptId, token: safeDecrypt(cfg.token) }
+      return { apiUrl: cfg.apiUrl, merchantId: cfg.merchantId, deptId: cfg.deptId, token: cfg.token }
     }
   }
 
