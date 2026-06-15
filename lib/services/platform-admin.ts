@@ -229,6 +229,7 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     totalOrders,
     paidOrders,
     pendingGroups,
+    totalGroupOwners,
     pendingCommissions,
     esimPendingOrders,
     margin,
@@ -241,6 +242,8 @@ export async function getDashboardStats(tenantAdminId: string | null) {
       _sum: { totalPaid: true },
     }),
     prisma.group.count({ where: pendingGroupsWhere }),
+    // 社群主人數 = 已核准(APPROVED)的社群數（一社群一主）
+    prisma.group.count({ where: { status: 'APPROVED', ...(tenantAdminId != null ? { tenantAdminId } : {}) } }),
     prisma.commission.aggregate({
       where: {
         status: 'PENDING',
@@ -303,6 +306,7 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     totalOrders,
     totalRevenue: paidOrders._sum.totalPaid ?? 0,
     pendingGroups,
+    totalGroupOwners,
     pendingCommissions: pendingCommissions._sum.commissionAmount ?? 0,
     esimPendingOrders,
     monthlyRevenue,
