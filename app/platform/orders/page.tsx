@@ -121,7 +121,7 @@ function OrdersContent() {
               {orders.map(o=>{
                 const s=STATUS[o.status]??{text:o.status,cls:'bg-gray-100 text-gray-500'}
                 return (
-                  <tr key={o.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={o.id} onClick={()=>router.push(`/platform/orders/${o.id}`)} className="hover:bg-gray-50 transition-colors cursor-pointer">
                     <td className="px-5 py-3.5">
                       <p className="font-mono text-xs font-semibold text-gray-700">{o.orderNumber??`#${o.id.slice(-8).toUpperCase()}`}</p>
                       <p className="text-xs text-gray-600 mt-0.5">
@@ -146,7 +146,7 @@ function OrdersContent() {
                       {o.retryCount>0&&<span className="block text-xs text-gray-400 mt-0.5">重試 {o.retryCount} 次</span>}
                     </td>
                     <td className="px-5 py-3.5 text-xs text-gray-400">{new Date(o.createdAt).toLocaleDateString('zh-TW')}</td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-3.5" onClick={e=>e.stopPropagation()}>
                       <div className="flex gap-1.5">
                         {(o.status==='PAID'||o.status==='ESIM_PENDING')&&(
                           <button onClick={()=>handleRetry(o.id)} disabled={actionLoading===o.id} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">補發</button>

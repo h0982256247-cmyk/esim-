@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
+import { safeDecrypt } from '@/lib/utils/crypto'
 import { retryEsimActivation } from '@/lib/services/esim'
 import { cancelCommission } from '@/lib/services/commission'
 import { restoreCouponsForRefundedOrder } from '@/lib/services/coupon'
@@ -36,7 +37,31 @@ export async function GET(req: NextRequest, { params }: Params) {
   })
 
   if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
-  return NextResponse.json({ order })
+
+  // 同捆訂單（多張 eSIM 一次購買 = 共用 bundleId 的多筆訂單）：列出其他張供切換查看。
+  const siblings = order.bundleId
+    ? await prisma.order.findMany({
+        where: { bundleId: order.bundleId, id: { not: order.id }, ...tenantWhere },
+        select: {
+          id: true, orderNumber: true, status: true,
+          orderItems: { select: { productName: true }, take: 1 },
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+    : []
+
+  // 客戶聯絡資訊在 DB 加密；後台撥款/客服需要看明文，解密後回傳（safeDecrypt 相容舊明文）。
+  return NextResponse.json({
+    order: {
+      ...order,
+      user: {
+        ...order.user,
+        phone: order.user.phone ? safeDecrypt(order.user.phone) : null,
+        email: order.user.email ? safeDecrypt(order.user.email) : null,
+      },
+    },
+    siblings,
+  })
 }
 
 // PATCH /api/platform/orders/:id  — action: retry_esim | refund
