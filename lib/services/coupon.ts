@@ -52,7 +52,7 @@ export async function issueRepurchaseCouponForOrder(orderId: string): Promise<vo
       isOfficial: false,
       sourceGroupId: member.group.id,
       sourceOrderId: orderId,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 天
+      expiresAt: null, // 回購券無使用期限
     },
   })
 }
