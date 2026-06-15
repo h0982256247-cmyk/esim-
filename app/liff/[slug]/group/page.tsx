@@ -80,6 +80,15 @@ export default function GroupPage() {
   const [joinedInfo, setJoinedInfo] = useState<{ groupName: string; couponDiscount: number | null } | null>(null)
 
   const [sharing, setSharing] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  // 邀請連結單一來源：永久連結（liff.line.me）才會在 LINE 內開啟，一般 https 會被外部瀏覽器接走。
+  const buildInviteUrl = async () => {
+    if (!ownedGroup) return ''
+    const fullUrl = `${window.location.origin}${base}/group?invite=${ownedGroup.inviteCode}`
+    try { if (liff) return await liff.permanentLink.createUrlBy(fullUrl) } catch {}
+    return fullUrl
+  }
 
   // 一鍵邀請：用 LINE shareTargetPicker 分享含邀請碼的卡片；點開連結回到本頁並預填邀請碼。
   const handleInvite = async () => {
@@ -90,30 +99,39 @@ export default function GroupPage() {
     }
     setSharing(true)
     try {
-      const fullUrl = `${window.location.origin}${base}/group?invite=${ownedGroup.inviteCode}`
-      let inviteUrl = fullUrl
-      try { inviteUrl = await liff.permanentLink.createUrlBy(fullUrl) } catch {}
+      const inviteUrl = await buildInviteUrl()
       const brandName = tenant?.brandName ?? 'eSIM'
       const flex = {
         type: 'flex' as const,
         altText: `邀請你加入「${ownedGroup.name}」社群`,
         contents: {
           type: 'bubble' as const,
-          body: {
-            type: 'box' as const, layout: 'vertical' as const, spacing: 'md',
+          header: {
+            type: 'box' as const, layout: 'vertical' as const, backgroundColor: C.primary, paddingAll: '20px' as const, spacing: 'xs',
             contents: [
-              { type: 'text' as const, text: `邀請你加入「${brandName}」社群`, weight: 'bold' as const, size: 'lg' as const, color: '#1a1a1a', wrap: true },
-              { type: 'text' as const, text: ownedGroup.name, size: 'md' as const, weight: 'bold' as const, wrap: true, color: C.primary },
-              { type: 'text' as const, text: '加入後即可獲得入群優惠券，一起買 eSIM 更划算！', size: 'sm' as const, color: '#475569', wrap: true },
-              { type: 'separator' as const, margin: 'md' as const },
-              { type: 'text' as const, text: `邀請碼：${ownedGroup.inviteCode}`, size: 'sm' as const, weight: 'bold' as const, color: '#1a1a1a', wrap: true },
+              { type: 'text' as const, text: brandName, size: 'sm' as const, weight: 'bold' as const, color: C.onPrimary },
+              { type: 'text' as const, text: '邀請你加入社群', size: 'xl' as const, weight: 'bold' as const, color: C.onPrimary, wrap: true },
+            ],
+          },
+          body: {
+            type: 'box' as const, layout: 'vertical' as const, spacing: 'md', paddingAll: '20px' as const,
+            contents: [
+              { type: 'text' as const, text: ownedGroup.name, size: 'lg' as const, weight: 'bold' as const, color: '#1a1a1a', wrap: true },
+              { type: 'text' as const, text: '加入後即可獲得入群優惠券，一起買 eSIM 更划算！', size: 'sm' as const, color: '#64748b', wrap: true },
+              {
+                type: 'box' as const, layout: 'vertical' as const, margin: 'md' as const, paddingAll: '14px' as const, cornerRadius: '12px' as const, backgroundColor: '#f8fafc', spacing: 'xs',
+                contents: [
+                  { type: 'text' as const, text: '邀請碼', size: 'xs' as const, color: '#94a3b8', align: 'center' as const },
+                  { type: 'text' as const, text: ownedGroup.inviteCode, size: 'xxl' as const, weight: 'bold' as const, color: '#1a1a1a', align: 'center' as const },
+                ],
+              },
             ],
           },
           footer: {
-            type: 'box' as const, layout: 'vertical' as const, spacing: 'sm',
+            type: 'box' as const, layout: 'vertical' as const, paddingAll: '16px' as const,
             contents: [
-              { type: 'button' as const, style: 'primary' as const, color: C.primary,
-                action: { type: 'uri' as const, label: '加入社群', uri: inviteUrl } },
+              { type: 'button' as const, style: 'primary' as const, color: C.primary, height: 'md' as const,
+                action: { type: 'uri' as const, label: '立即加入', uri: inviteUrl } },
             ],
           },
         },
@@ -123,6 +141,19 @@ export default function GroupPage() {
       window.alert(err instanceof Error ? err.message : '分享失敗')
     }
     setSharing(false)
+  }
+
+  // 複製邀請連結：給想用其他管道（IG / 簡訊 / 其他群組）轉發的社群主。
+  const copyInviteLink = async () => {
+    if (!ownedGroup) return
+    const inviteUrl = await buildInviteUrl()
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      window.prompt('複製這個邀請連結分享給朋友：', inviteUrl)
+    }
   }
 
   const reload = async () => {
@@ -224,22 +255,37 @@ export default function GroupPage() {
             </div>
 
             {/* 邀請碼 + 一鍵邀請 */}
-            <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-              <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 6px' }}>邀請碼</p>
-              <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 26, fontWeight: 800, color: S.ink, letterSpacing: '0.2em', margin: '0 0 12px' }}>
-                {ownedGroup.inviteCode}
-              </p>
-              <button
-                onClick={handleInvite}
-                disabled={sharing}
-                style={{
-                  width: '100%', border: 'none', borderRadius: 100, padding: '13px',
-                  fontSize: 14, fontWeight: 800, cursor: sharing ? 'not-allowed' : 'pointer',
-                  background: C.primary, color: C.onPrimary, opacity: sharing ? 0.6 : 1,
-                }}
-              >
-                {sharing ? '開啟分享…' : '分享好友'}
-              </button>
+            <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 10px' }}>邀請碼</p>
+              {/* 票券式邀請碼 */}
+              <div style={{ background: C.light, border: `1.5px dashed ${C.border}`, borderRadius: 12, padding: '15px 14px', textAlign: 'center', marginBottom: 14 }}>
+                <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 28, fontWeight: 800, color: C.primary, letterSpacing: '0.22em', margin: 0 }}>
+                  {ownedGroup.inviteCode}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={handleInvite}
+                  disabled={sharing}
+                  style={{
+                    flex: 1, border: 'none', borderRadius: 100, padding: '13px',
+                    fontSize: 14, fontWeight: 800, cursor: sharing ? 'not-allowed' : 'pointer',
+                    background: C.primary, color: C.onPrimary, opacity: sharing ? 0.6 : 1,
+                  }}
+                >
+                  {sharing ? '開啟分享…' : '分享好友'}
+                </button>
+                <button
+                  onClick={copyInviteLink}
+                  style={{
+                    flexShrink: 0, borderRadius: 100, padding: '13px 18px',
+                    fontSize: 14, fontWeight: 800, cursor: 'pointer',
+                    background: S.white, color: C.primary, border: `1.5px solid ${C.border}`,
+                  }}
+                >
+                  {copied ? '已複製' : '複製連結'}
+                </button>
+              </div>
             </div>
 
             {/* 社群成員名單 */}
@@ -369,18 +415,42 @@ export default function GroupPage() {
 
   // ── 未加入 ──
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto', padding: '28px 16px 96px' }}>
+    <div style={{ maxWidth: 480, margin: '0 auto', padding: '40px 20px 96px' }}>
       {joinedPopup}
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: '0 0 8px', letterSpacing: '-0.02em' }}>加入社群</h1>
-      <p style={{ fontSize: 13, color: S.faint, margin: '0 0 20px', lineHeight: 1.6 }}>輸入朋友給你的邀請碼，加入後即可獲得入群優惠券。</p>
+      <style>{`.invite-code-input::placeholder{letter-spacing:normal;font-weight:600;color:${S.faint};}.invite-code-input:focus{border-color:${C.primary}!important;box-shadow:0 0 0 3px ${C.light};}`}</style>
 
+      {/* hero */}
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div style={{ width: 72, height: 72, borderRadius: 20, background: C.light, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19" />
+            <circle cx="10" cy="8" r="3.2" />
+            <path d="M20 19v-1.4a3.5 3.5 0 0 0-2.7-3.4" />
+            <path d="M15.6 5.2a3.2 3.2 0 0 1 0 6.1" />
+          </svg>
+        </div>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: '0 0 8px', letterSpacing: '-0.02em' }}>加入社群</h1>
+        <p style={{ fontSize: 14, color: S.muted, margin: 0, lineHeight: 1.65 }}>輸入朋友給你的邀請碼，<br />加入後立即獲得專屬入群優惠券。</p>
+      </div>
+
+      {/* 入群回饋提示 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.light, border: `1px solid ${C.border}`, borderRadius: 14, padding: '13px 16px', marginBottom: 20 }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+          <path d="M3 9.5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v.4a1.9 1.9 0 0 0 0 3.7v.4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-.4a1.9 1.9 0 0 0 0-3.7v-.4Z" />
+          <path d="M14 7.5v9" strokeDasharray="2 2.4" />
+        </svg>
+        <p style={{ fontSize: 13, color: C.primary, fontWeight: 700, margin: 0, lineHeight: 1.45 }}>成功加入即享入群折扣券，買 eSIM 更省。</p>
+      </div>
+
+      {/* 填寫邀請碼 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <input
+          className="invite-code-input"
           value={inviteCode}
           onChange={e => setInviteCode(e.target.value.toUpperCase())}
           placeholder="輸入邀請碼"
           maxLength={8}
-          style={{ ...inputStyle, fontFamily: 'ui-monospace, monospace', fontSize: 24, fontWeight: 800, letterSpacing: '0.2em', textAlign: 'center' }}
+          style={{ ...inputStyle, fontFamily: 'ui-monospace, monospace', fontSize: 24, fontWeight: 800, letterSpacing: '0.2em', textAlign: 'center', padding: '16px', transition: 'border-color 0.15s, box-shadow 0.15s' }}
         />
         {joinMsg && (
           <div style={{ background: joinMsg.ok ? '#dcfce7' : '#fee2e2', borderRadius: 12, padding: '12px 16px' }}>
