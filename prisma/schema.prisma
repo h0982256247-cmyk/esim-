@@ -62,8 +62,8 @@ model Group {
   bankAccount String?     @map("bank_account") // 加密儲存
   bankBranch  String?     @map("bank_branch")
   bankHolderName String?  @map("bank_holder_name")
-  activityCouponQuota Int @default(4) @map("activity_coupon_quota") // 本月活動券「剩餘」次數（發一次扣 1）
-  monthlyCouponQuota  Int @default(4) @map("monthly_coupon_quota")  // 每月上限（可由平台調整），每月 1 號把剩餘重設為此值
+  activityCouponQuota Int @default(1) @map("activity_coupon_quota") // 本月活動券「剩餘」次數（發一次扣 1）
+  monthlyCouponQuota  Int @default(1) @map("monthly_coupon_quota")  // 每月上限（可由平台調整），每月 1 號把剩餘重設為此值；預設 1
   quotaResetAt DateTime?  @map("quota_reset_at")
   tenantAdminId String?   @map("tenant_admin_id")
   approvedAt  DateTime?   @map("approved_at")
