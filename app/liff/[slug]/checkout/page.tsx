@@ -1181,6 +1181,12 @@ function CheckoutContent() {
         padding: '14px 20px',
         paddingBottom: 'calc(14px + env(safe-area-inset-bottom))',
       }}>
+        {profileComplete === false && (
+          <div style={{ maxWidth: 520, margin: '0 auto 10px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 12, padding: '10px 14px' }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#9a3412', margin: 0 }}>⚠️ 請先完成基本資料才能付款</p>
+            <p style={{ fontSize: 12, color: '#c2410c', margin: '2px 0 0', lineHeight: 1.5 }}>付款與 eSIM 開卡需要你的姓名／電話／Email，點下方按鈕前往填寫。</p>
+          </div>
+        )}
         <div style={{ maxWidth: 520, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 16 }}>
           <div>
             {discount > 0 && (
