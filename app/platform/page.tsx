@@ -105,15 +105,25 @@ export default function PlatformDashboard() {
   const router = useRouter()
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     fetch('/api/platform/dashboard')
-      .then(r => {
-        if (r.status === 401) { router.replace('/platform/login'); return null }
-        return r.json()
+      .then(async r => {
+        if (r.status === 401) { router.replace('/platform/login'); return }
+        if (!r.ok) {
+          // 後端 500 等錯誤時不要靜默變空白：把訊息顯示出來、可重試。
+          let msg = `伺服器回應錯誤（${r.status}）`
+          try { const e = await r.json(); if (e?.error) msg = e.error } catch { /* 非 JSON 回應 */ }
+          throw new Error(msg)
+        }
+        const d = await r.json()
+        if (!cancelled) setStats(d)
       })
-      .then(d => { if (d) setStats(d) })
-      .finally(() => setLoading(false))
+      .catch(() => { if (!cancelled) setError('儀表板載入失敗，請重新整理；若持續發生請重新登入。') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [router])
 
   if (loading) {
@@ -122,6 +132,26 @@ export default function PlatformDashboard() {
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-gray-400">載入中…</p>
+        </div>
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="bg-white border border-red-100 rounded-2xl shadow-sm p-6 max-w-sm w-full text-center">
+          <div className="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
+            <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </div>
+          <p className="text-sm text-gray-700">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition"
+          >
+            重新整理
+          </button>
         </div>
       </div>
     )
