@@ -166,9 +166,10 @@ export async function POST(req: NextRequest) {
       order.userId,
       `eSIM 組合 (${paidOrderIds.length} 張)`,
       totalAggregate._sum.totalPaid ?? order.totalPaid,
+      tenantAdminId,
     ).catch(() => {})
   } else {
-    notifyOrderPaid(order.userId, productName, order.totalPaid).catch(() => {})
+    notifyOrderPaid(order.userId, productName, order.totalPaid, tenantAdminId).catch(() => {})
   }
 
   return NextResponse.json({ message: 'ok' })

@@ -260,7 +260,7 @@ export async function POST(req: NextRequest) {
       fireAndLog('calculateAndSaveCommission', o.id, calculateAndSaveCommission(o.id))
       fireAndLog('issueRepurchaseCouponForOrder', o.id, issueRepurchaseCouponForOrder(o.id))
     }
-    fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, detailsLabel, amount))
+    fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, detailsLabel, amount, user.tenantAdminId))
     return NextResponse.json({ ok: true, bundleId, orderIds: orders.map(o => o.id) })
   }
 
@@ -268,7 +268,7 @@ export async function POST(req: NextRequest) {
   fireAndLog('triggerEsimActivation', anchor.id, triggerEsimActivation(anchor.id))
   fireAndLog('calculateAndSaveCommission', anchor.id, calculateAndSaveCommission(anchor.id))
   fireAndLog('issueRepurchaseCouponForOrder', anchor.id, issueRepurchaseCouponForOrder(anchor.id))
-  fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, detailsLabel, amount))
+  fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, detailsLabel, amount, user.tenantAdminId))
 
   return NextResponse.json({ ok: true, orderId: anchor.id })
 }

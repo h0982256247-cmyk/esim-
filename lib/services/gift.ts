@@ -147,7 +147,7 @@ export async function claimGift(token: string, recipientId: string): Promise<Cla
       select: {
         id: true, orderId: true, fromUserId: true,
         claimedAt: true, cancelledAt: true, expiresAt: true,
-        order: { select: { id: true, status: true, currentOwnerId: true, userId: true, redeemedAt: true, activatedAt: true } },
+        order: { select: { id: true, status: true, currentOwnerId: true, userId: true, redeemedAt: true, activatedAt: true, user: { select: { tenantAdminId: true } } } },
       },
     })
 
@@ -188,6 +188,7 @@ export async function claimGift(token: string, recipientId: string): Promise<Cla
       gift.fromUserId,
       recipientUser?.displayName ?? '對方',
       item?.productName ?? 'eSIM',
+      gift.order.user?.tenantAdminId ?? null,
     ).catch(() => {})
 
     return { ok: true, orderId: gift.orderId }

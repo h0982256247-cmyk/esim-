@@ -10,8 +10,12 @@ export interface SessionPayload extends JWTPayload {
 }
 
 function getSecret() {
-  const secret = process.env.LINE_CHANNEL_SECRET
-  if (!secret) throw new Error('LINE_CHANNEL_SECRET is not set')
+  // 網站 session 簽章金鑰：與「LINE Login Channel Secret」是兩回事，故用獨立的
+  // SESSION_SECRET。為相容既有部署，未設定 SESSION_SECRET 時退回舊的
+  // LINE_CHANNEL_SECRET（沿用同一把金鑰 → 現有登入 session 不會失效）。
+  // 待 Vercel 設好 SESSION_SECRET（值沿用原 LINE_CHANNEL_SECRET）後即可移除 fallback。
+  const secret = process.env.SESSION_SECRET ?? process.env.LINE_CHANNEL_SECRET
+  if (!secret) throw new Error('SESSION_SECRET (or legacy LINE_CHANNEL_SECRET) is not set')
   return new TextEncoder().encode(secret)
 }
 

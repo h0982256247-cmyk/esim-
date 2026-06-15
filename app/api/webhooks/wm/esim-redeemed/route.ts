@@ -35,6 +35,13 @@ export async function POST(req: NextRequest) {
     select: {
       id: true, userId: true, esimQrcode: true,
       orderItems: { select: { productName: true } },
+      user: {
+        select: {
+          tenantAdminId: true,
+          groupMembership: { select: { group: { select: { tenantAdminId: true } } } },
+          ownedGroup: { select: { tenantAdminId: true } },
+        },
+      },
     },
   })
   if (!order) {
@@ -68,9 +75,13 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  // 推 LINE 通知：QR 可以用了
+  // 推 LINE 通知：QR 可以用了（用該訂單所屬租戶的 LINE OA）
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
-  notifyEsimReady(order.userId, productName).catch(() => {})
+  const tenantAdminId = order.user?.tenantAdminId
+    ?? order.user?.groupMembership?.group?.tenantAdminId
+    ?? order.user?.ownedGroup?.tenantAdminId
+    ?? null
+  notifyEsimReady(order.userId, productName, tenantAdminId).catch(() => {})
 
   return new NextResponse('1', { status: 200 })
 }

@@ -102,36 +102,40 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
 
 // ─── 常用通知捷徑 ─────────────────────────────────────────────────
 
-export async function notifyOrderPaid(userId: string, productName: string, amount: number) {
+export async function notifyOrderPaid(userId: string, productName: string, amount: number, tenantAdminId?: string | null) {
   await sendNotification({
     userId,
     type: NotificationType.ORDER_PAID,
     data: { productName, amount: String(amount) },
+    tenantAdminId,
   })
 }
 
-export async function notifyEsimReady(userId: string, productName: string) {
+export async function notifyEsimReady(userId: string, productName: string, tenantAdminId?: string | null) {
   await sendNotification({
     userId,
     type: NotificationType.ORDER_ESIM_READY,
     data: { productName },
+    tenantAdminId,
   })
 }
 
-export async function notifyEsimPending(userId: string, productName: string) {
+export async function notifyEsimPending(userId: string, productName: string, tenantAdminId?: string | null) {
   await sendNotification({
     userId,
     type: NotificationType.ORDER_ESIM_PENDING,
     data: { productName },
+    tenantAdminId,
   })
 }
 
-export async function notifyCouponIssued(userId: string, discount: number, typeName: string) {
+export async function notifyCouponIssued(userId: string, discount: number, typeName: string, tenantAdminId?: string | null) {
   const pct = Math.round((1 - discount) * 100)
   await sendNotification({
     userId,
     type: NotificationType.COUPON_ISSUED,
     data: { discount: `${pct}% OFF`, typeName },
+    tenantAdminId,
   })
 }
 
@@ -153,18 +157,20 @@ export async function notifyGroupRejected(userId: string, groupName: string, ten
   })
 }
 
-export async function notifyGiftClaimed(senderUserId: string, recipientName: string, productName: string) {
+export async function notifyGiftClaimed(senderUserId: string, recipientName: string, productName: string, tenantAdminId?: string | null) {
   await sendNotification({
     userId: senderUserId,
     type: NotificationType.GIFT_CLAIMED,
     data: { recipientName, productName },
+    tenantAdminId,
   })
 }
 
-export async function notifyCommissionSettled(userId: string, period: string, amount: number) {
+export async function notifyCommissionSettled(userId: string, period: string, amount: number, tenantAdminId?: string | null) {
   await sendNotification({
     userId,
     type: NotificationType.COMMISSION_SETTLED,
     data: { period, amount: String(amount) },
+    tenantAdminId,
   })
 }
