@@ -1,6 +1,7 @@
 // TapPay Pay by Prime / Pay by Token API
 
 import { prisma } from '@/lib/db/prisma'
+import { safeDecrypt } from '@/lib/utils/crypto'
 
 export interface TapPayChargeInput {
   prime: string
@@ -90,7 +91,8 @@ async function getConfig(tenantAdminId?: string | null, gateway: string = 'tappa
     })
     if (cfg) {
       return {
-        partnerKey: cfg.partnerKey,
+        // partnerKey 在 DB 為加密儲存；safeDecrypt 對舊明文值會原樣回傳（遷移容錯）
+        partnerKey: safeDecrypt(cfg.partnerKey),
         merchantId: cfg.merchantId,
         baseUrl: cfg.env === 'production'
           ? 'https://prod.tappaysdk.com/tpc'

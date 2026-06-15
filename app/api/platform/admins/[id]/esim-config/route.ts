@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
+import { encrypt, safeDecrypt } from '@/lib/utils/crypto'
 import { PlatformAdminRole } from '@prisma/client'
 
 type Params = { params: Promise<{ id: string }> }
@@ -26,7 +27,8 @@ export async function GET(req: NextRequest, { params }: Params) {
       apiUrl: cfg.apiUrl,
       merchantId: cfg.merchantId,
       deptId: cfg.deptId,
-      token: maskToken(cfg.token),
+      // 後台只回遮罩值（先 safeDecrypt 還原再遮罩）；完整 token 永不回傳
+      token: maskToken(safeDecrypt(cfg.token)),
       isActive: cfg.isActive,
       updatedAt: cfg.updatedAt,
     },
@@ -48,17 +50,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: '請填寫所有必要欄位' }, { status: 400 })
   }
 
-  // If token is masked (starts with ****), keep existing token
-  let finalToken = token
+  // token（機密）：新值 → 加密；遮罩值 → 沿用現有並正規化成加密（encrypt(safeDecrypt(...))
+  // 對舊明文值也一併遷移成加密、且不會把已加密值重複加密）
+  const existingRow = await prisma.tenantEsimConfig.findUnique({ where: { adminId: id } })
+  let finalToken: string
   if (token.startsWith('****')) {
-    const existing = await prisma.tenantEsimConfig.findUnique({ where: { adminId: id } })
-    if (!existing) return NextResponse.json({ error: 'Token 不可為遮罩值（請輸入完整 token）' }, { status: 400 })
-    finalToken = existing.token
+    if (!existingRow) return NextResponse.json({ error: 'Token 不可為遮罩值（請輸入完整 token）' }, { status: 400 })
+    finalToken = encrypt(safeDecrypt(existingRow.token))
+  } else {
+    finalToken = encrypt(token)
   }
 
   try {
     // 拆 upsert：適配 @prisma/adapter-pg
-    const existingRow = await prisma.tenantEsimConfig.findUnique({ where: { adminId: id } })
     if (existingRow) {
       await prisma.tenantEsimConfig.update({
         where: { adminId: id },

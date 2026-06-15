@@ -32,7 +32,8 @@ async function getWmConfig(tenantAdminId?: string | null) {
       select: { apiUrl: true, merchantId: true, deptId: true, token: true, isActive: true },
     })
     if (cfg && cfg.isActive) {
-      return { apiUrl: cfg.apiUrl, merchantId: cfg.merchantId, deptId: cfg.deptId, token: cfg.token }
+      // token 在 DB 為加密儲存；safeDecrypt 對舊明文值原樣回傳（遷移容錯）
+      return { apiUrl: cfg.apiUrl, merchantId: cfg.merchantId, deptId: cfg.deptId, token: safeDecrypt(cfg.token) }
     }
   }
 
