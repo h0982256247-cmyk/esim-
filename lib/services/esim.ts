@@ -32,6 +32,9 @@ async function getWmConfig(tenantAdminId?: string | null) {
     if (cfg && cfg.isActive) {
       return { apiUrl: cfg.apiUrl, merchantId: cfg.merchantId, deptId: cfg.deptId, token: cfg.token }
     }
+    // 指定了租戶卻查無啟用設定 → 明確報錯，不退回平台全域 env（避免漏設定的白牌
+    // 靜默用平台的世界移動帳號發卡）。env fallback 只給「無租戶」的單租戶/開發情境。
+    throw new Error('此商店尚未設定 eSIM 供應商（世界移動），請至後台「eSIM 設定」填寫')
   }
 
   const apiUrl = process.env.NODE_ENV === 'production'

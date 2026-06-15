@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
   if (!tenantAdminId) {
     const lineUid = req.nextUrl.searchParams.get('lineUid')
     if (lineUid) {
-      const user = await prisma.user.findUnique({
+      // lineUid 已非全域唯一（多租戶複合唯一），此處為無 session 的兜底，取第一筆即可。
+      const user = await prisma.user.findFirst({
         where: { lineUid },
         select: { tenantAdminId: true },
       })

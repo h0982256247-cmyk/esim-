@@ -15,7 +15,7 @@ datasource db {
 
 model User {
   id          String   @id @default(cuid())
-  lineUid     String   @unique @map("line_uid")
+  lineUid     String   @map("line_uid")
   displayName   String   @map("display_name")
   realName      String?  @map("real_name")
   phone         String?  // 加密儲存
@@ -38,6 +38,9 @@ model User {
   notifications   Notification[]
   savedCard       SavedCard?
 
+  // 多租戶隔離：同一 LINE 用戶在不同白牌＝不同會員（各自購物車/券/訂單）。
+  // 每個白牌有各自 LINE Login channel，sub 通常已不同；複合唯一再保險一層。
+  @@unique([tenantAdminId, lineUid])
   @@map("users")
 }
 

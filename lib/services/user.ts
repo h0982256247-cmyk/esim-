@@ -11,9 +11,17 @@ export interface UpdateProfileInput {
 }
 
 export async function findOrCreateUser(lineInfo: LineUserInfo, tenantAdminId?: string) {
-  const existing = await prisma.user.findUnique({
-    where: { lineUid: lineInfo.sub },
+  // 多租戶：同一 lineUid 在不同白牌＝不同 User，查詢必須帶租戶範圍。
+  let existing = await prisma.user.findFirst({
+    where: { lineUid: lineInfo.sub, ...(tenantAdminId ? { tenantAdminId } : {}) },
   })
+  // 相容遷移：舊資料可能 tenantAdminId 為 null，首次帶租戶登入時認領它（補上租戶），
+  // 不另開新列。下方 update 會把 tenantAdminId 寫進去。
+  if (!existing && tenantAdminId) {
+    existing = await prisma.user.findFirst({
+      where: { lineUid: lineInfo.sub, tenantAdminId: null },
+    })
+  }
 
   if (existing) {
     const updated = await prisma.user.update({

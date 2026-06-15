@@ -96,6 +96,9 @@ async function getConfig(tenantAdminId?: string | null, gateway: string = 'tappa
           : 'https://sandbox.tappaysdk.com/tpc',
       }
     }
+    // 指定了租戶卻查無啟用設定 → 明確報錯，不退回平台全域 env（避免漏設定的白牌
+    // 靜默用平台帳號收款）。env fallback 只給「無租戶」的單租戶/開發情境。
+    throw new Error(`此商店尚未設定${gateway === 'tappay_linepay' ? 'LINE Pay' : '信用卡'}金流，請至後台「金流設定」填寫後再付款`)
   }
 
   const partnerKey = process.env.TAPPAY_PARTNER_KEY
