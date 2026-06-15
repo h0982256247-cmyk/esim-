@@ -26,6 +26,7 @@ export async function applyGroup(input: ApplyGroupInput) {
       description: input.description,
       type: input.type,
       status: GroupStatus.PENDING,
+      rebateRate: 0.20,   // 預設讓利 20% → 會員回購券 8 折；社群主之後可在設定調整(0~30%)
       inviteCode: randomBytes(4).toString('hex').toUpperCase(),
       tenantAdminId: input.tenantAdminId ?? null,
     },
@@ -63,6 +64,7 @@ export async function promoteUserToOwner(input: PromoteUserToOwnerInput) {
       description: input.description,
       status: GroupStatus.APPROVED,
       approvedAt: new Date(),
+      rebateRate: 0.20,   // 預設讓利 20% → 會員回購券 8 折；社群主之後可在設定調整(0~30%)
       inviteCode: randomBytes(4).toString('hex').toUpperCase(),
       tenantAdminId: input.tenantAdminId ?? null,
     },
