@@ -146,6 +146,9 @@ export default function GroupAdminSettingsPage() {
             />
           </div>
         ))}
+        <p className="text-xs text-gray-400 leading-relaxed">
+          🔒 帳號為機密資料，這裡只顯示末 4 碼；完整帳號僅平台方在撥款時可見。要更改請直接輸入新的完整帳號後儲存。
+        </p>
       </div>
 
       {msg && <p className="text-sm text-center">{msg}</p>}

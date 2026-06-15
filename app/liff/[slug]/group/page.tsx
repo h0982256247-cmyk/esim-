@@ -61,7 +61,6 @@ export default function GroupPage() {
   const [ownedGroup, setOwnedGroup] = useState<GroupInfo | null>(null)
   const [membership, setMembership] = useState<Membership | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'join' | 'apply'>('join')
 
   // 被邀請連結帶 ?invite=CODE 進來時預填邀請碼（lazy init 避免在 effect 內同步 setState）。
   const [inviteCode, setInviteCode] = useState(() =>
@@ -71,11 +70,6 @@ export default function GroupPage() {
   )
   const [joinMsg, setJoinMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [joining, setJoining] = useState(false)
-
-  const [applyName, setApplyName] = useState('')
-  const [applyDesc, setApplyDesc] = useState('')
-  const [applying, setApplying] = useState(false)
-  const [applyMsg, setApplyMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const [leaving, setLeaving] = useState(false)
   const [sharing, setSharing] = useState(false)
@@ -158,18 +152,6 @@ export default function GroupPage() {
     setJoining(false)
     if (r.ok) { setJoinMsg({ ok: true, text: `已加入「${r.groupName}」，入群券已發放` }); reload() }
     else setJoinMsg({ ok: false, text: r.error })
-  }
-
-  const handleApply = async () => {
-    if (!applyName.trim()) return
-    setApplying(true); setApplyMsg(null)
-    const r = await fetch('/api/groups', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: applyName, description: applyDesc }),
-    }).then(x => x.json())
-    setApplying(false)
-    if (r.group) { setApplyMsg({ ok: true, text: '申請已送出，審核通過後即可使用' }); setOwnedGroup(r.group) }
-    else setApplyMsg({ ok: false, text: r.error })
   }
 
   if (loading) return <PageSkeleton rows={4} />
@@ -335,60 +317,26 @@ export default function GroupPage() {
   // ── 未加入 ──
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '28px 16px 96px' }}>
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: '0 0 20px', letterSpacing: '-0.02em' }}>社群</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: '0 0 8px', letterSpacing: '-0.02em' }}>加入社群</h1>
+      <p style={{ fontSize: 13, color: S.faint, margin: '0 0 20px', lineHeight: 1.6 }}>輸入朋友給你的邀請碼，加入後即可獲得入群優惠券。</p>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 12, padding: 4, marginBottom: 20, gap: 4 }}>
-        {(['join', 'apply'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            flex: 1, padding: '9px 0', borderRadius: 9, fontSize: 13, fontWeight: 600,
-            border: 'none', cursor: 'pointer', transition: 'all 0.15s',
-            background: tab === t ? S.white : 'transparent',
-            color: tab === t ? S.ink : S.faint,
-            boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-          }}>
-            {t === 'join' ? '加入社群' : '申請社群主'}
-          </button>
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <input
+          value={inviteCode}
+          onChange={e => setInviteCode(e.target.value.toUpperCase())}
+          placeholder="輸入邀請碼"
+          maxLength={8}
+          style={{ ...inputStyle, fontFamily: 'ui-monospace, monospace', fontSize: 24, fontWeight: 800, letterSpacing: '0.2em', textAlign: 'center' }}
+        />
+        {joinMsg && (
+          <div style={{ background: joinMsg.ok ? '#dcfce7' : '#fee2e2', borderRadius: 12, padding: '12px 16px' }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: joinMsg.ok ? '#15803d' : '#b91c1c', margin: 0 }}>{joinMsg.text}</p>
+          </div>
+        )}
+        <button onClick={handleJoin} disabled={!inviteCode.trim() || joining} style={btnEnabled(!!(inviteCode.trim() && !joining))}>
+          {joining ? '加入中…' : '加入社群'}
+        </button>
       </div>
-
-      {tab === 'join' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ fontSize: 13, color: S.faint, margin: 0 }}>輸入邀請碼，加入後即獲得入群優惠券。</p>
-          <input
-            value={inviteCode}
-            onChange={e => setInviteCode(e.target.value.toUpperCase())}
-            placeholder="輸入邀請碼"
-            maxLength={8}
-            style={{ ...inputStyle, fontFamily: 'ui-monospace, monospace', fontSize: 24, fontWeight: 800, letterSpacing: '0.2em', textAlign: 'center' }}
-          />
-          {joinMsg && (
-            <div style={{ background: joinMsg.ok ? '#dcfce7' : '#fee2e2', borderRadius: 12, padding: '12px 16px' }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: joinMsg.ok ? '#15803d' : '#b91c1c', margin: 0 }}>{joinMsg.text}</p>
-            </div>
-          )}
-          <button onClick={handleJoin} disabled={!inviteCode.trim() || joining} style={btnEnabled(!!(inviteCode.trim() && !joining))}>
-            {joining ? '加入中…' : '加入社群'}
-          </button>
-        </div>
-      )}
-
-      {tab === 'apply' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ fontSize: 13, color: S.faint, margin: 0 }}>申請成為社群主，管理成員並享有分潤收益。</p>
-          <input value={applyName} onChange={e => setApplyName(e.target.value)} placeholder="社群名稱 *" style={inputStyle} />
-          <textarea value={applyDesc} onChange={e => setApplyDesc(e.target.value)} placeholder="社群簡介（選填）" rows={3}
-            style={{ ...inputStyle, resize: 'none' }} />
-          {applyMsg && (
-            <div style={{ background: applyMsg.ok ? '#dcfce7' : '#fee2e2', borderRadius: 12, padding: '12px 16px' }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: applyMsg.ok ? '#15803d' : '#b91c1c', margin: 0 }}>{applyMsg.text}</p>
-            </div>
-          )}
-          <button onClick={handleApply} disabled={!applyName.trim() || applying} style={btnEnabled(!!(applyName.trim() && !applying))}>
-            {applying ? '送出中…' : '送出申請'}
-          </button>
-        </div>
-      )}
     </div>
   )
 }

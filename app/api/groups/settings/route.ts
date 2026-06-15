@@ -34,7 +34,12 @@ export async function PATCH(req: NextRequest) {
 
   // 銀行欄位加密儲存（bankName 為公開資訊不加密）
   if (body.bankName !== undefined) updates.bankName = body.bankName
-  if (body.bankAccount !== undefined)    updates.bankAccount    = body.bankAccount    ? encrypt(body.bankAccount)    : null
+  // 帳號回給社群主時是遮罩（••••末四碼）；若原封送回代表沒改 → 保留現有加密值，
+  // 不可把遮罩字串加密蓋掉真實帳號。
+  if (body.bankAccount !== undefined) {
+    const v = typeof body.bankAccount === 'string' ? body.bankAccount : ''
+    if (!v.startsWith('••••')) updates.bankAccount = v ? encrypt(v) : null
+  }
   if (body.bankBranch !== undefined)     updates.bankBranch     = body.bankBranch     ? encrypt(body.bankBranch)     : null
   if (body.bankHolderName !== undefined) updates.bankHolderName = body.bankHolderName ? encrypt(body.bankHolderName) : null
   if (body.description !== undefined) updates.description = body.description

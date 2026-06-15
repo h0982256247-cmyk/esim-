@@ -298,13 +298,22 @@ export async function getGroupByOwnerId(ownerId: string) {
     },
   })
   if (!group) return null
-  // 解密銀行欄位（safeDecrypt 對舊資料的明碼會原樣回傳，便於漸進遷移）
+  // 銀行帳號為機密：社群主本人在 LIFF 也只看遮罩（僅平台商後台可見完整帳號，供撥款）。
+  // 分行/戶名非「帳號」，解密回傳供本人確認。bankName 為公開資訊不加密。
+  const fullAccount = group.bankAccount ? safeDecrypt(group.bankAccount) : null
   return {
     ...group,
-    bankAccount:    group.bankAccount    ? safeDecrypt(group.bankAccount)    : null,
+    bankAccount:    fullAccount ? maskBankAccount(fullAccount) : null,
+    bankAccountSet: !!fullAccount,   // 前端用：已設定就顯示遮罩、不覆寫
     bankBranch:     group.bankBranch     ? safeDecrypt(group.bankBranch)     : null,
     bankHolderName: group.bankHolderName ? safeDecrypt(group.bankHolderName) : null,
   }
+}
+
+// 銀行帳號遮罩：只露末 4 碼，例如 ••••6789。用於回傳給社群主本人。
+function maskBankAccount(acc: string): string {
+  const tail = acc.slice(-4)
+  return `••••${tail}`
 }
 
 export async function getGroupByInviteCode(inviteCode: string) {
