@@ -114,8 +114,6 @@ export default function OrderDetailPage() {
   const [redeemError, setRedeemError] = useState<string | null>(null)
   const [redeemTimeout, setRedeemTimeout] = useState(false)
   const [canOneClick, setCanOneClick] = useState(false)
-  const [qrImgError, setQrImgError] = useState(false)   // QR 圖載入失敗（如測試機憑證/圖片不可用）→ 改顯示 LPA
-  const [lpaCopied, setLpaCopied] = useState(false)
   // 自訂確認彈窗（取代 window.confirm，避免 LINE 內建瀏覽器露出網址）
   const [dialog, setDialog] = useState<null | {
     title: string; lines: string[]; confirmLabel: string;
@@ -574,30 +572,8 @@ export default function OrderDetailPage() {
           <h2 style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: '0 0 14px' }}>安裝你的 eSIM</h2>
 
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
-            {qrImgError ? (
-              // QR 圖載不出來（常見於測試機：圖片主機憑證瀏覽器擋下）→ 改用 LPA 安裝
-              <div style={{ width: '100%', maxWidth: 320, background: '#fff', border: `1px dashed ${C.border}`, borderRadius: 12, padding: '16px', textAlign: 'center' }}>
-                <p style={{ fontSize: 12.5, color: S.muted, margin: '0 0 10px', lineHeight: 1.6 }}>
-                  QR 圖暫時無法載入，請用下方「一鍵安裝」，<br/>或複製 LPA 碼到手機手動新增 eSIM：
-                </p>
-                {order.esimLpa && (
-                  <>
-                    <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, color: S.ink, wordBreak: 'break-all', background: '#f1f5f9', borderRadius: 8, padding: '8px 10px', margin: '0 0 8px' }}>
-                      {order.esimLpa}
-                    </p>
-                    <button
-                      onClick={() => { navigator.clipboard?.writeText(order.esimLpa!).then(() => { setLpaCopied(true); setTimeout(() => setLpaCopied(false), 2000) }) }}
-                      style={{ background: C.primary, color: C.onPrimary, border: 'none', borderRadius: 100, padding: '8px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-                    >
-                      {lpaCopied ? '已複製' : '複製 LPA 碼'}
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={order.esimQrcode} alt="eSIM QR Code" onError={() => setQrImgError(true)} style={{ width: 200, height: 200, borderRadius: 12, background: '#fff', padding: 8 }} />
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={order.esimQrcode} alt="eSIM QR Code" style={{ width: 200, height: 200, borderRadius: 12, background: '#fff', padding: 8 }} />
           </div>
 
           {/* iOS 17.4+ 一鍵安裝 */}
