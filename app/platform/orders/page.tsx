@@ -124,8 +124,10 @@ function OrdersContent() {
                   <tr key={o.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3.5">
                       <p className="font-mono text-xs font-semibold text-gray-700">{o.orderNumber??`#${o.id.slice(-8).toUpperCase()}`}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">{o.orderItems[0]?.productName??'—'}</p>
-                      {o.tapPayOrderId&&<p className="font-mono text-xs text-gray-300 mt-0.5 select-all">{o.tapPayOrderId}</p>}
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        {o.orderItems[0]?.productName??'—'}
+                        {o.orderItems.length>1&&<span className="text-gray-400">　等 {o.orderItems.length} 張</span>}
+                      </p>
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
