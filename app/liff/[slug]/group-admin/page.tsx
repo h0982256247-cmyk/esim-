@@ -56,11 +56,20 @@ export default function GroupAdminDashboard() {
         <p className="text-xs text-gray-400">邀請碼：<span className="font-mono font-bold">{group.inviteCode}</span></p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-xl border p-4 shadow-sm">
-          <p className="text-xs text-gray-400 mb-1">待結算收益</p>
-          <p className="text-2xl font-bold text-blue-600">NT${pendingBalance.toLocaleString()}</p>
+      {/* 本月累積分潤（醒目）+ 進入收益明細/提領 */}
+      <button
+        onClick={() => router.push(`${base}/group-admin/revenue`)}
+        className="w-full text-left bg-blue-600 rounded-2xl p-5 shadow-sm"
+      >
+        <p className="text-xs text-blue-100">本月累積分潤（待結算）</p>
+        <p className="text-3xl font-extrabold text-white mt-1">NT${pendingBalance.toLocaleString()}</p>
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/20">
+          <span className="text-xs text-blue-50">每月分潤查詢 · 申請提領與進度</span>
+          <span className="text-sm font-semibold text-white">收益明細與提領 ›</span>
         </div>
+      </button>
+
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-white rounded-xl border p-4 shadow-sm">
           <p className="text-xs text-gray-400 mb-1">社群成員</p>
           <p className="text-2xl font-bold text-gray-800">{group.members?.length ?? 0} 人</p>
@@ -73,6 +82,10 @@ export default function GroupAdminDashboard() {
           <p className="text-xs text-gray-400 mb-1">本月發券剩餘</p>
           <p className="text-2xl font-bold text-gray-800">{group.activityCouponQuota} 次</p>
         </div>
+        <button onClick={() => router.push(`${base}/group-admin/revenue`)} className="bg-white rounded-xl border p-4 shadow-sm text-left">
+          <p className="text-xs text-gray-400 mb-1">提領</p>
+          <p className="text-base font-bold text-blue-600 mt-1">查看 / 申請 ›</p>
+        </button>
       </div>
     </div>
   )
