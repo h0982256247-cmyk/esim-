@@ -2,21 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { useTenantColors } from '@/components/liff/TenantContext'
+import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
+import { useLiff } from '@/components/liff/LiffProvider'
 import PageSkeleton from '@/components/liff/PageSkeleton'
 
-type GroupInfo  = { id: string; name: string; description: string | null; status: string; inviteCode: string }
+type GroupMemberInfo = { id: string; joinedAt: string; user: { id: string; displayName: string; avatarUrl: string | null } }
+type GroupInfo  = { id: string; name: string; description: string | null; status: string; inviteCode: string; members: GroupMemberInfo[] }
 type Membership = { group: { id: string; name: string; description: string | null }; joinedAt: string }
-type GroupStats = {
-  memberCount: number
-  pendingAmount: number
-  settledAmount: number
-  nextSettleAt: string
-  recentCommissions: { id: string; amount: number; status: string; createdAt: string; orderTotal: number }[]
-  settlements: { id: string; period: string; totalAmount: number; status: string; paidAt: string | null; createdAt: string }[]
-}
-type WithdrawalRecord = { id: string; amount: number; status: string; appliedAt: string; processedAt: string | null; note: string | null }
-type WithdrawalBalance = { settled: number; locked: number; paid: number; pending: number; available: number; pendingAdjustment: number }
 
 const S = {
   white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
@@ -62,15 +54,21 @@ export default function GroupPage() {
   const router = useRouter()
   const pathname = usePathname()
   const C = useTenantColors()
+  const tenant = useTenant()
+  const { liff } = useLiff()
   const slugMatch = pathname.match(/^(\/liff\/[^/]+)/)
   const base = slugMatch ? slugMatch[1] : ''
   const [ownedGroup, setOwnedGroup] = useState<GroupInfo | null>(null)
   const [membership, setMembership] = useState<Membership | null>(null)
-  const [stats, setStats] = useState<GroupStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'join' | 'apply'>('join')
 
-  const [inviteCode, setInviteCode] = useState('')
+  // 被邀請連結帶 ?invite=CODE 進來時預填邀請碼（lazy init 避免在 effect 內同步 setState）。
+  const [inviteCode, setInviteCode] = useState(() =>
+    typeof window !== 'undefined'
+      ? (new URLSearchParams(window.location.search).get('invite')?.toUpperCase() ?? '')
+      : ''
+  )
   const [joinMsg, setJoinMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [joining, setJoining] = useState(false)
 
@@ -80,39 +78,50 @@ export default function GroupPage() {
   const [applyMsg, setApplyMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const [leaving, setLeaving] = useState(false)
+  const [sharing, setSharing] = useState(false)
 
-  // 提領
-  const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([])
-  const [balance, setBalance] = useState<WithdrawalBalance | null>(null)
-  const [withdrawAmount, setWithdrawAmount] = useState('')
-  const [requesting, setRequesting] = useState(false)
-
-  const loadWithdrawals = async () => {
-    const r = await fetch('/api/withdrawals').then(x => x.json())
-    if (!r.error) {
-      setWithdrawals(r.withdrawals ?? [])
-      setBalance(r.balance ?? null)
-    }
-  }
-
-  const handleRequestWithdrawal = async () => {
-    const amount = parseInt(withdrawAmount)
-    if (!Number.isInteger(amount) || amount <= 0) {
-      window.alert('請輸入正整數金額')
+  // 一鍵邀請：用 LINE shareTargetPicker 分享含邀請碼的卡片；點開連結回到本頁並預填邀請碼。
+  const handleInvite = async () => {
+    if (!ownedGroup) return
+    if (!liff || !liff.isApiAvailable('shareTargetPicker')) {
+      window.alert(`請把邀請碼分享給朋友：${ownedGroup.inviteCode}`)
       return
     }
-    setRequesting(true)
-    const r = await fetch('/api/withdrawals', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount }),
-    }).then(x => x.json())
-    setRequesting(false)
-    if (r.error) {
-      window.alert(r.error)
-      return
+    setSharing(true)
+    try {
+      const fullUrl = `${window.location.origin}${base}/group?invite=${ownedGroup.inviteCode}`
+      let inviteUrl = fullUrl
+      try { inviteUrl = await liff.permanentLink.createUrlBy(fullUrl) } catch {}
+      const brandName = tenant?.brandName ?? 'eSIM'
+      const flex = {
+        type: 'flex' as const,
+        altText: `邀請你加入「${ownedGroup.name}」社群`,
+        contents: {
+          type: 'bubble' as const,
+          body: {
+            type: 'box' as const, layout: 'vertical' as const, spacing: 'md',
+            contents: [
+              { type: 'text' as const, text: `邀請你加入「${brandName}」社群`, weight: 'bold' as const, size: 'lg' as const, color: '#1a1a1a', wrap: true },
+              { type: 'text' as const, text: ownedGroup.name, size: 'md' as const, weight: 'bold' as const, wrap: true, color: C.primary },
+              { type: 'text' as const, text: '加入後即可獲得入群優惠券，一起買 eSIM 更划算！', size: 'sm' as const, color: '#475569', wrap: true },
+              { type: 'separator' as const, margin: 'md' as const },
+              { type: 'text' as const, text: `邀請碼：${ownedGroup.inviteCode}`, size: 'sm' as const, weight: 'bold' as const, color: '#1a1a1a', wrap: true },
+            ],
+          },
+          footer: {
+            type: 'box' as const, layout: 'vertical' as const, spacing: 'sm',
+            contents: [
+              { type: 'button' as const, style: 'primary' as const, color: C.primary,
+                action: { type: 'uri' as const, label: '加入社群', uri: inviteUrl } },
+            ],
+          },
+        },
+      }
+      await liff.shareTargetPicker([flex])
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '分享失敗')
     }
-    setWithdrawAmount('')
-    loadWithdrawals()
+    setSharing(false)
   }
 
   const handleLeave = async () => {
@@ -133,14 +142,11 @@ export default function GroupPage() {
     const d = await fetch('/api/groups').then(r => r.json())
     setOwnedGroup(d.ownedGroup ?? null)
     setMembership(d.membership ?? null)
-    if (d.ownedGroup?.status === 'APPROVED') {
-      const s = await fetch('/api/groups/stats').then(r => r.json())
-      if (!s.error) setStats(s)
-      loadWithdrawals()
-    }
   }
 
-  useEffect(() => { reload().finally(() => setLoading(false)) }, [])
+  useEffect(() => {
+    reload().finally(() => setLoading(false))
+  }, [])
 
   const handleJoin = async () => {
     if (!inviteCode.trim()) return
@@ -205,195 +211,62 @@ export default function GroupPage() {
 
         {ownedGroup.status === 'APPROVED' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 4px' }}>社群人數</p>
-                <p style={{ fontSize: 28, fontWeight: 800, color: S.ink, margin: 0, lineHeight: 1, letterSpacing: '-0.02em' }}>
-                  {stats ? stats.memberCount.toLocaleString() : '—'}
-                </p>
-                <p style={{ fontSize: 11, color: S.faint, margin: '4px 0 0' }}>位會員</p>
-              </div>
-              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 4px' }}>本月累積中</p>
-                <p style={{ fontSize: 22, fontWeight: 800, color: C.primary, margin: 0, lineHeight: 1, letterSpacing: '-0.02em' }}>
-                  {stats ? `NT$${Number(stats.pendingAmount).toLocaleString()}` : '—'}
-                </p>
-                <p style={{ fontSize: 11, color: S.faint, margin: '4px 0 0' }}>
-                  {stats?.nextSettleAt
-                    ? `下次結算 ${new Date(stats.nextSettleAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}`
-                    : '每月 1 號結算'}
-                </p>
-              </div>
+            {/* 社群人數（收益/分潤改集中在「社群主後台」）*/}
+            <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '14px 16px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 4px' }}>社群人數</p>
+              <p style={{ fontSize: 28, fontWeight: 800, color: S.ink, margin: 0, lineHeight: 1, letterSpacing: '-0.02em' }}>
+                {ownedGroup.members.length.toLocaleString()}
+              </p>
+              <p style={{ fontSize: 11, color: S.faint, margin: '4px 0 0' }}>位會員 · 收益與分潤請見「社群主後台」</p>
             </div>
 
+            {/* 邀請碼 + 一鍵邀請 */}
             <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 6px' }}>邀請碼</p>
-              <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 26, fontWeight: 800, color: S.ink, letterSpacing: '0.2em', margin: 0 }}>
+              <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 26, fontWeight: 800, color: S.ink, letterSpacing: '0.2em', margin: '0 0 12px' }}>
                 {ownedGroup.inviteCode}
               </p>
+              <button
+                onClick={handleInvite}
+                disabled={sharing}
+                style={{
+                  width: '100%', border: 'none', borderRadius: 100, padding: '13px',
+                  fontSize: 14, fontWeight: 800, cursor: sharing ? 'not-allowed' : 'pointer',
+                  background: C.primary, color: C.onPrimary, opacity: sharing ? 0.6 : 1,
+                }}
+              >
+                {sharing ? '開啟分享…' : '＋ 一鍵邀請朋友加入'}
+              </button>
             </div>
 
-            {/* 月結明細 */}
-            {stats && stats.settlements.length > 0 && (
-              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 12px' }}>月結明細</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {stats.settlements.map(s => {
-                    const [yr, mo] = s.period.split('-')
-                    const label = `${yr}/${mo}`
-                    const settledDate = new Date(s.createdAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
-                    const paidDate = s.paidAt ? new Date(s.paidAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' }) : null
-                    const statusText = s.status === 'PAID' ? `已撥款 · ${paidDate}` : `已結算 · ${settledDate} 入帳`
-                    const statusColor = s.status === 'PAID' ? '#15803d' : C.primary
-                    return (
-                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <p style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: 0 }}>{label}</p>
-                          <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0' }}>{statusText}</p>
+            {/* 社群成員名單 */}
+            <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 12px' }}>
+                社群成員（{ownedGroup.members.length}）
+              </p>
+              {ownedGroup.members.length === 0 ? (
+                <p style={{ fontSize: 13, color: S.faint, margin: 0 }}>還沒有成員，用上方「一鍵邀請」分享給朋友吧。</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {ownedGroup.members.map(m => (
+                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      {m.user.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={m.user.avatarUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e2e8f0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: S.faint }}>
+                          {m.user.displayName.slice(0, 1)}
                         </div>
-                        <p style={{ fontSize: 16, fontWeight: 800, color: statusColor, margin: 0 }}>
-                          NT${Number(s.totalAmount).toLocaleString()}
-                        </p>
-                      </div>
-                    )
-                  })}
-                </div>
-                {stats.pendingAmount > 0 && (
-                  <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px dashed ${S.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: S.muted, margin: 0 }}>本月累積中</p>
-                      <p style={{ fontSize: 10, color: S.faint, margin: '2px 0 0' }}>
-                        {stats.nextSettleAt && `待 ${new Date(stats.nextSettleAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} 結算`}
-                      </p>
-                    </div>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: S.muted, margin: 0 }}>
-                      +NT${Number(stats.pendingAmount).toLocaleString()}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {stats && stats.recentCommissions.length > 0 && (
-              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 12px' }}>近期分潤明細</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {stats.recentCommissions.map(c => (
-                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div>
-                        <p style={{ fontSize: 13, color: S.muted, margin: 0 }}>訂單金額 NT${Number(c.orderTotal).toLocaleString()}</p>
-                        <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0' }}>{new Date(c.createdAt).toLocaleDateString('zh-TW')}</p>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: c.status === 'SETTLED' ? '#15803d' : C.primary, margin: 0 }}>
-                          +NT${Number(c.amount).toLocaleString()}
-                        </p>
-                        <p style={{ fontSize: 10, color: c.status === 'SETTLED' ? '#15803d' : S.faint, margin: '2px 0 0' }}>
-                          {c.status === 'SETTLED' ? '已結算' : '待結算'}
-                        </p>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: S.ink, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.user.displayName}</p>
+                        <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0' }}>加入於 {new Date(m.joinedAt).toLocaleDateString('zh-TW')}</p>
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* 提領分潤 */}
-            {balance && (
-              <div style={{ background: S.white, borderRadius: 14, border: `1px solid ${S.line}`, padding: '16px 18px', marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 8px' }}>提領分潤</p>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                  <div>
-                    <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>可提領</p>
-                    <p style={{ fontSize: 22, fontWeight: 800, color: '#15803d', margin: '3px 0 0', letterSpacing: '-0.02em' }}>
-                      NT${balance.available.toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>已撥款累計</p>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: S.muted, margin: '3px 0 0' }}>
-                      NT${balance.paid.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-
-                {balance.pendingAdjustment > 0 && (
-                  <div style={{ marginBottom: 12, padding: '10px 12px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 10 }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: '#92400e', margin: 0 }}>
-                      ⚠ 退款扣抵 NT${balance.pendingAdjustment.toLocaleString()}
-                    </p>
-                    <p style={{ fontSize: 11, color: '#92400e', margin: '3px 0 0', lineHeight: 1.5 }}>
-                      有訂單退款後造成的待扣抵金額，會從之後新增的分潤自動扣回。
-                    </p>
-                  </div>
-                )}
-
-                {balance.available > 0 ? (
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                      type="number" min={1} max={balance.available}
-                      value={withdrawAmount}
-                      onChange={e => setWithdrawAmount(e.target.value)}
-                      placeholder={`最多 NT$${balance.available}`}
-                      style={{
-                        flex: 1, border: '1.5px solid #e2e8f0', borderRadius: 10,
-                        padding: '10px 14px', fontSize: 14, outline: 'none', background: S.white,
-                      }}
-                    />
-                    <button
-                      onClick={handleRequestWithdrawal}
-                      disabled={requesting || !withdrawAmount}
-                      style={{
-                        background: C.primary, color: C.onPrimary, border: 'none', borderRadius: 10,
-                        padding: '10px 18px', fontSize: 13, fontWeight: 700,
-                        cursor: (requesting || !withdrawAmount) ? 'not-allowed' : 'pointer',
-                        opacity: (requesting || !withdrawAmount) ? 0.5 : 1,
-                      }}
-                    >
-                      {requesting ? '送出中…' : '申請'}
-                    </button>
-                  </div>
-                ) : (
-                  <p style={{ fontSize: 12, color: S.faint, margin: 0 }}>
-                    {balance.settled === 0
-                      ? '尚無已結算分潤可提領'
-                      : balance.pending > 0
-                        ? `已申請待審 NT$${balance.pending.toLocaleString()}，請等待處理`
-                        : '本期無可提領餘額'}
-                  </p>
-                )}
-
-                {withdrawals.length > 0 && (
-                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${S.line}` }}>
-                    <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, margin: '0 0 8px' }}>提領記錄</p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {withdrawals.slice(0, 5).map(w => {
-                        const meta: Record<string, { text: string; color: string }> = {
-                          PENDING:  { text: '審核中', color: '#a16207' },
-                          APPROVED: { text: '已核准·待撥款', color: '#1d4ed8' },
-                          PAID:     { text: '已撥款', color: '#15803d' },
-                          REJECTED: { text: '已拒絕', color: '#b91c1c' },
-                        }
-                        const m = meta[w.status] ?? { text: w.status, color: S.faint }
-                        return (
-                          <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <p style={{ fontSize: 13, color: S.ink, margin: 0, fontWeight: 600 }}>NT${w.amount.toLocaleString()}</p>
-                              <p style={{ fontSize: 10, color: S.faint, margin: '2px 0 0' }}>
-                                {new Date(w.appliedAt).toLocaleDateString('zh-TW')}
-                                {w.note && ` · ${w.note}`}
-                              </p>
-                            </div>
-                            <span style={{ fontSize: 11, fontWeight: 600, color: m.color }}>{m.text}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
 
             <button
               onClick={() => router.push(`${base}/group-admin`)}
@@ -405,7 +278,7 @@ export default function GroupPage() {
             >
               <div>
                 <p style={{ fontSize: 14, fontWeight: 700, color: '#78350f', margin: 0 }}>進入社群主後台</p>
-                <p style={{ fontSize: 12, color: '#b45309', margin: '2px 0 0' }}>管理成員與分潤報表</p>
+                <p style={{ fontSize: 12, color: '#b45309', margin: '2px 0 0' }}>收益報表、發券、提領與設定</p>
               </div>
               <ChevronRight />
             </button>
