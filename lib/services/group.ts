@@ -129,7 +129,7 @@ export async function joinGroup(userId: string, lineUid: string, inviteCode: str
             discount: couponDiscount,
             isOfficial: false,
             sourceGroupId: group.id,
-            expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 天
+            expiresAt: null, // 入群券無使用期限
           },
         })
       }

@@ -41,7 +41,10 @@ function discountLabel(d: number) {
 }
 
 function discountFold(d: number) {
-  return `${Math.round(d * 10)} 折`
+  // 0.90→9 折、0.85→85 折、0.92→92 折（原本 Math.round(d*10) 對非整十折會算錯，
+  // 例：0.85→9 折）。整十折顯示個位數，其餘顯示兩位數。
+  const n = Math.round(d * 100)
+  return n % 10 === 0 ? `${n / 10} 折` : `${n} 折`
 }
 
 export default function CouponsPage() {
