@@ -156,12 +156,12 @@ export async function getRiskAlerts(tenantAdminId: string | null) {
       SELECT id, country_name_zh AS "countryNameZh", data_capacity AS "dataCapacity",
              display_days AS "displayDays", sell_price AS "sellPrice", cost_price AS "costPrice"
       FROM products
-      WHERE status = 'ACTIVE' ${tenantProducts} AND sell_price > 0 AND cost_price > sell_price * ${costFactor}
+      WHERE status = 'ACTIVE' ${tenantProducts} AND sell_price > 0 AND cost_price > sell_price * ${costFactor}::numeric
       ORDER BY (cost_price::float / sell_price) DESC
       LIMIT 8`,
     prisma.$queryRaw<Array<{ n: number }>>`
       SELECT COUNT(*)::int AS n FROM products
-      WHERE status = 'ACTIVE' ${tenantProducts} AND sell_price > 0 AND cost_price > sell_price * ${costFactor}`,
+      WHERE status = 'ACTIVE' ${tenantProducts} AND sell_price > 0 AND cost_price > sell_price * ${costFactor}::numeric`,
     // 系統異常（近 24h 未處理）：開卡/金流驗真/分潤/WM 等失敗
     prisma.$queryRaw<Array<{ label: string; orderId: string | null; createdAt: Date }>>`
       SELECT label, order_id AS "orderId", created_at AS "createdAt"
