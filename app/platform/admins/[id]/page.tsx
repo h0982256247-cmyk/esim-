@@ -54,7 +54,7 @@ type PaymentConfig = {
   updatedAt: string
 }
 
-const TABS = ['概覽', 'eSIM 設定', '金流設定', '品牌設定'] as const
+const TABS = ['概覽', 'eSIM 設定', '金流設定', '品牌設定', '網域設定'] as const
 type Tab = typeof TABS[number]
 
 const GATEWAY_LABEL: Record<string, string> = {
@@ -155,6 +155,7 @@ export default function AdminDetailPage() {
       {activeTab === 'eSIM 設定' && <EsimConfigTab adminId={adminId} config={esimConfig} onSaved={load} />}
       {activeTab === '金流設定' && <PaymentConfigTab adminId={adminId} configs={paymentConfigs} onSaved={load} />}
       {activeTab === '品牌設定' && <BrandConfigTab admin={admin} onSaved={load} />}
+      {activeTab === '網域設定' && <DomainConfigTab adminId={adminId} slug={admin.tenantSlug} />}
     </div>
   )
 }
@@ -871,6 +872,114 @@ function EndpointUrlRow({ slug, label = 'Endpoint URL' }: { slug: string; label?
       >
         {copied ? '已複製 ✓' : '複製'}
       </button>
+    </div>
+  )
+}
+
+// ─── Domain Config Tab ────────────────────────────────────────────
+
+type DomainRow = { id: string; domain: string; createdAt: string }
+
+function DomainConfigTab({ adminId, slug }: { adminId: string; slug: string | null }) {
+  const [domains, setDomains] = useState<DomainRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [input, setInput] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const r = await fetch(`/api/platform/admins/${adminId}/domains`).then(x => x.json()).catch(() => ({}))
+    setDomains(r.domains ?? [])
+    setLoading(false)
+  }, [adminId])
+
+  useEffect(() => { load() }, [load])
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setMsg(null)
+    const r = await fetch(`/api/platform/admins/${adminId}/domains`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: input }),
+    }).then(x => x.json()).catch(() => ({ error: '連線失敗' }))
+    setSaving(false)
+    if (r.ok) { setInput(''); setMsg({ ok: true, text: '✅ 已新增，請完成下方 DNS 設定' }); load() }
+    else setMsg({ ok: false, text: `❌ ${r.error ?? '新增失敗'}` })
+  }
+
+  const handleRemove = async (domain: string) => {
+    await fetch(`/api/platform/admins/${adminId}/domains?domain=${encodeURIComponent(domain)}`, { method: 'DELETE' })
+    load()
+  }
+
+  return (
+    <div className="max-w-xl space-y-4">
+      {/* 預設網址（一律存在） */}
+      <div className="bg-white rounded-2xl border shadow-sm p-5">
+        <h2 className="font-semibold mb-1">預設網址</h2>
+        <p className="text-xs text-gray-400 mb-3">系統內建網址，永遠可用，不需任何設定。</p>
+        {slug
+          ? <EndpointUrlRow slug={slug} label="商城網址" />
+          : <p className="text-xs text-amber-600">尚未設定 Slug（請先到「品牌設定」設定）。</p>}
+      </div>
+
+      {/* 自訂網域（選填） */}
+      <div className="bg-white rounded-2xl border shadow-sm p-5">
+        <h2 className="font-semibold mb-1">自訂網域<span className="text-xs font-normal text-gray-400 ml-1">（選填）</span></h2>
+        <p className="text-xs text-gray-400 mb-4">想用自己的網域（如 esim.yourbrand.com）開店時才需設定；設定後該網域會自動導向你的商城。</p>
+
+        <form onSubmit={handleAdd} className="flex gap-2 mb-3">
+          <input
+            type="text"
+            value={input}
+            onChange={e => { setInput(e.target.value); setMsg(null) }}
+            placeholder="esim.yourbrand.com"
+            className="flex-1 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            disabled={saving || !input.trim()}
+            className="shrink-0 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+          >
+            {saving ? '新增中…' : '新增'}
+          </button>
+        </form>
+        {msg && <p className={`text-sm mb-3 ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
+
+        {loading ? (
+          <p className="text-xs text-gray-400">載入中…</p>
+        ) : domains.length === 0 ? (
+          <p className="text-xs text-gray-400">尚未綁定自訂網域。</p>
+        ) : (
+          <ul className="space-y-2">
+            {domains.map(d => (
+              <li key={d.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <span className="text-sm font-mono text-gray-800 truncate">{d.domain}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemove(d.domain)}
+                  className="shrink-0 text-xs text-gray-400 hover:text-red-500 transition ml-2"
+                >
+                  移除
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* DNS / Vercel 設定指引（此版本不自動掛載，需手動完成兩步） */}
+        <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 leading-relaxed">
+          <p className="font-semibold mb-1">完成綁定還需兩步（一次性）：</p>
+          <ol className="list-decimal list-inside space-y-0.5">
+            <li>在 Vercel 專案 → Settings → Domains 把此網域 <code className="bg-amber-100 px-1 rounded">Add Domain</code></li>
+            <li>到你的 DNS 服務商把該網域指向 Vercel（CNAME → <code className="bg-amber-100 px-1 rounded">cname.vercel-dns.com</code>，根網域用 A → Vercel 指定 IP）</li>
+          </ol>
+          <p className="mt-1 text-amber-600">DNS 生效後，訪客打開此網域就會自動進入你的商城。</p>
+        </div>
+      </div>
     </div>
   )
 }

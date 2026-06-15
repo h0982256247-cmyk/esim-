@@ -492,8 +492,24 @@ model PlatformAdmin {
   // Per-tenant integrations
   esimConfig     TenantEsimConfig?
   paymentConfigs TenantPaymentConfig[]
+  customDomains  TenantDomain[]
 
   @@map("platform_admins")
+}
+
+// 白牌自訂網域（選填）：平台商可綁自己的網域（如 esim.客戶.com），
+// 進站時以 hostname 解析到該租戶；未綁定者仍用預設 /liff/<slug> 入口。
+// 實際網域掛載與 DNS 由平台商在 Vercel/DNS 端設定，本表只負責 host→tenant 對應。
+model TenantDomain {
+  id            String   @id @default(cuid())
+  tenantAdminId String   @map("tenant_admin_id")
+  domain        String   @unique // 純 host，小寫、不含協定/路徑，如 esim.example.com
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  admin PlatformAdmin @relation(fields: [tenantAdminId], references: [id], onDelete: Cascade)
+
+  @@index([tenantAdminId])
+  @@map("tenant_domains")
 }
 
 // ============================================================
