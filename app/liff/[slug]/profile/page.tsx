@@ -56,15 +56,6 @@ function IconSupport() {
   )
 }
 
-function IconAdmin() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
-    </svg>
-  )
-}
-
 export default function ProfilePage() {
   const router = useRouter()
   const base = useLiffBase()
@@ -143,27 +134,6 @@ export default function ProfilePage() {
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: '#9a3412', margin: 0 }}>個人資料未填寫</p>
             <p style={{ fontSize: 12, color: '#c2410c', margin: 0 }}>填寫後才能完成結帳</p>
-          </div>
-          <ChevronRight />
-        </button>
-      )}
-
-      {/* Owner admin shortcut */}
-      {isGroupOwner && (
-        <button
-          onClick={() => router.push(`${base}/group-admin`)}
-          style={{
-            width: '100%', marginBottom: 14,
-            background: '#fffbeb', border: '1px solid #fde68a',
-            borderRadius: 14, padding: '14px 16px',
-            display: 'flex', alignItems: 'center', gap: 12,
-            cursor: 'pointer', textAlign: 'left',
-          }}
-        >
-          <IconAdmin />
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: '#78350f', margin: 0 }}>社群主後台</p>
-            <p style={{ fontSize: 12, color: '#b45309', margin: 0 }}>管理成員、查看分潤報表</p>
           </div>
           <ChevronRight />
         </button>

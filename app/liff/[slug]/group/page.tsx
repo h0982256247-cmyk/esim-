@@ -235,7 +235,7 @@ export default function GroupPage() {
                   background: C.primary, color: C.onPrimary, opacity: sharing ? 0.6 : 1,
                 }}
               >
-                {sharing ? '開啟分享…' : '＋ 一鍵邀請朋友加入'}
+                {sharing ? '開啟分享…' : '分享好友'}
               </button>
             </div>
 
