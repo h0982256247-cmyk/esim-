@@ -308,7 +308,7 @@ function EsimConfigTab({
             ) : (
               <p className="text-xs font-mono text-gray-500 mt-1 break-all">{form.apiUrl}</p>
             )}
-            <p className="text-xs text-amber-600 mt-1 leading-relaxed">⚠️ 測試與正式是兩個獨立帳號：切換環境後，下方 Merchant ID / Dept ID / Token 要改填該環境的值，且商品需用該環境重新匯入（wmproductId 不同）。</p>
+            <p className="text-xs text-gray-400 mt-1 leading-relaxed">切換環境只會改 API 主機網址。商品（wmproductId）測試與正式共用，不需重新匯入。若兩環境的 Merchant ID / Dept ID / Token 不同，記得一併更新。</p>
           </div>
           {[
             { label: 'Merchant ID', key: 'merchantId', placeholder: '' },
