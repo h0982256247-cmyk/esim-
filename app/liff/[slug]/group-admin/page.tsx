@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLiffBase } from '@/hooks/useLiffBase'
+import { useTenantColors } from '@/components/liff/TenantContext'
+import PageSkeleton from '@/components/liff/PageSkeleton'
 
 type GroupData = {
   id: string
@@ -17,6 +19,7 @@ type GroupData = {
 export default function GroupAdminDashboard() {
   const router = useRouter()
   const base = useLiffBase()
+  const C = useTenantColors()
   const [group, setGroup] = useState<GroupData | null>(null)
   const [pendingBalance, setPendingBalance] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -36,7 +39,7 @@ export default function GroupAdminDashboard() {
     }).finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">載入中…</p></div>
+  if (loading) return <div className="px-4 py-5"><PageSkeleton rows={4} /></div>
 
   if (noAccess) {
     return (
@@ -59,13 +62,14 @@ export default function GroupAdminDashboard() {
       {/* 本月累積分潤（醒目）+ 進入收益明細/提領 */}
       <button
         onClick={() => router.push(`${base}/group-admin/revenue`)}
-        className="w-full text-left bg-blue-600 rounded-2xl p-5 shadow-sm"
+        className="w-full text-left rounded-2xl p-5 shadow-sm"
+        style={{ background: C.primary }}
       >
-        <p className="text-xs text-blue-100">本月累積分潤（待結算）</p>
-        <p className="text-3xl font-extrabold text-white mt-1">NT${pendingBalance.toLocaleString()}</p>
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/20">
-          <span className="text-xs text-blue-50">每月分潤查詢 · 申請提領與進度</span>
-          <span className="text-sm font-semibold text-white">收益明細與提領 ›</span>
+        <p className="text-xs" style={{ color: C.onPrimary, opacity: 0.85 }}>本月累積分潤（待結算）</p>
+        <p className="text-3xl font-extrabold mt-1" style={{ color: C.onPrimary }}>NT${pendingBalance.toLocaleString()}</p>
+        <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: `1px solid ${C.onPrimary}33` }}>
+          <span className="text-xs" style={{ color: C.onPrimary, opacity: 0.85 }}>每月分潤查詢 · 申請提領與進度</span>
+          <span className="text-sm font-semibold" style={{ color: C.onPrimary }}>收益明細與提領 ›</span>
         </div>
       </button>
 
@@ -84,7 +88,7 @@ export default function GroupAdminDashboard() {
         </div>
         <button onClick={() => router.push(`${base}/group-admin/revenue`)} className="bg-white rounded-xl border p-4 shadow-sm text-left">
           <p className="text-xs text-gray-400 mb-1">提領</p>
-          <p className="text-base font-bold text-blue-600 mt-1">查看 / 申請 ›</p>
+          <p className="text-base font-bold mt-1" style={{ color: C.primary }}>查看 / 申請 ›</p>
         </button>
       </div>
     </div>

@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTenantColors } from '@/components/liff/TenantContext'
+import PageSkeleton from '@/components/liff/PageSkeleton'
 
 type GroupSettings = {
   name: string
@@ -13,6 +15,7 @@ type GroupSettings = {
 }
 
 export default function GroupAdminSettingsPage() {
+  const C = useTenantColors()
   const [settings, setSettings] = useState<GroupSettings | null>(null)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -59,7 +62,7 @@ export default function GroupAdminSettingsPage() {
     setMsg(r.group ? '✅ 設定已儲存' : `❌ ${r.error}`)
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">載入中…</p></div>
+  if (loading) return <div className="px-4 py-5"><PageSkeleton rows={5} /></div>
   if (!settings) return <div className="px-4 py-5"><p className="text-gray-500">無法取得社群資訊</p></div>
 
   return (
@@ -88,7 +91,7 @@ export default function GroupAdminSettingsPage() {
             onChange={e => setRebateRate(e.target.value)}
             className="flex-1"
           />
-          <span className="text-xl font-bold text-blue-600 w-16 text-right">{rebateRate}%</span>
+          <span className="text-xl font-bold w-16 text-right" style={{ color: C.primary }}>{rebateRate}%</span>
         </div>
         {(() => {
           const r = parseInt(rebateRate) || 0
@@ -156,7 +159,8 @@ export default function GroupAdminSettingsPage() {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold disabled:opacity-50"
+        className="w-full py-3 rounded-xl font-semibold disabled:opacity-50"
+        style={{ background: C.primary, color: C.onPrimary }}
       >
         {saving ? '儲存中…' : '儲存設定'}
       </button>

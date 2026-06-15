@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTenantColors } from '@/components/liff/TenantContext'
+import PageSkeleton from '@/components/liff/PageSkeleton'
 
 type Commission = {
   id: string
@@ -45,6 +47,7 @@ const WD_STATUS: Record<string, { text: string; color: string }> = {
 }
 
 export default function RevenuePage() {
+  const C = useTenantColors()
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [settlements, setSettlements] = useState<Settlement[]>([])
   const [pendingBalance, setPendingBalance] = useState(0)
@@ -82,21 +85,22 @@ export default function RevenuePage() {
     loadWithdrawals()
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">載入中…</p></div>
+  if (loading) return <div className="px-4 py-5"><PageSkeleton rows={4} /></div>
 
   return (
     <div className="px-4 py-5">
       <h1 className="text-xl font-bold mb-2">收益中心</h1>
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-        <p className="text-sm text-blue-600">本月累積（待結算）</p>
-        <p className="text-3xl font-extrabold text-blue-700">NT${pendingBalance.toLocaleString()}</p>
-        <p className="text-xs text-blue-500 mt-1">每月 1 號結算；結算後可於「提領」申請撥款</p>
+      <div className="rounded-xl p-4 mb-4" style={{ background: C.light, border: `1px solid ${C.border}` }}>
+        <p className="text-sm" style={{ color: C.primary }}>本月累積（待結算）</p>
+        <p className="text-3xl font-extrabold" style={{ color: C.primary }}>NT${pendingBalance.toLocaleString()}</p>
+        <p className="text-xs mt-1" style={{ color: C.primary, opacity: 0.8 }}>每月 1 號結算；結算後可於「提領」申請撥款</p>
       </div>
 
       <div className="flex border-b mb-4">
         {(['commissions', 'settlements', 'withdraw'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`flex-1 pb-2 text-sm font-medium border-b-2 transition ${tab === t ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400'}`}
+            className="flex-1 pb-2 text-sm font-medium border-b-2 transition"
+            style={tab === t ? { borderColor: C.primary, color: C.primary } : { borderColor: 'transparent', color: '#9ca3af' }}
           >
             {t === 'commissions' ? '分潤明細' : t === 'settlements' ? '每月結算' : '提領'}
           </button>
@@ -116,7 +120,7 @@ export default function RevenuePage() {
                     <p className="text-xs text-gray-400">{c.order.paidAt ? new Date(c.order.paidAt).toLocaleDateString('zh-TW') : '—'}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-blue-600">+NT${c.commissionAmount}</p>
+                    <p className="font-bold" style={{ color: C.primary }}>+NT${c.commissionAmount}</p>
                     <span className={`text-xs ${s.color}`}>{s.text}</span>
                   </div>
                 </div>
@@ -142,7 +146,7 @@ export default function RevenuePage() {
                   <p className="font-medium">{label} 月結</p>
                   <span className={`text-xs ${status.color}`}>{status.text}{s.status === 'PAID' && paidDate ? ` · ${paidDate} 入帳` : ''}</span>
                 </div>
-                <p className={`font-bold ${s.totalAmount < 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                <p className="font-bold" style={{ color: s.totalAmount < 0 ? '#dc2626' : C.primary }}>
                   NT${s.totalAmount.toLocaleString()}
                 </p>
               </div>
@@ -183,7 +187,8 @@ export default function RevenuePage() {
                       placeholder={`最多 NT$${balance.available}`}
                       className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     <button onClick={handleRequestWithdrawal} disabled={requesting || !withdrawAmount}
-                      className="shrink-0 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                      className="shrink-0 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      style={{ background: C.primary, color: C.onPrimary }}>
                       {requesting ? '送出中…' : '申請提領'}
                     </button>
                   </div>

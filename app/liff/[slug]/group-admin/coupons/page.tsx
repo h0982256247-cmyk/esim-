@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTenantColors } from '@/components/liff/TenantContext'
+import PageSkeleton from '@/components/liff/PageSkeleton'
 
 type Member = {
   id: string
@@ -8,12 +10,14 @@ type Member = {
 }
 
 export default function GroupAdminCouponsPage() {
+  const C = useTenantColors()
   const [members, setMembers] = useState<Member[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [discount, setDiscount] = useState('0.95')
   const [sending, setSending] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [quota, setQuota] = useState<number | null>(null)
+  const [cap, setCap] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -22,6 +26,7 @@ export default function GroupAdminCouponsPage() {
       .then(d => {
         setMembers(d.ownedGroup?.members ?? [])
         setQuota(d.ownedGroup?.activityCouponQuota ?? 0)
+        setCap(d.ownedGroup?.monthlyCouponQuota ?? null)
       })
       .finally(() => setLoading(false))
   }, [])
@@ -49,13 +54,13 @@ export default function GroupAdminCouponsPage() {
     }
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">載入中…</p></div>
+  if (loading) return <div className="px-4 py-5"><PageSkeleton rows={4} /></div>
 
   return (
     <div className="px-4 py-5">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-xl font-bold">發送活動券</h1>
-        <span className="text-sm text-gray-500">本月剩餘 <span className="font-bold text-blue-600">{quota}</span> 次</span>
+        <span className="text-sm text-gray-500">本月剩餘 <span className="font-bold" style={{ color: C.primary }}>{quota}</span>{cap != null ? ` / ${cap}` : ''} 次</span>
       </div>
 
       <div className="mb-4">
@@ -78,7 +83,8 @@ export default function GroupAdminCouponsPage() {
       <div className="space-y-2 mb-4">
         {members.length === 0 && <p className="text-gray-400 text-sm py-4 text-center">目前沒有社群成員</p>}
         {members.map(m => (
-          <label key={m.id} className={`flex items-center gap-3 bg-white rounded-xl border p-3 cursor-pointer ${selectedIds.includes(m.user.id) ? 'border-blue-500 bg-blue-50' : ''}`}>
+          <label key={m.id} className="flex items-center gap-3 bg-white rounded-xl border p-3 cursor-pointer"
+            style={selectedIds.includes(m.user.id) ? { borderColor: C.primary, background: C.light } : undefined}>
             <input
               type="checkbox"
               checked={selectedIds.includes(m.user.id)}
@@ -95,7 +101,8 @@ export default function GroupAdminCouponsPage() {
       <button
         onClick={handleSend}
         disabled={selectedIds.length === 0 || sending || quota === 0}
-        className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold disabled:opacity-50"
+        className="w-full py-3 rounded-xl font-semibold disabled:opacity-50"
+        style={{ background: C.primary, color: C.onPrimary }}
       >
         {sending ? '發送中…' : `發送給 ${selectedIds.length} 位成員`}
       </button>

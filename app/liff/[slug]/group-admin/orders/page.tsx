@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTenantColors } from '@/components/liff/TenantContext'
+import PageSkeleton from '@/components/liff/PageSkeleton'
 
 type Commission = {
   id: string
@@ -16,6 +18,7 @@ type Commission = {
 }
 
 export default function GroupAdminOrdersPage() {
+  const C = useTenantColors()
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -26,7 +29,7 @@ export default function GroupAdminOrdersPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">載入中…</p></div>
+  if (loading) return <div className="px-4 py-5"><PageSkeleton rows={4} /></div>
 
   return (
     <div className="px-4 py-5">
@@ -45,7 +48,7 @@ export default function GroupAdminOrdersPage() {
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-500">實付 NT${c.paidAmount}</p>
-                <p className="font-bold text-blue-600">分潤 +NT${c.commissionAmount}</p>
+                <p className="font-bold" style={{ color: C.primary }}>分潤 +NT${c.commissionAmount}</p>
               </div>
             </div>
           </div>
