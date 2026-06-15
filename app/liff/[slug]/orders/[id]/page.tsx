@@ -95,6 +95,12 @@ function buildAppleOneClickUrl(lpa: string): string {
   return `https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(lpa)}`
 }
 
+// 折扣（0.85）→ 折數標籤（9 折 / 85 折 / 92 折）
+function zheLabel(d: number): string {
+  const n = Math.round(d * 100)
+  return n % 10 === 0 ? `${n / 10} 折` : `${n} 折`
+}
+
 export default function OrderDetailPage() {
   const router = useRouter()
   const base = useLiffBase()
@@ -114,6 +120,7 @@ export default function OrderDetailPage() {
   const [redeemError, setRedeemError] = useState<string | null>(null)
   const [redeemTimeout, setRedeemTimeout] = useState(false)
   const [canOneClick, setCanOneClick] = useState(false)
+  const [repurchaseCoupon, setRepurchaseCoupon] = useState<{ discount: number } | null>(null)
   // 自訂確認彈窗（取代 window.confirm，避免 LINE 內建瀏覽器露出網址）
   const [dialog, setDialog] = useState<null | {
     title: string; lines: string[]; confirmLabel: string;
@@ -156,6 +163,7 @@ export default function OrderDetailPage() {
         .then(r => { if (r.status === 404) setNotFound(true); return r.json() })
         .then(d => {
           if (d.order) setOrder(d.order)
+          setRepurchaseCoupon(d.repurchaseCoupon ?? null)
           const o = d.order
           // 需要 polling 的情境：
           //   A. 訂單處理中（PAID/ESIM_PENDING 還沒收 2.2 callback）
@@ -445,6 +453,18 @@ export default function OrderDetailPage() {
         </div>
         <p style={{ fontSize: 12, color: S.faint, marginTop: 4 }}>{order.orderNumber ?? `#${order.id.slice(-8).toUpperCase()}`}</p>
       </div>
+
+      {/* 結帳完成回饋：本筆已發出回購券（趁剛買完最有感）*/}
+      {repurchaseCoupon && (order.status === 'PAID' || order.status === 'COMPLETED') && (
+        <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 26, lineHeight: 1 }}>🎁</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: 0 }}>本筆已回饋 {zheLabel(repurchaseCoupon.discount)} 回購券</p>
+            <p style={{ fontSize: 12, color: S.muted, margin: '2px 0 0' }}>下次購買即可使用，於「優惠券」查看</p>
+          </div>
+          <button onClick={() => router.push(`${base}/coupons`)} style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: C.primary, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 100, padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>查看</button>
+        </div>
+      )}
 
       {/* === eSIM 階段一：未使用（已收到 rcode、未按我要安裝） === */}
       {order.status === 'COMPLETED' && order.esimRcode && !order.redeemedAt && !order.activatedAt && (() => {

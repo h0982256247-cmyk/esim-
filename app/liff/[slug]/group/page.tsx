@@ -66,6 +66,7 @@ export default function GroupPage() {
   const base = slugMatch ? slugMatch[1] : ''
   const [ownedGroup, setOwnedGroup] = useState<GroupInfo | null>(null)
   const [membership, setMembership] = useState<Membership | null>(null)
+  const [memberStats, setMemberStats] = useState<{ purchaseCount: number; totalSaved: number } | null>(null)
   const [loading, setLoading] = useState(true)
 
   // 被邀請連結帶 ?invite=CODE 進來時預填邀請碼（lazy init 避免在 effect 內同步 setState）。
@@ -128,6 +129,7 @@ export default function GroupPage() {
     const d = await fetch('/api/groups').then(r => r.json())
     setOwnedGroup(d.ownedGroup ?? null)
     setMembership(d.membership ?? null)
+    setMemberStats(d.memberStats ?? null)
   }
 
   useEffect(() => {
@@ -310,6 +312,20 @@ export default function GroupPage() {
         </div>
         {membership.group.description && (
           <p style={{ fontSize: 14, color: S.muted, lineHeight: 1.6 }}>{membership.group.description}</p>
+        )}
+
+        {/* 我的累積：購買次數 + 已省金額 */}
+        {memberStats && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+            <div style={{ flex: 1, background: S.white, border: `1px solid ${S.line}`, borderRadius: 14, padding: '14px 16px', textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>累積購買</p>
+              <p style={{ fontSize: 24, fontWeight: 800, color: S.ink, margin: '2px 0 0' }}>{memberStats.purchaseCount}<span style={{ fontSize: 13, fontWeight: 600 }}> 次</span></p>
+            </div>
+            <div style={{ flex: 1, background: S.white, border: `1px solid ${S.line}`, borderRadius: 14, padding: '14px 16px', textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>已省金額</p>
+              <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: '2px 0 0' }}>NT${memberStats.totalSaved.toLocaleString()}</p>
+            </div>
+          </div>
         )}
 
         {/* 會員回饋：讓會員知道「每次購買都會拿到回購券」 */}
