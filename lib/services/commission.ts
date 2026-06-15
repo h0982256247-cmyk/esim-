@@ -149,6 +149,7 @@ export async function getGroupCommissions(groupId: string) {
         select: {
           id: true,
           paidAt: true,
+          subtotal: true,   // 分潤以原價(subtotal)計算，明細顯示用
           orderItems: { select: { productName: true } },
         },
       },

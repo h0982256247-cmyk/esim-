@@ -15,6 +15,7 @@ type Commission = {
   order: {
     id: string
     paidAt: string | null
+    subtotal: number
     orderItems: { productName: string }[]
   }
 }
@@ -152,7 +153,7 @@ export default function RevenuePage() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">
-                  實付 NT${c.paidAmount} × {Math.round(Number(c.ownerRate) * 100)}%
+                  原價 NT${c.order.subtotal.toLocaleString()} × {Math.round(Number(c.ownerRate) * 100)}% 分潤
                 </p>
               </div>
             )
