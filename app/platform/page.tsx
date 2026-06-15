@@ -22,6 +22,7 @@ type Stats = {
   totalRevenue: number
   pendingGroups: number
   totalGroupOwners: number
+  totalProducts: number
   pendingCommissions: number
   esimPendingOrders: number
   monthlyRevenue: MonthlyRevenue[]
@@ -165,6 +166,38 @@ export default function PlatformDashboard() {
         </div>
       </div>
 
+      {/* 開站總覽：尚無交易資料時，把空白儀表板換成「現況 + 下一步」引導。 */}
+      {stats.totalOrders === 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 shadow-sm">
+          <p className="text-base font-semibold text-gray-800">平台運行總覽</p>
+          <p className="text-sm text-gray-500 mt-0.5 mb-4">目前還沒有交易資料；完成下面幾步就會開始有營收數字。</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: '會員', value: stats.totalUsers, href: '/platform/users' },
+              { label: '上架商品', value: stats.totalProducts, href: '/platform/products' },
+              { label: '社群主', value: stats.totalGroupOwners, href: '/platform/groups' },
+              { label: '訂單', value: stats.totalOrders, href: '/platform/orders' },
+            ].map(s => (
+              <Link key={s.label} href={s.href} className="bg-white rounded-xl border border-gray-100 p-3 hover:border-blue-300 transition">
+                <p className="text-xs text-gray-400">{s.label}</p>
+                <p className="text-xl font-bold text-gray-800 mt-0.5">{s.value.toLocaleString()}</p>
+              </Link>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2 mt-4">
+            <Link href="/platform/products" className="text-sm font-medium text-blue-700 bg-white border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-100 transition">
+              {stats.totalProducts === 0 ? '① 匯入商品' : '管理商品'}
+            </Link>
+            <Link href="/platform/users" className="text-sm font-medium text-blue-700 bg-white border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-100 transition">
+              {stats.totalGroupOwners === 0 ? '② 升級社群主' : '管理社群'}
+            </Link>
+            <Link href="/platform/liff" className="text-sm font-medium text-blue-700 bg-white border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-100 transition">
+              ③ 設定金流 / 外觀
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* 風險警示區：系統異常 + 虧損訂單 + 低毛利商品。皆 0 時整區不顯示。 */}
       {(stats.riskAlerts.systemAlerts.count > 0 || stats.riskAlerts.lossOrders.count > 0 || stats.riskAlerts.lowMarginProducts.count > 0) && (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
@@ -259,7 +292,7 @@ export default function PlatformDashboard() {
         <div className="bg-white rounded-2xl border-2 border-emerald-100 p-4 shadow-sm">
           <p className="text-xs text-emerald-700 font-medium">毛利率</p>
           <p className={`text-2xl font-bold mt-1 ${stats.marginRate < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-            {(stats.marginRate * 100).toFixed(1)}%
+            {stats.ordersIncluded > 0 ? `${(stats.marginRate * 100).toFixed(1)}%` : '—'}
           </p>
           <p className="text-[10px] text-gray-400 mt-0.5">
             納入 {stats.ordersIncluded} 筆
