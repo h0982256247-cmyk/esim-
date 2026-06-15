@@ -136,7 +136,7 @@ export default function ClassicShop({
           <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>目前沒有可購買的商品</p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 16px' }}>
-            {countries.map((c, i) => {
+            {countries.map((c) => {
               const { accent, soft } = getAccent(c.countryCode)
               return (
                 <button

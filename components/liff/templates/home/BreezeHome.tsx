@@ -24,7 +24,7 @@ function getBreezeGrad(code: string) {
 }
 
 export default function BreezeHome({
-  tenant, slug, countries, colors: C, onSelectCountry, onNavigate, onSearch,
+  tenant, countries, colors: C, onSelectCountry, onNavigate, onSearch,
 }: HomePageProps) {
   const [query, setQuery] = useState('')
   const [selDays, setSelDays] = useState<string | null>(null)

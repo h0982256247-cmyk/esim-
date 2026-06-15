@@ -20,7 +20,6 @@ export async function recordAlert(label: string, ctx: AlertContext = {}): Promis
     `
   } catch (e) {
     // 告警本身不可影響主流程
-    // eslint-disable-next-line no-console
     console.error('[alert] recordAlert failed', label, e instanceof Error ? e.message : e)
   }
 }

@@ -14,7 +14,6 @@ interface TPDirectLike {
 
 export function redirectToPaymentUrl(url: string): void {
   if (typeof window === 'undefined') return
-  // eslint-disable-next-line no-console
   console.log('[payment-redirect]', url)
   const tp = (window as unknown as { TPDirect?: TPDirectLike }).TPDirect
   if (tp && typeof tp.redirect === 'function') {
@@ -25,7 +24,6 @@ export function redirectToPaymentUrl(url: string): void {
     const before = window.location.href
     setTimeout(() => {
       if (window.location.href === before) {
-        // eslint-disable-next-line no-console
         console.warn('[payment-redirect] TPDirect.redirect did not navigate, forcing window.location.href')
         window.location.href = url
       }

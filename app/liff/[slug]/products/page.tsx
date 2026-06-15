@@ -57,7 +57,7 @@ function ProductsContent() {
   const searchDays = searchParams.get('days')
   // 流量類型用 state：初始吃主頁搜尋帶的 ?data，使用者可在商城頁用按鈕切換（null=全部）
   const [dataType, setDataType] = useState<string | null>(searchParams.get('data'))
-  const { liff, isReady } = useLiff()
+  const { isReady } = useLiff()
   const C = useTenantColors()
   const tenant = useTenant()
   const cart = useCart()

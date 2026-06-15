@@ -32,7 +32,6 @@ export async function POST(req: NextRequest) {
   const tapPayOrderId = body.order_number as string | undefined
   // 診斷：webhook 一進來就記，方便在 Vercel logs 確認 TapPay 到底有沒有打回來、
   // 以及卡在哪一關（找不到訂單 / 401 / 付款失敗 / 成功）。
-  // eslint-disable-next-line no-console
   console.log('[tappay-notify] received', {
     order_number: tapPayOrderId,
     status: body.status,
@@ -50,7 +49,6 @@ export async function POST(req: NextRequest) {
   })
 
   if (!order) {
-    // eslint-disable-next-line no-console
     console.warn('[tappay-notify] order NOT FOUND for order_number', tapPayOrderId)
     return NextResponse.json({ message: 'Order not found' }, { status: 404 })
   }
@@ -103,7 +101,6 @@ export async function POST(req: NextRequest) {
       status,
       msg: (body.msg as string | undefined) ?? null,
     })
-    // eslint-disable-next-line no-console
     console.warn('[tappay-notify] payment FAILED', { order_number: tapPayOrderId, status, reason })
     if (bundleId) await markBundleFailed(bundleId, reason)
     else await markOrderFailed(order.id, reason)
@@ -120,7 +117,6 @@ export async function POST(req: NextRequest) {
   // record_status 0 = 已授權（即使尚未請款 is_captured=false 也算付款成立，TapPay
   // 會在 cap_millis 自動請款）。金額需與訂單相符。
   if (!verify.ok || verify.amount !== expectedAmount || verify.recordStatus !== 0) {
-    // eslint-disable-next-line no-console
     console.warn('[tappay-notify] Record API 驗真失敗，不標記 PAID', { order_number: tapPayOrderId, expectedAmount, verify })
     await recordAlert('payment_verify_failed', {
       orderId: order.id, tenantAdminId,
@@ -141,7 +137,6 @@ export async function POST(req: NextRequest) {
     await markOrderPaid(order.id, recTradeId)
     paidOrderIds = [order.id]
   }
-  // eslint-disable-next-line no-console
   console.log('[tappay-notify] marked PAID ✅', { order_number: tapPayOrderId, paidOrderIds })
 
   // 記憶卡號：card_secret 只在 pay-by-prime「第一段回應」出現、backend_notify 不帶，
@@ -155,7 +150,6 @@ export async function POST(req: NextRequest) {
     try {
       await triggerEsimActivation(oid)
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error('[pay-notify] triggerEsimActivation failed', oid, e)
       await recordAlert('esim_activation_failed', { orderId: oid, tenantAdminId, error: e instanceof Error ? e.message : String(e) })
     }

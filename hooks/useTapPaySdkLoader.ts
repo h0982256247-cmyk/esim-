@@ -52,7 +52,6 @@ export function useTapPaySdkLoader(options: UseTapPaySdkLoaderOptions = {}): boo
       script.onerror = () => {
         // SDK 載入失敗（網路、CSP、SRI 不符等）— 下次 debug 在 LIFF / Safari Remote
         // Inspector 看得到，比靜默卡 spinner 好排查。
-        // eslint-disable-next-line no-console
         console.error('[TapPay] SDK failed to load:', TAPPAY_SDK_SRC)
       }
       document.head.appendChild(script)

@@ -8,7 +8,6 @@ import { recordAlert } from '@/lib/services/alert'
 export function fireAndLog(label: string, ctx: unknown, p: Promise<unknown>): void {
   p.catch(e => {
     const msg = e instanceof Error ? e.message : String(e)
-    // eslint-disable-next-line no-console
     console.error(`[fire-and-log] ${label} failed`, ctx, msg)
     recordAlert(label, { orderId: typeof ctx === 'string' ? ctx : null, error: msg })
   })

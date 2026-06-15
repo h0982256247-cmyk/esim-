@@ -238,7 +238,6 @@ export async function POST(req: NextRequest) {
         cardExpiresAt: charge.cardInfo?.expiryDate,
       })
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error('[pay] upsertSavedCard failed', e)
     }
   }

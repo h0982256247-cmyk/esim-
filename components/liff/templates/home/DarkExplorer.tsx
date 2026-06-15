@@ -29,7 +29,7 @@ function getDarkGrad(code: string) {
 }
 
 export default function DarkExplorer({
-  tenant, slug, countries, colors: C, onSelectCountry, onNavigate, onSearch,
+  tenant, countries, onSelectCountry, onNavigate, onSearch,
 }: HomePageProps) {
   const [query, setQuery]     = useState('')
   const [selDays, setSelDays] = useState<string | null>(null)

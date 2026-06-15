@@ -288,7 +288,6 @@ function CheckoutContent() {
     const appKey = cfg?.appKey ?? process.env.NEXT_PUBLIC_TAPPAY_APP_KEY ?? ''
     const env = cfg?.env ?? (process.env.NEXT_PUBLIC_TAPPAY_ENV === 'production' ? 'production' : 'sandbox')
     if (!appId || !appKey) {
-      // eslint-disable-next-line no-console
       console.error('[checkout] TapPay config missing (appId=0). 後端 /api/liff/payment-config 未提供 tenant 設定。')
       return false
     }
@@ -386,7 +385,6 @@ function CheckoutContent() {
     else if (productId) cart.remove(productId)
   }
   const handlePayResult = (res: { requiresRedirect?: boolean; paymentUrl?: string; ok?: boolean; error?: string }, successHref: string) => {
-    // eslint-disable-next-line no-console
     console.log('[checkout] tappay response', { requiresRedirect: res.requiresRedirect, paymentUrl: res.paymentUrl ? `${res.paymentUrl.slice(0,40)}...` : null, ok: res.ok, error: res.error })
     if (res.requiresRedirect && res.paymentUrl) {
       clearCartAfterCommit()
@@ -433,7 +431,6 @@ function CheckoutContent() {
     // 診斷：把每一步驟印到 console。卡在「付款中」時打開 Safari Remote
     // Inspector 就能直接看到流程停在哪。最後一個成功的 log 就是卡點。
     const dbg = (msg: string, data?: unknown) => {
-      // eslint-disable-next-line no-console
       console.log(`[checkout] ${msg}`, data ?? '')
     }
     dbg('start', { paymentMethod, useNewCard, bundleMode, hasSavedCard: !!savedCard })
@@ -443,7 +440,6 @@ function CheckoutContent() {
     let watchdogFired = false
     const watchdog = setTimeout(() => {
       watchdogFired = true
-      // eslint-disable-next-line no-console
       console.error('[checkout] watchdog fired — no response within 30s')
       setErrorMsg('付款處理逾時（30 秒未回應）。請檢查網路後再試一次，或改用其他付款方式。')
       setSubmitting(false)
@@ -480,7 +476,6 @@ function CheckoutContent() {
         }
       } catch (e) {
         stopWatchdog()
-        // eslint-disable-next-line no-console
         console.error('[checkout] bundle order failed', e)
         setErrorMsg('網路錯誤，請重試')
         setSubmitting(false)
@@ -503,7 +498,6 @@ function CheckoutContent() {
         orderRes = await r.json()
       } catch (e) {
         stopWatchdog()
-        // eslint-disable-next-line no-console
         console.error('[checkout] single order failed', e)
         setErrorMsg('網路錯誤，請重試')
         setSubmitting(false)
@@ -557,7 +551,6 @@ function CheckoutContent() {
           handlePayResult(res, successHref)
         } catch (e) {
           stopWatchdog()
-          // eslint-disable-next-line no-console
           console.error('[checkout] LINE Pay tappay call failed', e)
           setErrorMsg('網路錯誤，請重試')
           setSubmitting(false)
@@ -582,7 +575,6 @@ function CheckoutContent() {
         handlePayResult(res, successHref)
       } catch (e) {
         stopWatchdog()
-        // eslint-disable-next-line no-console
         console.error('[checkout] saved-card tappay call failed', e)
         setErrorMsg('網路錯誤，請重試')
         setSubmitting(false)
@@ -613,7 +605,6 @@ function CheckoutContent() {
         handlePayResult(res, successHref)
       } catch (e) {
         stopWatchdog()
-        // eslint-disable-next-line no-console
         console.error('[checkout] new-card tappay call failed', e)
         setErrorMsg('網路錯誤，請重試')
         setSubmitting(false)

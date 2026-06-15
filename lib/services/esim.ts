@@ -301,7 +301,6 @@ export async function triggerEsimActivation(orderId: string): Promise<void> {
     // ⚠ 不要靜默：印出 log（Vercel 可見），訂單留在「PAID 且無 esimRcode」可被
     // retry cron / 後台補發撈到。這段過去靜默吞錯，是「付款成功卻沒收到 eSIM」
     // 最難 debug 的主因。
-    // eslint-disable-next-line no-console
     console.error('[esim] placeWmOrder 失敗，訂單維持 PAID 待重試', { orderId })
     notifyEsimPending(userId, productName).catch(() => {})
     return

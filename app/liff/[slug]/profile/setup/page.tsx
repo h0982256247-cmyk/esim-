@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useLiff } from '@/components/liff/LiffProvider'
 import { useLiffBase } from '@/hooks/useLiffBase'
 import { useTenantColors } from '@/components/liff/TenantContext'
 import { invalidateCache } from '@/hooks/useCachedData'
@@ -12,7 +11,6 @@ const S = {
 } as const
 
 export default function ProfileSetup() {
-  const { liff } = useLiff()
   const router = useRouter()
   const base = useLiffBase()
   const C = useTenantColors()
