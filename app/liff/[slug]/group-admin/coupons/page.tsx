@@ -34,6 +34,8 @@ export default function GroupAdminCouponsPage() {
   const toggle = (id: string) => {
     setSelectedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
   }
+  const allSelected = members.length > 0 && selectedIds.length === members.length
+  const toggleAll = () => setSelectedIds(allSelected ? [] : members.map(m => m.user.id))
 
   const handleSend = async () => {
     if (selectedIds.length === 0 || !discount) return
@@ -73,13 +75,17 @@ export default function GroupAdminCouponsPage() {
           <option value="0.95">95 折（5% OFF）</option>
           <option value="0.92">92 折（8% OFF）</option>
           <option value="0.90">9 折（10% OFF）</option>
-          <option value="0.88">88 折（12% OFF）</option>
-          <option value="0.85">85 折（15% OFF）</option>
-          <option value="0.80">8 折（20% OFF）</option>
         </select>
       </div>
 
-      <p className="text-sm text-gray-500 mb-2">選擇發送對象（共 {members.length} 位成員）</p>
+      <div className="flex justify-between items-center mb-2">
+        <p className="text-sm text-gray-500">選擇發送對象（共 {members.length} 位成員）</p>
+        {members.length > 0 && (
+          <button type="button" onClick={toggleAll} className="text-xs font-medium" style={{ color: C.primary }}>
+            {allSelected ? '取消全選' : '全選'}
+          </button>
+        )}
+      </div>
       <div className="space-y-2 mb-4">
         {members.length === 0 && <p className="text-gray-400 text-sm py-4 text-center">目前沒有社群成員</p>}
         {members.map(m => (
