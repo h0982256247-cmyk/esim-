@@ -31,9 +31,18 @@ export async function getActiveProducts(countryCode?: string, tenantAdminId?: st
   })
 }
 
-export async function getProductById(id: string) {
-  return prisma.product.findUnique({
-    where: { id },
+// 多租戶隔離：購買/查詢單一商品時，商品必須屬於買家的租戶（tenantAdminId）。
+// 否則 A 白牌帳號可拿 B 白牌的 productId 下單 → 售價/成本/世界移動發卡設定/分潤
+// 全部歸屬錯亂。同時要求 status=ACTIVE 且 supplierProduct=ACTIVE（不可買下架品）。
+// tenantAdminId 為 null（未登入訪客瀏覽）時不限租戶；下單路徑一律帶入買家租戶。
+export async function getProductById(id: string, tenantAdminId?: string | null) {
+  return prisma.product.findFirst({
+    where: {
+      id,
+      status: ProductStatus.ACTIVE,
+      supplierProduct: { status: SupplierProductStatus.ACTIVE },
+      ...(tenantAdminId != null ? { tenantAdminId } : {}),
+    },
     select: {
       id: true,
       countryCode: true,

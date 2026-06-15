@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
+import { resolveTenantAdminIdFromToken } from '@/lib/auth/resolve-tenant'
 import { createOrder, getUserOrders } from '@/lib/services/order'
 import { isUserProfileComplete } from '@/lib/services/user'
 import { checkRateLimit } from '@/lib/utils/rate-limit'
@@ -48,12 +49,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '請先完成基本資料填寫', code: 'PROFILE_INCOMPLETE' }, { status: 422 })
   }
 
+  // 多租戶隔離：帶入買家租戶，商品必須屬於同租戶才能下單
+  const tenantAdminId = await resolveTenantAdminIdFromToken(token)
   const result = await createOrder({
     userId: session.userId,
     lineUid: session.lineUid,
     productId,
     couponIds,
     paymentMethod,
+    tenantAdminId,
   })
 
   if (!result.ok) {

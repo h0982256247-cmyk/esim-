@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
+import { resolveTenantAdminIdFromToken } from '@/lib/auth/resolve-tenant'
 import { createBundleOrders, type BundleCartLine } from '@/lib/services/order'
 import { isUserProfileComplete } from '@/lib/services/user'
 import { checkRateLimit } from '@/lib/utils/rate-limit'
@@ -60,12 +61,15 @@ export async function POST(req: NextRequest) {
   // JSON (not a 500 HTML page). A non-JSON 500 makes the client's .json()
   // throw and surfaces a misleading「網路錯誤，請重試」.
   try {
+    // 多租戶隔離：帶入買家租戶，每張商品都必須屬於同租戶才能下單
+    const tenantAdminId = await resolveTenantAdminIdFromToken(token)
     const result = await createBundleOrders({
       userId: session.userId,
       lineUid: session.lineUid,
       lines: cleaned,
       paymentMethod,
       couponIds,
+      tenantAdminId,
     })
 
     if (!result.ok) {

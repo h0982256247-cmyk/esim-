@@ -26,6 +26,8 @@ export interface CreateOrderInput {
   productId: string
   couponIds: string[]
   paymentMethod: PaymentMethod
+  /** 買家所屬租戶；商品必須屬於此租戶才能下單（多租戶隔離）。 */
+  tenantAdminId?: string | null
 }
 
 export type CreateOrderResult =
@@ -33,7 +35,7 @@ export type CreateOrderResult =
   | { ok: false; reason: string }
 
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
-  const product = await getProductById(input.productId)
+  const product = await getProductById(input.productId, input.tenantAdminId)
   if (!product) return { ok: false, reason: '商品不存在或已下架' }
 
   const subtotal = product.sellPrice
@@ -145,6 +147,8 @@ export interface CreateBundleOrdersInput {
   lines: BundleCartLine[]
   paymentMethod: PaymentMethod
   couponIds?: string[]
+  /** 買家所屬租戶；每張商品都必須屬於此租戶才能下單（多租戶隔離）。 */
+  tenantAdminId?: string | null
 }
 
 // 把「總折扣」按各筆原價比例攤到每一筆（最大餘數法）。
@@ -195,7 +199,7 @@ export async function createBundleOrders(input: CreateBundleOrdersInput): Promis
 
   // Fetch products once (dedupe by id)
   const uniqueIds = Array.from(new Set(slots.map(s => s.productId)))
-  const products = await Promise.all(uniqueIds.map(id => getProductById(id)))
+  const products = await Promise.all(uniqueIds.map(id => getProductById(id, input.tenantAdminId)))
   const productMap = new Map<string, NonNullable<Awaited<ReturnType<typeof getProductById>>>>()
   for (let i = 0; i < uniqueIds.length; i++) {
     const p = products[i]
