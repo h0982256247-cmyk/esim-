@@ -122,7 +122,11 @@ export default function ProfileSetup() {
               background: C.light, border: `1px solid ${C.border}`, color: C.primary,
               fontSize: 13, fontWeight: 700, padding: '7px 14px', borderRadius: 100,
             }}>
-              🎫 完成註冊即領「官方 9 折券」
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 8a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 000-4z" />
+                <path d="M14 6.5v11" strokeDasharray="2 2.5" />
+              </svg>
+              完成註冊即領「官方 9 折券」
             </div>
           )}
         </div>
@@ -145,8 +149,6 @@ export default function ProfileSetup() {
                   style={{
                     ...inputStyle,
                     borderColor: errors[key] ? '#ef4444' : S.line,
-                    // 生日是短欄位，不需占滿整行（避免看起來過長）
-                    ...(key === 'birthday' ? { maxWidth: 220, fontVariantNumeric: 'tabular-nums' } : {}),
                   }}
                 />
                 {errors[key] && <p style={{ fontSize: 12, color: '#ef4444', marginTop: 5 }}>{errors[key]}</p>}
