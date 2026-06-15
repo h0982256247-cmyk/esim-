@@ -39,8 +39,8 @@ export default function LiffSettingsPage() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
 
   useEffect(() => {
-    setLiffId(process.env.NEXT_PUBLIC_LIFF_ID ?? '')
     fetch('/api/platform/appearance').then(r => r.json()).then(d => {
+      if (d.liffId)          setLiffId(d.liffId)   // 該租戶自己的 LIFF ID（不再讀全域 env）
       if (d.adminId)         setAdminId(d.adminId)
       if (d.homeTemplate)    setHomeTemplate(d.homeTemplate)
       if (d.productsTemplate) setProductsTemplate(d.productsTemplate)
@@ -125,7 +125,7 @@ export default function LiffSettingsPage() {
     </button>
   )
 
-  const liffUrl = liffId ? `https://liff.line.me/${liffId}` : '（請先設定 NEXT_PUBLIC_LIFF_ID）'
+  const liffUrl = liffId ? `https://liff.line.me/${liffId}` : '（請先到「帳號管理 → 品牌設定」填入此商店的 LIFF ID）'
 
   return (
     <div className="max-w-3xl space-y-8">

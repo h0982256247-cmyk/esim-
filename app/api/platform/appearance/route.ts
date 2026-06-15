@@ -11,7 +11,7 @@ export async function GET() {
     where: { id: session.tenantAdminId },
     select: {
       homeTemplate: true, productsTemplate: true,
-      brandName: true, logoUrl: true, primaryColor: true,
+      brandName: true, logoUrl: true, primaryColor: true, liffId: true,
     },
   })
   if (!admin) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -23,6 +23,7 @@ export async function GET() {
     brandName:    admin.brandName,
     logoUrl:      admin.logoUrl,
     primaryColor: admin.primaryColor,
+    liffId:       admin.liffId,        // 該租戶自己的 LIFF ID（取代全域 NEXT_PUBLIC_LIFF_ID）
   })
 }
 
