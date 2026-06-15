@@ -606,6 +606,22 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const handleTestToken = async () => {
+    setTesting(true)
+    setTestResult(null)
+    const r = await fetch(`/api/platform/admins/${admin.id}/line-test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: form.lineAccessToken }),
+    }).then(x => x.json()).catch(() => ({ ok: false, error: '連線失敗' }))
+    setTesting(false)
+    setTestResult(r.ok
+      ? { ok: true, text: `✅ 已連線官方帳號：${r.displayName ?? ''}${r.basicId ? `（${r.basicId}）` : ''}` }
+      : { ok: false, text: `❌ ${r.error ?? '測試失敗'}` })
+  }
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -690,22 +706,6 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
             )}
           </div>
 
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">LIFF ID</label>
-            <input
-              type="text"
-              value={form.liffId}
-              onChange={e => setForm(p => ({ ...p, liffId: e.target.value }))}
-              placeholder="例：1234567890-abcdefgh"
-              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {form.tenantSlug ? (
-              <EndpointUrlRow slug={form.tenantSlug} />
-            ) : (
-              <p className="text-xs text-gray-400 mt-0.5">至 LINE Developers Console 申請，填入 Endpoint URL 後存檔</p>
-            )}
-          </div>
-
           {/* Logo 欄位：支援直接上傳或貼網址 */}
           <div>
             <label className="text-xs text-gray-500 block mb-1">Logo 圖片</label>
@@ -777,16 +777,58 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
             </div>
           </div>
 
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">LINE Channel Access Token</label>
-            <input
-              type="password"
-              value={form.lineAccessToken}
-              onChange={e => setForm(p => ({ ...p, lineAccessToken: e.target.value }))}
-              placeholder="輸入 LINE Channel Access Token"
-              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <p className="text-xs text-gray-400 mt-1">留空則使用系統預設環境變數。</p>
+          {/* ── LINE 設定（分兩區：登入用 vs 推播用，兩組是不同的 LINE Channel）── */}
+          <div className="border-t pt-4 mt-1">
+            <p className="text-sm font-semibold text-gray-700">LINE 設定</p>
+            <p className="text-xs text-gray-400 mt-0.5 mb-3">這兩組來自不同的 LINE Channel，請勿混用。</p>
+
+            {/* A. LINE Login / LIFF（給商城開啟與會員登入用）*/}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-semibold text-gray-600">A. LINE Login / LIFF<span className="font-normal text-gray-400">（商城登入用）</span></p>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">LIFF ID</label>
+                <input
+                  type="text"
+                  value={form.liffId}
+                  onChange={e => setForm(p => ({ ...p, liffId: e.target.value }))}
+                  placeholder="例：1234567890-abcdefgh"
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {form.tenantSlug ? (
+                  <EndpointUrlRow slug={form.tenantSlug} />
+                ) : (
+                  <p className="text-xs text-gray-400 mt-0.5">至 LINE Developers Console（LINE Login channel）申請，並把上方 LIFF 網址填回 Endpoint URL。</p>
+                )}
+                <p className="text-xs text-gray-400 mt-1">Login Channel ID 會自動從 LIFF ID 前綴解析，不需另填；Channel Secret 也不需填（登入用 LIFF id token 驗證）。</p>
+              </div>
+            </div>
+
+            {/* B. LINE 官方帳號 / Messaging API（給推播通知用）*/}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2 mt-3">
+              <p className="text-xs font-semibold text-gray-600">B. LINE 官方帳號 / Messaging API<span className="font-normal text-gray-400">（推播通知用）</span></p>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Channel Access Token</label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={form.lineAccessToken}
+                    onChange={e => { setForm(p => ({ ...p, lineAccessToken: e.target.value })); setTestResult(null) }}
+                    placeholder="輸入 Messaging API Channel Access Token"
+                    className="flex-1 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTestToken}
+                    disabled={testing || !form.lineAccessToken}
+                    className="shrink-0 border border-blue-200 text-blue-700 bg-white hover:bg-blue-50 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
+                  >
+                    {testing ? '測試中…' : '測試推播'}
+                  </button>
+                </div>
+                {testResult && <p className={`text-xs mt-1 ${testResult.ok ? 'text-green-600' : 'text-red-500'}`}>{testResult.text}</p>}
+                <p className="text-xs text-gray-400 mt-1">付款成功 / eSIM 就緒 / 轉贈等通知會用此 token 從你的官方帳號推播。留空則用系統預設（多白牌時請務必填）。Messaging Channel ID / Secret 目前不需填（未接收 webhook）。</p>
+              </div>
+            </div>
           </div>
 
           {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
