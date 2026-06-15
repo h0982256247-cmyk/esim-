@@ -216,6 +216,18 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 // ─── eSIM Config Tab ──────────────────────────────────────────────
 
+// 世界移動「測試 / 正式」是兩台獨立主機（各有不同 merchantId/deptId/token 與 wmproductId）。
+const WM_API_HOSTS = {
+  test: 'https://tfmshippingsys.fastmove.com.tw',
+  prod: 'https://fmshippingsys.fastmove.com.tw',
+} as const
+type WmEnv = 'test' | 'prod' | 'custom'
+function inferWmEnv(apiUrl: string): WmEnv {
+  if (apiUrl === WM_API_HOSTS.test) return 'test'
+  if (apiUrl === WM_API_HOSTS.prod) return 'prod'
+  return apiUrl ? 'custom' : 'test'
+}
+
 function EsimConfigTab({
   adminId,
   config,
@@ -227,11 +239,12 @@ function EsimConfigTab({
 }) {
   const [form, setForm] = useState({
     provider: config?.provider ?? 'worldmove',
-    apiUrl: config?.apiUrl ?? '',
+    apiUrl: config?.apiUrl ?? WM_API_HOSTS.test,
     merchantId: config?.merchantId ?? '',
     deptId: config?.deptId ?? '',
     token: config?.token ?? '',
   })
+  const [env, setEnv] = useState<WmEnv>(inferWmEnv(config?.apiUrl ?? ''))
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -266,8 +279,38 @@ function EsimConfigTab({
         )}
 
         <form onSubmit={handleSave} className="space-y-3">
+          {/* 環境切換：測試 / 正式（各為獨立主機與帳號） */}
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">環境</label>
+            <select
+              value={env}
+              onChange={e => {
+                const v = e.target.value as WmEnv
+                setEnv(v)
+                if (v === 'test') setForm(p => ({ ...p, apiUrl: WM_API_HOSTS.test }))
+                else if (v === 'prod') setForm(p => ({ ...p, apiUrl: WM_API_HOSTS.prod }))
+              }}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="test">測試（tfmshippingsys）</option>
+              <option value="prod">正式（fmshippingsys）</option>
+              <option value="custom">自訂網址</option>
+            </select>
+            {env === 'custom' ? (
+              <input
+                type="text"
+                value={form.apiUrl}
+                onChange={e => setForm(p => ({ ...p, apiUrl: e.target.value }))}
+                placeholder="https://..."
+                required
+                className="w-full border rounded-lg px-3 py-2 text-sm font-mono mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            ) : (
+              <p className="text-xs font-mono text-gray-500 mt-1 break-all">{form.apiUrl}</p>
+            )}
+            <p className="text-xs text-amber-600 mt-1 leading-relaxed">⚠️ 測試與正式是兩個獨立帳號：切換環境後，下方 Merchant ID / Dept ID / Token 要改填該環境的值，且商品需用該環境重新匯入（wmproductId 不同）。</p>
+          </div>
           {[
-            { label: 'API URL', key: 'apiUrl', placeholder: 'https://api.worldmobile.com.tw/...' },
             { label: 'Merchant ID', key: 'merchantId', placeholder: '' },
             { label: 'Dept ID', key: 'deptId', placeholder: '' },
           ].map(f => (
