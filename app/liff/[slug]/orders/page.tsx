@@ -750,7 +750,9 @@ function CompactRow({ order, onClick }: { order: Order; onClick: () => void }) {
 
 function CouponRow({ coupon, primary, inactive }: { coupon: Coupon; primary: string; inactive?: boolean }) {
   const pct = Math.round((1 - coupon.discount) * 100)
-  const fold = Math.round(coupon.discount * 10)
+  // 折數：0.90→9 折、0.85→85 折、0.92→92 折（原 Math.round(d*10) 對非整十折會算錯）
+  const foldN = Math.round(coupon.discount * 100)
+  const fold = foldN % 10 === 0 ? foldN / 10 : foldN
   const now = new Date()
   const expired = !coupon.usedAt && coupon.expiresAt && new Date(coupon.expiresAt) <= now
   const isInactive = inactive || !!coupon.usedAt || !!expired
