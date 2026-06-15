@@ -106,7 +106,7 @@ export default function GroupAdminSettingsPage() {
               ) : (
                 <>
                   <p className="font-semibold text-gray-700 mb-1">
-                    會員入群券 / 回購券：{memberDiscountPct >= 10 ? `${memberDiscountPct/10}` : `0.${memberDiscountPct}`} 折
+                    會員入群券 / 回購券：{memberDiscountPct % 10 === 0 ? memberDiscountPct / 10 : memberDiscountPct} 折
                   </p>
                   <p>
                     範例：原價 NT$1,000 商品<br />

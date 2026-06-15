@@ -283,7 +283,7 @@ export default function UserDetailPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5 font-bold text-gray-800">
-                      {Math.round(Number(c.discount) * 10)}折
+                      {(() => { const n = Math.round(Number(c.discount) * 100); return n % 10 === 0 ? n / 10 : n })()}折
                     </td>
                     <td className="px-5 py-3.5 text-gray-500">
                       {c.isOfficial ? '官方' : (c.sourceGroup?.name ?? '—')}
