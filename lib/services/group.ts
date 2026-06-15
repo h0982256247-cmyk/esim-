@@ -218,6 +218,27 @@ export async function adminSetRebateRate(
   })
 }
 
+// 平台設定某社群「每月活動券上限」。立即生效（同時把本月剩餘設為新上限），
+// 之後每月 1 號 settle-monthly 會再把剩餘重設為此上限。
+export async function adminSetMonthlyCouponQuota(
+  groupId: string,
+  quota: number,
+  tenantAdminId: string | null,
+) {
+  if (!Number.isInteger(quota) || quota < 0 || quota > 100) {
+    throw new Error('每月發券上限須為 0~100 的整數')
+  }
+  // 租戶隔離：非平台級只能改自己租戶的社群（比照 adminSetRebateRate）。
+  if (tenantAdminId != null) {
+    const existing = await prisma.group.findUnique({ where: { id: groupId }, select: { tenantAdminId: true } })
+    if (!existing || existing.tenantAdminId !== tenantAdminId) throw new Error('無權操作此社群')
+  }
+  return prisma.group.update({
+    where: { id: groupId },
+    data: { monthlyCouponQuota: quota, activityCouponQuota: quota },
+  })
+}
+
 // ─── 社群主後台：發送活動券 ───────────────────────────────────────
 
 export async function issueActivityCoupon(

@@ -39,11 +39,24 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // 每月把活動券「剩餘次數」重設為各社群的上限（過去只減不回復 → 發完永久卡住）。
+  // 跟月結同一支 cron（每月 1 號）跑，時點正確。
+  let quotaReset = 0
+  try {
+    quotaReset = await prisma.$executeRaw`
+      UPDATE groups
+      SET activity_coupon_quota = monthly_coupon_quota, quota_reset_at = now()
+      WHERE status = 'APPROVED'`
+  } catch (err) {
+    errors.push({ groupName: '(quota reset)', error: err instanceof Error ? err.message : 'unknown' })
+  }
+
   return NextResponse.json({
     ok: true,
     period,
     totalGroups: groups.length,
     settled,
+    quotaReset,
     errors,
     at: new Date().toISOString(),
   })

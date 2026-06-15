@@ -6,6 +6,7 @@ import TenantScopeBar from '@/components/platform/TenantScopeBar'
 
 type Group = {
   id: string; name: string; status: string; rebateRate: number
+  monthlyCouponQuota: number
   inviteCode: string; createdAt: string
   owner: { displayName: string; lineUid: string }
   _count: { members: number }
@@ -36,6 +37,10 @@ function GroupsContent() {
   const [rebateInput, setRebateInput] = useState('')
   const [savingRebate, setSavingRebate] = useState(false)
   const [rebateError, setRebateError] = useState<string | null>(null)
+  const [editingQuota, setEditingQuota] = useState<string | null>(null)
+  const [quotaInput, setQuotaInput] = useState('')
+  const [savingQuota, setSavingQuota] = useState(false)
+  const [quotaError, setQuotaError] = useState<string | null>(null)
   const load = () => {
     setLoading(true)
     fetch(`/api/admin/groups${statusFilter ? `?status=${statusFilter}` : ''}${filterTenantId ? `${statusFilter ? '&' : '?'}tenantAdminId=${filterTenantId}` : ''}`)
@@ -74,6 +79,13 @@ function GroupsContent() {
     const r = await fetch(`/api/admin/groups/${groupId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({rebateRate:pct/100})}).then(x=>x.json())
     setSavingRebate(false); if(r.ok){setEditingRebate(null);load()}else setRebateError(r.error??'設定失敗')
   }
+  const handleSaveQuota = async (groupId: string) => {
+    setSavingQuota(true); setQuotaError(null)
+    const n = parseInt(quotaInput, 10)
+    if (isNaN(n)||n<0||n>100) { setQuotaError('請輸入 0 ~ 100'); setSavingQuota(false); return }
+    const r = await fetch(`/api/admin/groups/${groupId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({monthlyCouponQuota:n})}).then(x=>x.json())
+    setSavingQuota(false); if(r.ok){setEditingQuota(null);load()}else setQuotaError(r.error??'設定失敗')
+  }
   const canEditRebate = currentUser?.role==='SUPER_ADMIN'||currentUser?.role==='PLATFORM_ADMIN'
   return (
     <div className="space-y-5">
@@ -96,7 +108,7 @@ function GroupsContent() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['社群名稱','社群主','成員','讓利比例','狀態','操作',...(currentUser?.role==='SUPER_ADMIN'?['所屬平台']:[])].map(h=>(
+                {['社群名稱','社群主','成員','讓利比例','每月發券','狀態','操作',...(currentUser?.role==='SUPER_ADMIN'?['所屬平台']:[])].map(h=>(
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -132,6 +144,31 @@ function GroupsContent() {
                           {canEditRebate&&g.status==='APPROVED'&&(
                             <button onClick={()=>{setEditingRebate(g.id);setRebateInput(String(Math.round(Number(g.rebateRate)*100)));setRebateError(null)}}
                               className="text-gray-300 hover:text-blue-500 transition" title="編輯讓利比例">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm">
+                      {editingQuota===g.id ? (
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1">
+                            <input type="number" min={0} max={100} step={1} value={quotaInput} onChange={e=>setQuotaInput(e.target.value)}
+                              className="w-14 border border-gray-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                            <span className="text-xs text-gray-400">次/月</span>
+                            <button onClick={()=>handleSaveQuota(g.id)} disabled={savingQuota} className="text-xs bg-blue-600 text-white px-2 py-1 rounded-lg disabled:opacity-50">{savingQuota?'…':'存'}</button>
+                            <button onClick={()=>{setEditingQuota(null);setQuotaError(null)}} className="text-xs text-gray-400 hover:text-gray-600 px-1">✕</button>
+                          </div>
+                          <p className="text-gray-400 text-xs">設定後立即生效，並每月 1 號回復</p>
+                          {quotaError&&<p className="text-red-500 text-xs">{quotaError}</p>}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-800">{g.monthlyCouponQuota} 次/月</span>
+                          {canEditRebate&&g.status==='APPROVED'&&(
+                            <button onClick={()=>{setEditingQuota(g.id);setQuotaInput(String(g.monthlyCouponQuota));setQuotaError(null)}}
+                              className="text-gray-300 hover:text-blue-500 transition" title="編輯每月發券上限">
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                           )}
