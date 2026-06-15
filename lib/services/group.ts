@@ -88,7 +88,7 @@ export async function promoteUserToOwner(input: PromoteUserToOwnerInput) {
 // ─── 加入社群 ─────────────────────────────────────────────────────
 
 export type JoinGroupResult =
-  | { ok: true; groupName: string }
+  | { ok: true; groupName: string; couponDiscount: number | null }
   | { ok: false; reason: string }
 
 export async function joinGroup(userId: string, lineUid: string, inviteCode: string): Promise<JoinGroupResult> {
@@ -136,7 +136,7 @@ export async function joinGroup(userId: string, lineUid: string, inviteCode: str
     }
   })
 
-  return { ok: true, groupName: group.name }
+  return { ok: true, groupName: group.name, couponDiscount: shouldIssueCoupon ? couponDiscount : null }
 }
 
 // ─── 退出社群 ─────────────────────────────────────────────────────

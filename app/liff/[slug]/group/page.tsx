@@ -50,6 +50,12 @@ function MemberBadge() {
   )
 }
 
+// 折扣（0.90）→ 折數標籤（9 折 / 92 折 / 95 折）
+function zheLabel(d: number): string {
+  const n = Math.round(d * 100)
+  return n % 10 === 0 ? `${n / 10} 折` : `${n} 折`
+}
+
 export default function GroupPage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -70,8 +76,8 @@ export default function GroupPage() {
   )
   const [joinMsg, setJoinMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [joining, setJoining] = useState(false)
+  const [joinedInfo, setJoinedInfo] = useState<{ groupName: string; couponDiscount: number | null } | null>(null)
 
-  const [leaving, setLeaving] = useState(false)
   const [sharing, setSharing] = useState(false)
 
   // 一鍵邀請：用 LINE shareTargetPicker 分享含邀請碼的卡片；點開連結回到本頁並預填邀請碼。
@@ -118,20 +124,6 @@ export default function GroupPage() {
     setSharing(false)
   }
 
-  const handleLeave = async () => {
-    const ok = window.confirm('退出社群後，此社群發出的未使用優惠券將立即失效。確定要退出嗎？')
-    if (!ok) return
-    setLeaving(true)
-    const r = await fetch('/api/groups/leave', { method: 'POST' }).then(x => x.json())
-    setLeaving(false)
-    if (r.error) {
-      window.alert(`退出失敗：${r.error}`)
-      return
-    }
-    window.alert(`已退出「${r.groupName}」${r.expiredCoupons > 0 ? `\n失效優惠券：${r.expiredCoupons} 張` : ''}`)
-    location.reload()
-  }
-
   const reload = async () => {
     const d = await fetch('/api/groups').then(r => r.json())
     setOwnedGroup(d.ownedGroup ?? null)
@@ -150,7 +142,7 @@ export default function GroupPage() {
       body: JSON.stringify({ inviteCode: inviteCode.trim() }),
     }).then(x => x.json())
     setJoining(false)
-    if (r.ok) { setJoinMsg({ ok: true, text: `已加入「${r.groupName}」，入群券已發放` }); reload() }
+    if (r.ok) { setJoinedInfo({ groupName: r.groupName, couponDiscount: r.couponDiscount ?? null }); reload() }
     else setJoinMsg({ ok: false, text: r.error })
   }
 
@@ -170,6 +162,33 @@ export default function GroupPage() {
     transition: 'all 0.15s',
     letterSpacing: '0.02em',
   })
+
+  // 加入成功彈窗（領到入群券時慶祝）。各 view 都掛上，確保加入瞬間就跳出。
+  const joinedPopup = joinedInfo && (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 60 }}
+      onClick={() => setJoinedInfo(null)}
+    >
+      <div style={{ background: S.white, borderRadius: 20, padding: '28px 24px', maxWidth: 340, width: '100%', textAlign: 'center', boxShadow: '0 12px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 44, marginBottom: 6 }}>🎉</div>
+        <p style={{ fontSize: 18, fontWeight: 800, color: S.ink, margin: '0 0 6px' }}>已加入「{joinedInfo.groupName}」</p>
+        {joinedInfo.couponDiscount != null ? (
+          <>
+            <p style={{ fontSize: 14, color: S.muted, margin: '0 0 2px' }}>恭喜獲得入群優惠券</p>
+            <p style={{ fontSize: 30, fontWeight: 800, color: C.primary, margin: '0 0 18px' }}>{zheLabel(joinedInfo.couponDiscount)}</p>
+          </>
+        ) : (
+          <p style={{ fontSize: 14, color: S.muted, margin: '0 0 18px' }}>歡迎加入社群！</p>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {joinedInfo.couponDiscount != null && (
+            <button onClick={() => router.push(`${base}/coupons`)} style={btnEnabled(true)}>查看我的優惠券</button>
+          )}
+          <button onClick={() => setJoinedInfo(null)} style={{ border: 'none', background: 'transparent', color: S.faint, fontSize: 14, fontWeight: 600, padding: 8, cursor: 'pointer' }}>知道了</button>
+        </div>
+      </div>
+    </div>
+  )
 
   // ── 社群主視角 ──
   if (ownedGroup) {
@@ -293,23 +312,29 @@ export default function GroupPage() {
           <p style={{ fontSize: 14, color: S.muted, lineHeight: 1.6 }}>{membership.group.description}</p>
         )}
 
-        <div style={{ marginTop: 32, padding: 16, background: '#fef2f2', borderRadius: 14, border: '1px solid #fecaca' }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: '#991b1b', margin: '0 0 6px' }}>退出社群</p>
-          <p style={{ fontSize: 12, color: '#7f1d1d', lineHeight: 1.6, margin: '0 0 12px' }}>
-            退出後，此社群發出的未使用優惠券將立即失效。
-          </p>
+        <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <button
-            onClick={handleLeave}
-            disabled={leaving}
-            style={{
-              width: '100%', padding: '10px 16px', borderRadius: 10, border: '1px solid #dc2626',
-              background: '#fff', color: '#dc2626', fontSize: 13, fontWeight: 600,
-              cursor: leaving ? 'not-allowed' : 'pointer', opacity: leaving ? 0.5 : 1,
-            }}
+            onClick={() => router.push(`${base}/coupons`)}
+            style={{ width: '100%', background: S.white, border: `1px solid ${S.line}`, borderRadius: 14, padding: '15px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
           >
-            {leaving ? '退出中…' : '退出社群'}
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: 0 }}>我的優惠券</p>
+              <p style={{ fontSize: 12, color: S.faint, margin: '3px 0 0' }}>查看社群與官方發給你的折扣券</p>
+            </div>
+            <ChevronRight />
+          </button>
+          <button
+            onClick={() => router.push(`${base}/products`)}
+            style={{ width: '100%', background: S.white, border: `1px solid ${S.line}`, borderRadius: 14, padding: '15px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
+          >
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: 0 }}>探索 eSIM 方案</p>
+              <p style={{ fontSize: 12, color: S.faint, margin: '3px 0 0' }}>用優惠券購買更划算</p>
+            </div>
+            <ChevronRight />
           </button>
         </div>
+        {joinedPopup}
       </div>
     )
   }
@@ -317,6 +342,7 @@ export default function GroupPage() {
   // ── 未加入 ──
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '28px 16px 96px' }}>
+      {joinedPopup}
       <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: '0 0 8px', letterSpacing: '-0.02em' }}>加入社群</h1>
       <p style={{ fontSize: 13, color: S.faint, margin: '0 0 20px', lineHeight: 1.6 }}>輸入朋友給你的邀請碼，加入後即可獲得入群優惠券。</p>
 

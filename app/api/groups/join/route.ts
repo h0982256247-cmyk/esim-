@@ -22,5 +22,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.reason }, { status: 422 })
   }
 
-  return NextResponse.json({ ok: true, groupName: result.groupName })
+  return NextResponse.json({ ok: true, groupName: result.groupName, couponDiscount: result.couponDiscount })
 }
