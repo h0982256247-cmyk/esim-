@@ -434,6 +434,7 @@ model Withdrawal {
   id              String           @id @default(cuid())
   groupId         String           @map("group_id")
   amount          Int
+  period          String?          // 對應的結算月份 YYYY-MM（整月提領；舊資料為 null）
   status          WithdrawalStatus @default(PENDING)
   bankInfoSnapshot Json            @map("bank_info_snapshot") // 申請時銀行資訊快照
   appliedAt       DateTime         @default(now()) @map("applied_at")

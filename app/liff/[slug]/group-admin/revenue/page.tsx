@@ -27,8 +27,9 @@ type Settlement = {
   paidAt: string | null
 }
 
-type WithdrawalRecord = { id: string; amount: number; status: string; appliedAt: string; processedAt: string | null; note: string | null }
+type WithdrawalRecord = { id: string; amount: number; period: string | null; status: string; appliedAt: string; processedAt: string | null; note: string | null }
 type WithdrawalBalance = { settled: number; locked: number; paid: number; pending: number; available: number; pendingAdjustment: number }
+type WithdrawableMonth = { period: string; amount: number }
 
 const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   PENDING: { text: '待結算', color: 'text-yellow-600' },
@@ -53,10 +54,11 @@ export default function RevenuePage() {
   const [pendingBalance, setPendingBalance] = useState(0)
   const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([])
   const [balance, setBalance] = useState<WithdrawalBalance | null>(null)
-  const [withdrawAmount, setWithdrawAmount] = useState('')
-  const [requesting, setRequesting] = useState(false)
+  const [withdrawableMonths, setWithdrawableMonths] = useState<WithdrawableMonth[]>([])
+  const [requesting, setRequesting] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'commissions' | 'settlements' | 'withdraw'>('commissions')
+  const [monthFilter, setMonthFilter] = useState<string>('all')
 
   const loadCommissions = () => fetch('/api/commissions').then(r => r.json()).then(d => {
     setCommissions(d.commissions ?? [])
@@ -64,28 +66,40 @@ export default function RevenuePage() {
     setPendingBalance(d.pendingBalance ?? 0)
   })
   const loadWithdrawals = () => fetch('/api/withdrawals').then(r => r.json()).then(d => {
-    if (!d.error) { setWithdrawals(d.withdrawals ?? []); setBalance(d.balance ?? null) }
+    if (!d.error) {
+      setWithdrawals(d.withdrawals ?? [])
+      setBalance(d.balance ?? null)
+      setWithdrawableMonths(d.withdrawableMonths ?? [])
+    }
   })
 
   useEffect(() => {
     Promise.all([loadCommissions(), loadWithdrawals()]).finally(() => setLoading(false))
   }, [])
 
-  const handleRequestWithdrawal = async () => {
-    const amount = parseInt(withdrawAmount, 10)
-    if (!Number.isInteger(amount) || amount <= 0) { window.alert('請輸入正整數金額'); return }
-    setRequesting(true)
+  // 只能整月提領：對某個結算月份送出申請（金額由後端鎖定為該月結算總額）。
+  const handleWithdrawMonth = async (period: string) => {
+    if (!window.confirm(`確定申請提領 ${period.replace('-', '/')} 整月分潤？送出後等平台撥款。`)) return
+    setRequesting(period)
     const r = await fetch('/api/withdrawals', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount }),
-    }).then(x => x.json())
-    setRequesting(false)
+      body: JSON.stringify({ period }),
+    }).then(x => x.json()).catch(() => ({ error: '連線失敗' }))
+    setRequesting(null)
     if (r.error) { window.alert(r.error); return }
-    setWithdrawAmount('')
     loadWithdrawals()
   }
 
   if (loading) return <div className="px-4 py-5"><PageSkeleton rows={4} /></div>
+
+  // 收益月份篩選：選項取自分潤(付款月)與結算月份，去重後新到舊。
+  const monthOf = (iso: string | null) => (iso ? iso.slice(0, 7) : '')
+  const monthOptions = Array.from(new Set([
+    ...commissions.map(c => monthOf(c.order.paidAt)).filter(Boolean),
+    ...settlements.map(s => s.period),
+  ])).sort().reverse()
+  const filteredCommissions = monthFilter === 'all' ? commissions : commissions.filter(c => monthOf(c.order.paidAt) === monthFilter)
+  const filteredSettlements = monthFilter === 'all' ? settlements : settlements.filter(s => s.period === monthFilter)
 
   return (
     <div className="px-4 py-5">
@@ -107,10 +121,23 @@ export default function RevenuePage() {
         ))}
       </div>
 
+      {tab !== 'withdraw' && monthOptions.length > 0 && (
+        <div className="mb-3">
+          <select
+            value={monthFilter}
+            onChange={e => setMonthFilter(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-200"
+          >
+            <option value="all">全部月份</option>
+            {monthOptions.map(m => <option key={m} value={m}>{m.replace('-', '/')}</option>)}
+          </select>
+        </div>
+      )}
+
       {tab === 'commissions' && (
         <div className="space-y-2">
-          {commissions.length === 0 && <p className="text-center text-gray-400 py-8">尚無分潤紀錄</p>}
-          {commissions.map(c => {
+          {filteredCommissions.length === 0 && <p className="text-center text-gray-400 py-8">尚無分潤紀錄</p>}
+          {filteredCommissions.map(c => {
             const s = STATUS_LABEL[c.status] ?? { text: c.status, color: 'text-gray-500' }
             return (
               <div key={c.id} className="bg-white rounded-xl border p-4 shadow-sm">
@@ -135,8 +162,8 @@ export default function RevenuePage() {
 
       {tab === 'settlements' && (
         <div className="space-y-2">
-          {settlements.length === 0 && <p className="text-center text-gray-400 py-8">尚無每月結算紀錄</p>}
-          {settlements.map(s => {
+          {filteredSettlements.length === 0 && <p className="text-center text-gray-400 py-8">尚無每月結算紀錄</p>}
+          {filteredSettlements.map(s => {
             const status = STATUS_LABEL[s.status] ?? { text: s.status, color: 'text-gray-500' }
             const label = s.period.replace('-', '/')
             const paidDate = s.paidAt ? new Date(s.paidAt).toLocaleDateString('zh-TW') : null
@@ -180,24 +207,30 @@ export default function RevenuePage() {
               )}
 
               <div className="bg-white rounded-xl border p-4 shadow-sm">
-                {balance.available > 0 ? (
-                  <div className="flex gap-2">
-                    <input type="number" min={1} max={balance.available} value={withdrawAmount}
-                      onChange={e => setWithdrawAmount(e.target.value)}
-                      placeholder={`最多 NT$${balance.available}`}
-                      className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <button onClick={handleRequestWithdrawal} disabled={requesting || !withdrawAmount}
-                      className="shrink-0 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-                      style={{ background: C.primary, color: C.onPrimary }}>
-                      {requesting ? '送出中…' : '申請提領'}
-                    </button>
-                  </div>
-                ) : (
+                <p className="text-xs text-gray-400 mb-2 font-medium">可提領月份（每次提領整月，不可拆分）</p>
+                {withdrawableMonths.length === 0 ? (
                   <p className="text-sm text-gray-400">
-                    {balance.settled === 0 ? '尚無已結算分潤可提領'
-                      : balance.pending > 0 ? `已申請待審 NT$${balance.pending.toLocaleString()}，請等待處理`
-                      : '本期無可提領餘額'}
+                    {balance.settled === 0 ? '尚無已結算分潤可提領' : '目前沒有可提領的月份（已結算月份皆已申請或撥款）'}
                   </p>
+                ) : (
+                  <div className="space-y-2">
+                    {withdrawableMonths.map(m => (
+                      <div key={m.period} className="flex items-center justify-between border rounded-lg px-3 py-2">
+                        <div>
+                          <p className="font-semibold text-sm">{m.period.replace('-', '/')} 月結</p>
+                          <p className="text-xs" style={{ color: C.primary }}>NT${m.amount.toLocaleString()}</p>
+                        </div>
+                        <button
+                          onClick={() => handleWithdrawMonth(m.period)}
+                          disabled={requesting === m.period}
+                          className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+                          style={{ background: C.primary, color: C.onPrimary }}
+                        >
+                          {requesting === m.period ? '送出中…' : '提領整月'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -209,7 +242,7 @@ export default function RevenuePage() {
                     return (
                       <div key={w.id} className="bg-white rounded-xl border p-3 shadow-sm flex justify-between items-center">
                         <div>
-                          <p className="font-semibold text-sm">NT${w.amount.toLocaleString()}</p>
+                          <p className="font-semibold text-sm">{w.period ? `${w.period.replace('-', '/')} · ` : ''}NT${w.amount.toLocaleString()}</p>
                           <p className="text-xs text-gray-400">{new Date(w.appliedAt).toLocaleDateString('zh-TW')}{w.note ? ` · ${w.note}` : ''}</p>
                         </div>
                         <span className={`text-xs font-medium ${m.color}`}>{m.text}</span>
