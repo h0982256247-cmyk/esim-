@@ -59,14 +59,19 @@ export async function issueRepurchaseCouponForOrder(orderId: string): Promise<vo
 
 // ─── 訂單退款：歸還已使用的券 + 作廢由該訂單發出的回購券 ──────────
 
-export async function restoreCouponsForRefundedOrder(orderId: string): Promise<{ restored: number; voided: number }> {
+// 接受一組訂單 id（單張退款傳 [orderId]；整捆全退傳整捆所有 id）。
+// 注意：合購時「使用的券」掛在錨單（usedOrderId = 第一筆），「回購券」則各筆各自發
+// （sourceOrderId = 各筆），故整捆退券務必把整捆所有 id 都帶進來，才不會漏。
+// 只在「整捆全退」時呼叫——單張部分退款不動優惠券（避免只退一張卻把整批券還回去）。
+export async function restoreCouponsForRefundedOrders(orderIds: string[]): Promise<{ restored: number; voided: number }> {
+  if (orderIds.length === 0) return { restored: 0, voided: 0 }
   const now = new Date()
   const graceUntil = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)  // 14 天寬限
 
   return prisma.$transaction(async tx => {
-    // 找出此訂單使用過的所有券
+    // 找出這些訂單使用過的所有券
     const consumed = await tx.coupon.findMany({
-      where: { usedOrderId: orderId },
+      where: { usedOrderId: { in: orderIds } },
       select: { id: true, expiresAt: true },
     })
 
@@ -82,10 +87,10 @@ export async function restoreCouponsForRefundedOrder(orderId: string): Promise<{
       })
     }
 
-    // 作廢此訂單發出但未使用的回購券
+    // 作廢這些訂單發出但未使用的回購券
     const voided = await tx.coupon.updateMany({
       where: {
-        sourceOrderId: orderId,
+        sourceOrderId: { in: orderIds },
         usedAt: null,
         OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       },

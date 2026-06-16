@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import { safeDecrypt } from '@/lib/utils/crypto'
 import { retryEsimActivation } from '@/lib/services/esim'
 import { cancelCommission } from '@/lib/services/commission'
-import { restoreCouponsForRefundedOrder } from '@/lib/services/coupon'
+import { restoreCouponsForRefundedOrders } from '@/lib/services/coupon'
 import { tapPayRefund } from '@/lib/services/tappay'
 import { OrderStatus } from '@prisma/client'
 
@@ -51,20 +51,23 @@ export async function GET(req: NextRequest, { params }: Params) {
   })
 
   // 退款預覽：讓退款確認視窗能精準說明「會發生什麼」，並對無法自動追回的情況示警。
-  //   restore       — 此訂單使用過的券（退款會歸還給會員）
-  //   voidUnused    — 此訂單發出、尚未使用的回購券（退款會作廢）
-  //   usedElsewhere — 此訂單發出的回購券已被用於其他訂單（無法自動追回，需人工處理）
+  //   restore       — 使用過的券（退款會歸還給會員）
+  //   voidUnused    — 發出、尚未使用的回購券（退款會作廢）
+  //   usedElsewhere — 發出的回購券已被用於其他訂單（無法自動追回，需人工處理）
+  // scope=bundle → 以整捆所有訂單為範圍（整捆退款用）；否則只看本筆（單張退款用）。
+  const scope = req.nextUrl.searchParams.get('scope')
+  const previewIds = scope === 'bundle' && order.bundleId ? esims.map(e => e.id) : [order.id]
   const now = new Date()
   const [restore, voidUnused, usedElsewhere] = await Promise.all([
-    prisma.coupon.count({ where: { usedOrderId: order.id } }),
+    prisma.coupon.count({ where: { usedOrderId: { in: previewIds } } }),
     prisma.coupon.count({
       where: {
-        sourceOrderId: order.id, type: 'GROUP_REPURCHASE', usedAt: null,
+        sourceOrderId: { in: previewIds }, type: 'GROUP_REPURCHASE', usedAt: null,
         OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       },
     }),
     prisma.coupon.count({
-      where: { sourceOrderId: order.id, type: 'GROUP_REPURCHASE', usedAt: { not: null } },
+      where: { sourceOrderId: { in: previewIds }, type: 'GROUP_REPURCHASE', usedAt: { not: null } },
     }),
   ])
 
@@ -115,69 +118,88 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ ok: true, message: '已觸發補發流程' })
   }
 
-  if (action === 'refund') {
-    // 1. 撈訂單資料 + tappayRecTradeId（退款必須）
-    const order = await prisma.order.findFirst({
+  // 退款：'refund' = 單張（部分退款，不動優惠券）；'refund_bundle' = 整捆全退（退券＋作廢回購券）
+  if (action === 'refund' || action === 'refund_bundle') {
+    const isBundleAction = action === 'refund_bundle'
+
+    // 焦點訂單：取 bundleId / 共用的 recTradeId / 租戶（退款打 TapPay 用）
+    const focus = await prisma.order.findFirst({
       where: { id, ...tenantWhere },
+      select: { id: true, bundleId: true, tapPayRecTradeId: true, user: { select: { tenantAdminId: true } } },
+    })
+    if (!focus) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
+
+    // 退款對象：整捆 → 同 bundleId 所有筆；單張 → 僅本筆
+    const groupOrders = await prisma.order.findMany({
+      where: isBundleAction && focus.bundleId
+        ? { bundleId: focus.bundleId, ...tenantWhere }
+        : { id: focus.id, ...tenantWhere },
       select: {
-        status: true,
-        totalPaid: true,
-        tapPayRecTradeId: true,
-        user: { select: { tenantAdminId: true } },
-        gift: { select: { id: true, claimedAt: true, cancelledAt: true, toUser: { select: { displayName: true } } } },
+        id: true, status: true, totalPaid: true,
+        gift: { select: { claimedAt: true, toUser: { select: { displayName: true } } } },
       },
     })
-    if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
-    if (order.status === OrderStatus.REFUNDED) {
-      return NextResponse.json({ error: '此訂單已退款，請勿重複操作' }, { status: 409 })
+
+    const refundable = groupOrders.filter(o => REFUNDABLE_STATUSES.includes(o.status))
+    if (refundable.length === 0) {
+      return NextResponse.json({ error: '沒有可退款的 eSIM（可能已退款或未付款）' }, { status: 409 })
     }
-    if (!REFUNDABLE_STATUSES.includes(order.status)) {
-      return NextResponse.json({ error: `訂單狀態為「${order.status}」，無法退款` }, { status: 409 })
-    }
-    if (!order.tapPayRecTradeId) {
-      return NextResponse.json({ error: '此訂單無 TapPay 交易紀錄，無法自動退款。請手動處理。' }, { status: 400 })
-    }
-    // 已被領取的轉贈擋退款（避免「轉贈後退款」詐騙）
-    if (order.gift?.claimedAt) {
-      const who = order.gift.toUser?.displayName ?? '對方'
+    // 任一張已被領取的轉贈 → 擋（避免「轉贈後退款」詐騙）
+    const claimed = refundable.find(o => o.gift?.claimedAt)
+    if (claimed) {
+      const who = claimed.gift?.toUser?.displayName ?? '對方'
       return NextResponse.json(
-        { error: `此訂單已被「${who}」領取使用，無法自動退款。如需退款請聯絡客服。` },
+        { error: `其中一張 eSIM 已被「${who}」領取使用，無法自動退款。如需退款請聯絡客服。` },
         { status: 409 },
       )
     }
-
-    // 2. 先打 TapPay refund — 失敗就 abort、DB 不動
-    const refund = await tapPayRefund(
-      order.tapPayRecTradeId,
-      order.totalPaid,
-      order.user.tenantAdminId ?? null,
-    )
-    if (!refund.ok) {
-      return NextResponse.json(
-        { error: `TapPay 退款失敗：${refund.message ?? '未知錯誤'}` },
-        { status: 502 },
-      )
+    if (!focus.tapPayRecTradeId) {
+      return NextResponse.json({ error: '此訂單無 TapPay 交易紀錄，無法自動退款。請手動處理。' }, { status: 400 })
     }
 
-    // 3. TapPay 退款成功 → 更新 DB（訂單、分潤、優惠券、未領取的轉贈）
-    await prisma.order.update({
-      where: { id },
-      data: { status: OrderStatus.REFUNDED },
-    })
-    await cancelCommission(id)
-    const couponResult = await restoreCouponsForRefundedOrder(id)
+    const amount = refundable.reduce((s, o) => s + o.totalPaid, 0)
+    const ids = refundable.map(o => o.id)
 
-    // 未領取的 gift 一併作廢（已領取的在上面已 abort，不會走到這）
-    if (order.gift?.id && !order.gift.cancelledAt && !order.gift.claimedAt) {
-      await prisma.orderGift.update({
-        where: { id: order.gift.id },
-        data: { cancelledAt: new Date(), cancelReason: 'order_refund' },
+    // 1. 先打 TapPay refund（整捆共用同一 recTradeId；單張＝對該交易部分退款）— 失敗即 abort、DB 不動
+    const refund = await tapPayRefund(focus.tapPayRecTradeId, amount, focus.user.tenantAdminId ?? null)
+    if (!refund.ok) {
+      return NextResponse.json({ error: `TapPay 退款失敗：${refund.message ?? '未知錯誤'}` }, { status: 502 })
+    }
+
+    // 2. 訂單轉 REFUNDED、逐筆取消分潤、作廢未領取的轉贈
+    await prisma.order.updateMany({ where: { id: { in: ids } }, data: { status: OrderStatus.REFUNDED } })
+    for (const oid of ids) await cancelCommission(oid)
+    await prisma.orderGift.updateMany({
+      where: { orderId: { in: ids }, claimedAt: null, cancelledAt: null },
+      data: { cancelledAt: new Date(), cancelReason: 'order_refund' },
+    })
+
+    // 3. 優惠券：只有「整捆全退」才退還使用券／作廢回購券；單張部分退款不動券。
+    //    判定全退＝退完後整捆已無「仍有效」的訂單（無 bundleId 視為單筆＝全退）。
+    let fullyRefunded = true
+    if (focus.bundleId) {
+      const stillActive = await prisma.order.count({
+        where: {
+          bundleId: focus.bundleId,
+          status: { notIn: [OrderStatus.REFUNDED, OrderStatus.CANCELLED, OrderStatus.FAILED] },
+        },
       })
+      fullyRefunded = stillActive === 0
+    }
+    let couponResult = { restored: 0, voided: 0 }
+    if (fullyRefunded) {
+      // 退券範圍 = 整捆所有訂單 id（使用券掛錨單、回購券掛各筆，務必全帶）
+      const scopeIds = focus.bundleId
+        ? (await prisma.order.findMany({ where: { bundleId: focus.bundleId }, select: { id: true } })).map(o => o.id)
+        : [focus.id]
+      couponResult = await restoreCouponsForRefundedOrders(scopeIds)
     }
 
     return NextResponse.json({
       ok: true,
-      refundedAmount:  order.totalPaid,
+      refundedAmount:  amount,
+      refundedCount:   ids.length,
+      couponsRestored: fullyRefunded,
       restoredCoupons: couponResult.restored,
       voidedCoupons:   couponResult.voided,
     })

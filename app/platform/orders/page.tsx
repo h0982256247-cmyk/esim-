@@ -61,22 +61,26 @@ function OrdersContent() {
   useEffect(load, [page,statusFilter,filterTenantId,router])
   const handleRetry = async (id:string) => { setActionLoading(id); await fetch(`/api/platform/orders/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'retry_esim'})}); setActionLoading(null); load() }
 
-  // 開啟退款視窗：先抓退款預覽（會退還／會作廢／已被使用的券），再交由 RefundConfirmDialog 確認。
+  // 開啟退款視窗（列表頁為單張退款）：抓退款預覽 + 判斷是否整捆全退（決定是否退券），交給 RefundConfirmDialog。
   const openRefund = async (o: Order) => {
     setActionLoading(o.id)
-    const d = await fetch(`/api/platform/orders/${o.id}`).then(r => r.json()).catch(() => null)
+    const j = await fetch(`/api/platform/orders/${o.id}`).then(r => r.json()).catch(() => null)
     setActionLoading(null)
+    const esims: { id: string; status: string }[] = j?.esims ?? []
+    const othersActive = esims.some(x => x.id !== o.id && !['REFUNDED', 'CANCELLED', 'FAILED'].includes(x.status))
     setRefundTarget({
-      id: o.id, orderNumber: o.orderNumber, status: o.status,
-      totalPaid: o.totalPaid, preview: d?.refundPreview ?? null,
+      id: o.id, orderNumber: o.orderNumber, status: o.status, scope: 'single',
+      amount: o.totalPaid, count: 1,
+      restoresCoupons: esims.length <= 1 ? true : !othersActive,
+      preview: j?.refundPreview ?? null,
     })
   }
 
   // 由視窗確認後執行退款；回傳結果給視窗顯示，成功則重新整理列表。
-  const doRefund = async (orderId: string): Promise<{ ok: boolean; message: string }> => {
-    const r = await fetch(`/api/platform/orders/${orderId}`, {
+  const doRefund = async (t: RefundTarget): Promise<{ ok: boolean; message: string }> => {
+    const r = await fetch(`/api/platform/orders/${t.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'refund' }),
+      body: JSON.stringify({ action: t.scope === 'bundle' ? 'refund_bundle' : 'refund' }),
     }).then(x => x.json()).catch(() => ({ error: '連線失敗' }))
     if (r.error) return { ok: false, message: r.error }
     const parts = [`已退還 NT$${(r.refundedAmount ?? 0).toLocaleString()}`]

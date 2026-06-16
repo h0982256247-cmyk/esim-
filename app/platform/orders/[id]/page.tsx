@@ -116,23 +116,48 @@ export default function PlatformOrderDetail() {
     load()
   }
 
-  // 退款單張：先抓該張的退款預覽，再交由 RefundConfirmDialog 確認
+  const REFUNDABLE = (s: string) => s === 'PAID' || s === 'COMPLETED' || s === 'ESIM_PENDING'
+  const ACTIVE = (s: string) => !['REFUNDED', 'CANCELLED', 'FAILED'].includes(s)
+
+  // 退款單張：抓該張預覽；判斷「退完後整捆是否全退」決定是否退券（只有全退才退券）。
   const openRefund = async (e: Esim) => {
     setActingId(e.id)
     const j = await fetch(`/api/platform/orders/${e.id}`).then(x => x.json()).catch(() => null)
     setActingId(null)
+    const all = d?.esims ?? [e]
+    const othersActive = all.some(x => x.id !== e.id && ACTIVE(x.status))
     setRefundTarget({
-      id: e.id, orderNumber: e.orderNumber, status: e.status,
-      totalPaid: e.totalPaid, preview: j?.refundPreview ?? null,
+      id: e.id, orderNumber: e.orderNumber, status: e.status, scope: 'single',
+      amount: e.totalPaid, count: 1,
+      restoresCoupons: !othersActive,
+      preview: j?.refundPreview ?? null,
     })
   }
-  const doRefund = async (orderId: string): Promise<{ ok: boolean; message: string }> => {
-    const r = await fetch(`/api/platform/orders/${orderId}`, {
+
+  // 整捆退款：退所有仍可退的 eSIM、金額為合計，會退還／作廢優惠券。
+  const openBundleRefund = async () => {
+    if (!d) return
+    const refundable = d.esims.filter(e => REFUNDABLE(e.status))
+    if (refundable.length === 0) return
+    setActingId('bundle')
+    const j = await fetch(`/api/platform/orders/${d.focusedId}?scope=bundle`).then(x => x.json()).catch(() => null)
+    setActingId(null)
+    setRefundTarget({
+      id: d.focusedId, orderNumber: d.orderNumber, status: refundable[0].status, scope: 'bundle',
+      amount: refundable.reduce((s, e) => s + e.totalPaid, 0),
+      count: refundable.length,
+      restoresCoupons: true,
+      preview: j?.refundPreview ?? null,
+    })
+  }
+
+  const doRefund = async (t: RefundTarget): Promise<{ ok: boolean; message: string }> => {
+    const r = await fetch(`/api/platform/orders/${t.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'refund' }),
+      body: JSON.stringify({ action: t.scope === 'bundle' ? 'refund_bundle' : 'refund' }),
     }).then(x => x.json()).catch(() => ({ error: '連線失敗' }))
     if (r.error) return { ok: false, message: r.error }
-    const parts = [`已退還 NT$${(r.refundedAmount ?? 0).toLocaleString()}`]
+    const parts = [`已退還 NT$${(r.refundedAmount ?? 0).toLocaleString()}${r.refundedCount > 1 ? `（${r.refundedCount} 張 eSIM）` : ''}`]
     if (r.restoredCoupons > 0) parts.push(`歸還優惠券 ${r.restoredCoupons} 張`)
     if (r.voidedCoupons > 0) parts.push(`作廢回購券 ${r.voidedCoupons} 張`)
     load()
@@ -146,6 +171,7 @@ export default function PlatformOrderDetail() {
   const esims = d.esims
   const isBundle = esims.length > 1
   const totalPaid = esims.reduce((s, e) => s + e.totalPaid, 0)
+  const refundableCount = esims.filter(e => REFUNDABLE(e.status)).length
 
   return (
     <div className="max-w-3xl mx-auto space-y-4 pb-12">
@@ -155,6 +181,11 @@ export default function PlatformOrderDetail() {
         <span className="text-gray-300">/</span>
         <h1 className="font-mono text-lg font-bold text-gray-800">{d.orderNumber ?? `#${d.focusedId.slice(-8).toUpperCase()}`}</h1>
         {isBundle && <span className="text-xs font-semibold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full">合購 · {esims.length} 張 eSIM</span>}
+        {isBundle && refundableCount > 1 && (
+          <button onClick={openBundleRefund} disabled={actingId === 'bundle'} className="ml-auto text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">
+            {actingId === 'bundle' ? '…' : `整捆退款（${refundableCount} 張）`}
+          </button>
+        )}
       </div>
       {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
 
