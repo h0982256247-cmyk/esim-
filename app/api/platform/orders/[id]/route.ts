@@ -50,6 +50,24 @@ export async function GET(req: NextRequest, { params }: Params) {
       })
     : []
 
+  // 退款預覽：讓退款確認視窗能精準說明「會發生什麼」，並對無法自動追回的情況示警。
+  //   restore       — 此訂單使用過的券（退款會歸還給會員）
+  //   voidUnused    — 此訂單發出、尚未使用的回購券（退款會作廢）
+  //   usedElsewhere — 此訂單發出的回購券已被用於其他訂單（無法自動追回，需人工處理）
+  const now = new Date()
+  const [restore, voidUnused, usedElsewhere] = await Promise.all([
+    prisma.coupon.count({ where: { usedOrderId: order.id } }),
+    prisma.coupon.count({
+      where: {
+        sourceOrderId: order.id, type: 'GROUP_REPURCHASE', usedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+    }),
+    prisma.coupon.count({
+      where: { sourceOrderId: order.id, type: 'GROUP_REPURCHASE', usedAt: { not: null } },
+    }),
+  ])
+
   // 客戶聯絡資訊在 DB 加密；後台撥款/客服需要看明文，解密後回傳（safeDecrypt 相容舊明文）。
   return NextResponse.json({
     order: {
@@ -61,6 +79,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       },
     },
     siblings,
+    refundPreview: { restore, voidUnused, usedElsewhere },
   })
 }
 

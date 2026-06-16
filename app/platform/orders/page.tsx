@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import TenantScopeBar from '@/components/platform/TenantScopeBar'
+import RefundConfirmDialog, { type RefundTarget } from '@/components/platform/RefundConfirmDialog'
 
 type Order = {
   id: string; status: string; totalPaid: number; paymentMethod: string
@@ -41,6 +42,7 @@ function OrdersContent() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [refundTarget, setRefundTarget] = useState<RefundTarget | null>(null)
   const [currentRole, setCurrentRole] = useState<string | null>(null)
   const [platformAdmins, setPlatformAdmins] = useState<{id:string;name:string;brandName:string|null}[]>([])
   const [filterTenantId, setFilterTenantId] = useState<string>('')
@@ -59,40 +61,34 @@ function OrdersContent() {
   useEffect(load, [page,statusFilter,filterTenantId,router])
   const handleRetry = async (id:string) => { setActionLoading(id); await fetch(`/api/platform/orders/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'retry_esim'})}); setActionLoading(null); load() }
 
-  const handleRefund = async (o: Order) => {
-    // 依訂單狀態給不同警語
-    const baseMsg = `將退還 NT$${o.totalPaid.toLocaleString()} 給用戶（透過 TapPay）。`
-    let warning = ''
-    if (o.status === 'COMPLETED') {
-      warning = '\n\n⚠ 此訂單已完成（用戶已取得 eSIM 兌換碼）\n  · 供應商成本無法回收，平台需自行吸收\n  · 社群主已產生的分潤將自動扣抵'
-    } else if (o.status === 'ESIM_PENDING') {
-      warning = '\n\n⚠ 此訂單 eSIM 尚未交付\n  · 平台應主動向供應商（世界移動）確認是否計費\n  · 若已計費，平台需自行吸收'
-    } else if (o.status === 'PAID') {
-      warning = '\n\n⚠ eSIM 流程已啟動，供應商成本可能已產生'
-    }
-    if (!confirm(baseMsg + warning + '\n\n確定要退款嗎？')) return
-
+  // 開啟退款視窗：先抓退款預覽（會退還／會作廢／已被使用的券），再交由 RefundConfirmDialog 確認。
+  const openRefund = async (o: Order) => {
     setActionLoading(o.id)
-    const r = await fetch(`/api/platform/orders/${o.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'refund' }),
-    }).then(x => x.json())
+    const d = await fetch(`/api/platform/orders/${o.id}`).then(r => r.json()).catch(() => null)
     setActionLoading(null)
+    setRefundTarget({
+      id: o.id, orderNumber: o.orderNumber, status: o.status,
+      totalPaid: o.totalPaid, preview: d?.refundPreview ?? null,
+    })
+  }
 
-    if (r.error) {
-      alert(`退款失敗：${r.error}`)
-      return
-    }
-    const parts: string[] = [`✅ 已退款 NT$${r.refundedAmount.toLocaleString()}`]
+  // 由視窗確認後執行退款；回傳結果給視窗顯示，成功則重新整理列表。
+  const doRefund = async (orderId: string): Promise<{ ok: boolean; message: string }> => {
+    const r = await fetch(`/api/platform/orders/${orderId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'refund' }),
+    }).then(x => x.json()).catch(() => ({ error: '連線失敗' }))
+    if (r.error) return { ok: false, message: r.error }
+    const parts = [`已退還 NT$${(r.refundedAmount ?? 0).toLocaleString()}`]
     if (r.restoredCoupons > 0) parts.push(`歸還優惠券 ${r.restoredCoupons} 張`)
     if (r.voidedCoupons   > 0) parts.push(`作廢回購券 ${r.voidedCoupons} 張`)
-    alert(parts.join('\n'))
     load()
+    return { ok: true, message: parts.join('\n') }
   }
   const totalPages = Math.ceil(total/20)
   return (
     <div className="space-y-5">
+      <RefundConfirmDialog target={refundTarget} onClose={()=>setRefundTarget(null)} onConfirm={doRefund} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h1 className="text-2xl font-bold text-gray-800">訂單管理</h1><p className="text-sm text-gray-400 mt-0.5">共 {total} 筆訂單</p></div>
         <div className="flex flex-wrap gap-1.5">
@@ -152,7 +148,7 @@ function OrdersContent() {
                           <button onClick={()=>handleRetry(o.id)} disabled={actionLoading===o.id} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">補發</button>
                         )}
                         {(o.status==='PAID'||o.status==='COMPLETED'||o.status==='ESIM_PENDING')&&(
-                          <button onClick={()=>handleRefund(o)} disabled={actionLoading===o.id} className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">退款</button>
+                          <button onClick={()=>openRefund(o)} disabled={actionLoading===o.id} className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">{actionLoading===o.id?'…':'退款'}</button>
                         )}
                       </div>
                     </td>

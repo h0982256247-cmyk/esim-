@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import RefundConfirmDialog, { type RefundPreview } from '@/components/platform/RefundConfirmDialog'
 
 type Item = { productName: string; qty: number; unitPrice: number }
 type OrderDetail = {
@@ -73,30 +74,46 @@ export default function PlatformOrderDetail() {
   const { id } = useParams<{ id: string }>()
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [siblings, setSiblings] = useState<Sibling[]>([])
+  const [refundPreview, setRefundPreview] = useState<RefundPreview | null>(null)
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState(false)
+  const [refundOpen, setRefundOpen] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/platform/orders/${id}`)
     if (r.status === 401) { router.replace('/platform/login'); return }
     const d = await r.json()
-    if (d.order) { setOrder(d.order); setSiblings(d.siblings ?? []) }
+    if (d.order) { setOrder(d.order); setSiblings(d.siblings ?? []); setRefundPreview(d.refundPreview ?? null) }
     setLoading(false)
   }, [id, router])
   useEffect(() => { load() }, [load])
 
-  const act = async (action: 'retry_esim' | 'refund') => {
-    if (action === 'refund' && !window.confirm('確定要退款此訂單？將同步退 TapPay、取消分潤、作廢相關優惠券。')) return
+  // 補發 eSIM（無金流風險，直接觸發）
+  const retry = async () => {
     setActing(true); setMsg(null)
     const r = await fetch(`/api/platform/orders/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action: 'retry_esim' }),
     }).then(x => x.json()).catch(() => ({ error: '連線失敗' }))
     setActing(false)
     if (r.error) { setMsg({ ok: false, text: r.error }); return }
-    setMsg({ ok: true, text: action === 'refund' ? `已退款 NT$${(r.refundedAmount ?? 0).toLocaleString()}` : '已觸發補發流程，稍候重新整理查看' })
+    setMsg({ ok: true, text: '已觸發補發流程，稍候重新整理查看' })
     load()
+  }
+
+  // 退款由 RefundConfirmDialog 確認後呼叫；回傳結果給視窗顯示，成功則重整。
+  const doRefund = async (orderId: string): Promise<{ ok: boolean; message: string }> => {
+    const r = await fetch(`/api/platform/orders/${orderId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'refund' }),
+    }).then(x => x.json()).catch(() => ({ error: '連線失敗' }))
+    if (r.error) return { ok: false, message: r.error }
+    const parts = [`已退還 NT$${(r.refundedAmount ?? 0).toLocaleString()}`]
+    if (r.restoredCoupons > 0) parts.push(`歸還優惠券 ${r.restoredCoupons} 張`)
+    if (r.voidedCoupons > 0) parts.push(`作廢回購券 ${r.voidedCoupons} 張`)
+    load()
+    return { ok: true, message: parts.join('\n') }
   }
 
   if (loading) return <div className="text-gray-400 text-sm p-8">載入中…</div>
@@ -119,11 +136,17 @@ export default function PlatformOrderDetail() {
       {/* Actions */}
       {(canRetry || canRefund) && (
         <div className="flex gap-2">
-          {canRetry && <button onClick={() => act('retry_esim')} disabled={acting} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl disabled:opacity-50">補發 eSIM</button>}
-          {canRefund && <button onClick={() => act('refund')} disabled={acting} className="bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium px-4 py-2 rounded-xl disabled:opacity-50">退款</button>}
+          {canRetry && <button onClick={retry} disabled={acting} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl disabled:opacity-50">補發 eSIM</button>}
+          {canRefund && <button onClick={() => setRefundOpen(true)} disabled={acting} className="bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium px-4 py-2 rounded-xl disabled:opacity-50">退款</button>}
         </div>
       )}
       {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
+
+      <RefundConfirmDialog
+        target={refundOpen ? { id: order.id, orderNumber: order.orderNumber, status: order.status, totalPaid: order.totalPaid, preview: refundPreview } : null}
+        onClose={() => setRefundOpen(false)}
+        onConfirm={doRefund}
+      />
 
       {/* eSIM 狀態（最關鍵：卡在處理中時看這裡）*/}
       <Card title="eSIM 狀態">
