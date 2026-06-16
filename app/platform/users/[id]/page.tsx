@@ -317,8 +317,8 @@ export default function UserDetailPage() {
                 {user.orders.map(o => {
                   const sm = STATUS_META[o.status] ?? { text: o.status, bg: '#f1f5f9', color: '#475569' }
                   return (
-                    <tr key={o.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-5 py-3.5 font-mono text-xs text-gray-400">#{o.id.slice(-8).toUpperCase()}</td>
+                    <tr key={o.id} onClick={() => router.push(`/platform/orders/${o.id}`)} className="hover:bg-gray-50 transition-colors cursor-pointer">
+                      <td className="px-5 py-3.5 font-mono text-xs text-blue-600">#{o.id.slice(-8).toUpperCase()}</td>
                       <td className="px-5 py-3.5 text-gray-700 max-w-[180px] truncate">
                         {o.orderItems[0]?.productName ?? '—'}
                       </td>
