@@ -38,17 +38,17 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
 
-  // 同捆訂單（多張 eSIM 一次購買 = 共用 bundleId 的多筆訂單）：列出其他張供切換查看。
-  const siblings = order.bundleId
-    ? await prisma.order.findMany({
-        where: { bundleId: order.bundleId, id: { not: order.id }, ...tenantWhere },
-        select: {
-          id: true, orderNumber: true, status: true,
-          orderItems: { select: { productName: true }, take: 1 },
-        },
-        orderBy: { createdAt: 'asc' },
-      })
-    : []
+  // 同捆 = 共用 bundleId 的多筆訂單，每筆 = 一張 eSIM。一次撈齊整捆（含本筆），
+  // 前端並列呈現、逐張查看與操作；單張訂單則回傳只含自己一筆。
+  const esims = await prisma.order.findMany({
+    where: order.bundleId ? { bundleId: order.bundleId, ...tenantWhere } : { id: order.id },
+    include: {
+      orderItems: { select: { productName: true, qty: true } },
+      orderCoupons: { include: { coupon: { select: { type: true, discount: true } } } },
+      commission: { select: { commissionAmount: true, ownerRate: true, status: true } },
+    },
+    orderBy: [{ bundleSeq: 'asc' }, { createdAt: 'asc' }],
+  })
 
   // 退款預覽：讓退款確認視窗能精準說明「會發生什麼」，並對無法自動追回的情況示警。
   //   restore       — 此訂單使用過的券（退款會歸還給會員）
@@ -69,16 +69,24 @@ export async function GET(req: NextRequest, { params }: Params) {
   ])
 
   // 客戶聯絡資訊在 DB 加密；後台撥款/客服需要看明文，解密後回傳（safeDecrypt 相容舊明文）。
+  // 會員與付款（同捆共用同一筆 TapPay 收款）為整捆共用脈絡，單獨回傳一次；esims 為逐張明細。
   return NextResponse.json({
-    order: {
-      ...order,
-      user: {
-        ...order.user,
-        phone: order.user.phone ? safeDecrypt(order.user.phone) : null,
-        email: order.user.email ? safeDecrypt(order.user.email) : null,
-      },
+    orderNumber: order.orderNumber,
+    bundleId: order.bundleId,
+    focusedId: order.id,
+    user: {
+      displayName: order.user.displayName,
+      lineUid: order.user.lineUid,
+      phone: order.user.phone ? safeDecrypt(order.user.phone) : null,
+      email: order.user.email ? safeDecrypt(order.user.email) : null,
     },
-    siblings,
+    payment: {
+      paymentMethod: order.paymentMethod,
+      paidAt: order.paidAt,
+      createdAt: order.createdAt,
+      tapPayRecTradeId: order.tapPayRecTradeId,
+    },
+    esims,
     refundPreview: { restore, voidUnused, usedElsewhere },
   })
 }

@@ -2,24 +2,22 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import RefundConfirmDialog, { type RefundPreview } from '@/components/platform/RefundConfirmDialog'
+import RefundConfirmDialog, { type RefundTarget } from '@/components/platform/RefundConfirmDialog'
 
-type Item = { productName: string; qty: number; unitPrice: number }
-type OrderDetail = {
+type CouponLine = { coupon: { type: string; discount: number } }
+type Commission = { commissionAmount: number; ownerRate: number; status: string } | null
+type OrderItem = { productName: string; qty: number }
+type Esim = {
   id: string
   orderNumber: string | null
   status: string
+  bundleSeq: number | null
   subtotal: number
   discountAmount: number
   totalPaid: number
-  paymentMethod: string
-  paidAt: string | null
-  createdAt: string
-  bundleId: string | null
-  retryCount: number
-  failureReason: string | null
-  wmOrderId: string | null
-  wmOrderSn: string | null
+  orderItems: OrderItem[]
+  orderCoupons: CouponLine[]
+  commission: Commission
   esimRcode: string | null
   esimQrcode: string | null
   esimIccid: string | null
@@ -27,13 +25,19 @@ type OrderDetail = {
   activationEnd: string | null
   redeemedAt: string | null
   activatedAt: string | null
-  tapPayRecTradeId: string | null
-  user: { displayName: string; lineUid: string; phone: string | null; email: string | null }
-  orderItems: Item[]
-  orderCoupons: { coupon: { type: string; discount: number } }[]
-  commission: { commissionAmount: number; ownerRate: number; status: string } | null
+  wmOrderId: string | null
+  wmOrderSn: string | null
+  retryCount: number
+  failureReason: string | null
 }
-type Sibling = { id: string; orderNumber: string | null; status: string; orderItems: { productName: string }[] }
+type Detail = {
+  orderNumber: string | null
+  bundleId: string | null
+  focusedId: string
+  user: { displayName: string; lineUid: string; phone: string | null; email: string | null }
+  payment: { paymentMethod: string; paidAt: string | null; createdAt: string; tapPayRecTradeId: string | null }
+  esims: Esim[]
+}
 
 const STATUS: Record<string, { text: string; cls: string }> = {
   PENDING:      { text: '待付款',   cls: 'bg-yellow-50 text-yellow-600' },
@@ -49,22 +53,34 @@ const COUPON_LABEL: Record<string, string> = {
   OFFICIAL_WELCOME: '官方歡迎券', GROUP_JOIN: '入群券', GROUP_REPURCHASE: '回購券',
   GROUP_OWNER: '社群主券', GROUP_ACTIVITY: '活動券',
 }
+const COMMISSION_STATUS: Record<string, string> = { SETTLED: '已結算', CANCELLED: '已取消', PENDING: '待結算' }
 function fold(d: number) { const n = Math.round(d * 100); return n % 10 === 0 ? `${n / 10} 折` : `${n} 折` }
 function dt(s: string | null) { return s ? new Date(s).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' }
+const dash = <span className="text-gray-300">—</span>
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Pill({ status }: { status: string }) {
+  const s = STATUS[status] ?? { text: status, cls: 'bg-gray-100 text-gray-500' }
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${s.cls}`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />{s.text}
+    </span>
+  )
+}
+
+function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="flex justify-between gap-4 py-2 border-b border-gray-50 last:border-0">
       <span className="text-xs text-gray-400 flex-shrink-0">{label}</span>
-      <span className="text-sm text-gray-700 text-right break-all">{children}</span>
+      <span className={`text-right break-all text-gray-700 ${mono ? 'font-mono text-xs select-all' : 'text-sm'}`}>{value}</span>
     </div>
   )
 }
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+
+function SummaryCell({ label, value, mono, full }: { label: string; value: React.ReactNode; mono?: boolean; full?: boolean }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <h2 className="text-sm font-semibold text-gray-800 mb-2">{title}</h2>
-      {children}
+    <div className={full ? 'col-span-2' : ''}>
+      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+      <p className={`text-gray-800 break-all ${mono ? 'font-mono text-xs select-all' : 'text-sm font-medium'}`}>{value}</p>
     </div>
   )
 }
@@ -72,37 +88,44 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 export default function PlatformOrderDetail() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
-  const [order, setOrder] = useState<OrderDetail | null>(null)
-  const [siblings, setSiblings] = useState<Sibling[]>([])
-  const [refundPreview, setRefundPreview] = useState<RefundPreview | null>(null)
+  const [d, setD] = useState<Detail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [acting, setActing] = useState(false)
-  const [refundOpen, setRefundOpen] = useState(false)
+  const [actingId, setActingId] = useState<string | null>(null)
+  const [refundTarget, setRefundTarget] = useState<RefundTarget | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/platform/orders/${id}`)
     if (r.status === 401) { router.replace('/platform/login'); return }
-    const d = await r.json()
-    if (d.order) { setOrder(d.order); setSiblings(d.siblings ?? []); setRefundPreview(d.refundPreview ?? null) }
+    const j = await r.json()
+    if (j.esims) setD(j)
     setLoading(false)
   }, [id, router])
   useEffect(() => { load() }, [load])
 
-  // 補發 eSIM（無金流風險，直接觸發）
-  const retry = async () => {
-    setActing(true); setMsg(null)
-    const r = await fetch(`/api/platform/orders/${id}`, {
+  // 補發單張 eSIM（無金流風險，直接觸發；後端具冪等守門）
+  const retry = async (orderId: string) => {
+    setActingId(orderId); setMsg(null)
+    const r = await fetch(`/api/platform/orders/${orderId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'retry_esim' }),
     }).then(x => x.json()).catch(() => ({ error: '連線失敗' }))
-    setActing(false)
+    setActingId(null)
     if (r.error) { setMsg({ ok: false, text: r.error }); return }
     setMsg({ ok: true, text: '已觸發補發流程，稍候重新整理查看' })
     load()
   }
 
-  // 退款由 RefundConfirmDialog 確認後呼叫；回傳結果給視窗顯示，成功則重整。
+  // 退款單張：先抓該張的退款預覽，再交由 RefundConfirmDialog 確認
+  const openRefund = async (e: Esim) => {
+    setActingId(e.id)
+    const j = await fetch(`/api/platform/orders/${e.id}`).then(x => x.json()).catch(() => null)
+    setActingId(null)
+    setRefundTarget({
+      id: e.id, orderNumber: e.orderNumber, status: e.status,
+      totalPaid: e.totalPaid, preview: j?.refundPreview ?? null,
+    })
+  }
   const doRefund = async (orderId: string): Promise<{ ok: boolean; message: string }> => {
     const r = await fetch(`/api/platform/orders/${orderId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -117,99 +140,100 @@ export default function PlatformOrderDetail() {
   }
 
   if (loading) return <div className="text-gray-400 text-sm p-8">載入中…</div>
-  if (!order) return <div className="p-8 text-center text-gray-400 text-sm">訂單不存在</div>
+  if (!d) return <div className="p-8 text-center text-gray-400 text-sm">訂單不存在</div>
 
-  const s = STATUS[order.status] ?? { text: order.status, cls: 'bg-gray-100 text-gray-500' }
-  const canRetry = order.status === 'PAID' || order.status === 'ESIM_PENDING'
-  const canRefund = ['PAID', 'COMPLETED', 'ESIM_PENDING'].includes(order.status)
+  const { user, payment } = d
+  const esims = d.esims
+  const isBundle = esims.length > 1
+  const totalPaid = esims.reduce((s, e) => s + e.totalPaid, 0)
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4">
+    <div className="max-w-3xl mx-auto space-y-4 pb-12">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <button onClick={() => router.push('/platform/orders')} className="text-gray-400 hover:text-gray-600 text-sm">← 訂單管理</button>
         <span className="text-gray-300">/</span>
-        <h1 className="font-mono text-lg font-bold text-gray-800">{order.orderNumber ?? `#${order.id.slice(-8).toUpperCase()}`}</h1>
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${s.cls}`}>{s.text}</span>
+        <h1 className="font-mono text-lg font-bold text-gray-800">{d.orderNumber ?? `#${d.focusedId.slice(-8).toUpperCase()}`}</h1>
+        {isBundle && <span className="text-xs font-semibold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full">合購 · {esims.length} 張 eSIM</span>}
       </div>
-
-      {/* Actions */}
-      {(canRetry || canRefund) && (
-        <div className="flex gap-2">
-          {canRetry && <button onClick={retry} disabled={acting} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl disabled:opacity-50">補發 eSIM</button>}
-          {canRefund && <button onClick={() => setRefundOpen(true)} disabled={acting} className="bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium px-4 py-2 rounded-xl disabled:opacity-50">退款</button>}
-        </div>
-      )}
       {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
 
-      <RefundConfirmDialog
-        target={refundOpen ? { id: order.id, orderNumber: order.orderNumber, status: order.status, totalPaid: order.totalPaid, preview: refundPreview } : null}
-        onClose={() => setRefundOpen(false)}
-        onConfirm={doRefund}
-      />
-
-      {/* eSIM 狀態（最關鍵：卡在處理中時看這裡）*/}
-      <Card title="eSIM 狀態">
-        <div className="space-y-0.5">
-          <Row label="方案">
-            {order.orderItems.map((it, i) => <div key={i}>{it.productName}{it.qty > 1 ? ` × ${it.qty}` : ''}</div>)}
-          </Row>
-          <Row label="兌換碼 rcode">{order.esimRcode ?? <span className="text-gray-300">尚未取得</span>}</Row>
-          <Row label="QR Code">{order.esimQrcode ? <a href={order.esimQrcode} target="_blank" rel="noreferrer" className="text-blue-600 underline">開啟</a> : <span className="text-gray-300">—</span>}</Row>
-          <Row label="ICCID">{order.esimIccid ?? <span className="text-gray-300">—</span>}</Row>
-          <Row label="可用期間">{order.activationStart ? `${dt(order.activationStart)} ~ ${dt(order.activationEnd)}` : <span className="text-gray-300">—</span>}</Row>
-          <Row label="開始安裝 / 啟用">{order.redeemedAt ? dt(order.redeemedAt) : '—'} / {order.activatedAt ? dt(order.activatedAt) : '—'}</Row>
-          <Row label="世界移動單號">{order.wmOrderId ?? <span className="text-gray-300">尚未下單</span>}{order.wmOrderSn ? `（${order.wmOrderSn}）` : ''}</Row>
-          {order.retryCount > 0 && <Row label="補發重試">{order.retryCount} 次</Row>}
-          {order.failureReason && (
-            <div className="mt-2 bg-red-50 border border-red-100 rounded-lg p-3">
-              <p className="text-xs font-semibold text-red-700">開卡/付款失敗原因</p>
-              <p className="text-sm text-red-600 mt-0.5">{order.failureReason}</p>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* 金額 */}
-      <Card title="金額明細">
-        <Row label="原價">NT${order.subtotal.toLocaleString()}</Row>
-        <Row label="折扣">- NT${order.discountAmount.toLocaleString()}</Row>
-        <Row label="實付"><span className="font-semibold text-gray-800">NT${order.totalPaid.toLocaleString()}</span></Row>
-        <Row label="付款方式">{order.paymentMethod === 'CREDIT_CARD' ? '信用卡' : 'LINE Pay'}</Row>
-        <Row label="付款 / 建立時間">{dt(order.paidAt)} / {dt(order.createdAt)}</Row>
-        {order.tapPayRecTradeId && <Row label="TapPay 交易號"><span className="font-mono text-xs select-all">{order.tapPayRecTradeId}</span></Row>}
-        {order.orderCoupons.length > 0 && (
-          <Row label="使用優惠券">{order.orderCoupons.map(c => `${COUPON_LABEL[c.coupon.type] ?? c.coupon.type}（${fold(c.coupon.discount)}）`).join('、')}</Row>
-        )}
-        {order.commission && (
-          <Row label="社群分潤">NT${order.commission.commissionAmount.toLocaleString()}（{Math.round(Number(order.commission.ownerRate) * 100)}%・{order.commission.status === 'SETTLED' ? '已結算' : order.commission.status === 'CANCELLED' ? '已取消' : '待結算'}）</Row>
-        )}
-      </Card>
-
-      {/* 會員 */}
-      <Card title="會員">
-        <Row label="暱稱">{order.user.displayName}</Row>
-        <Row label="手機">{order.user.phone ?? <span className="text-gray-300">未填</span>}</Row>
-        <Row label="Email">{order.user.email ?? <span className="text-gray-300">未填</span>}</Row>
-        <Row label="LINE UID"><span className="font-mono text-xs">{order.user.lineUid}</span></Row>
-      </Card>
-
-      {/* 同捆訂單（多張 eSIM）*/}
-      {siblings.length > 0 && (
-        <Card title={`同捆訂單（共 ${siblings.length + 1} 張 eSIM）`}>
-          <div className="space-y-1.5">
-            {siblings.map(sb => {
-              const ss = STATUS[sb.status] ?? { text: sb.status, cls: 'bg-gray-100 text-gray-500' }
-              return (
-                <button key={sb.id} onClick={() => router.push(`/platform/orders/${sb.id}`)} className="w-full flex items-center justify-between bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-2 transition text-left">
-                  <span className="text-sm text-gray-700">{sb.orderItems[0]?.productName ?? '—'}</span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ss.cls}`}>{ss.text}</span>
-                </button>
-              )
-            })}
+      {/* 訂單摘要（會員 + 付款，整捆共用） */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-800">訂單摘要</h2>
+          <div className="text-right">
+            <span className="text-xs text-gray-400">{isBundle ? '合計實付' : '實付'}</span>
+            <span className="ml-2 text-xl font-extrabold text-gray-900">NT${totalPaid.toLocaleString()}</span>
           </div>
-        </Card>
-      )}
+        </div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+          <SummaryCell label="會員" value={user.displayName} />
+          <SummaryCell label="付款方式" value={payment.paymentMethod === 'CREDIT_CARD' ? '信用卡' : 'LINE Pay'} />
+          <SummaryCell label="手機" value={user.phone ?? <span className="text-gray-300">未填</span>} />
+          <SummaryCell label="付款 / 建立時間" value={`${dt(payment.paidAt)} / ${dt(payment.createdAt)}`} />
+          <SummaryCell label="Email" value={user.email ?? <span className="text-gray-300">未填</span>} />
+          <SummaryCell label="LINE UID" value={user.lineUid} mono />
+          {payment.tapPayRecTradeId && <SummaryCell label="TapPay 交易號" value={payment.tapPayRecTradeId} mono full />}
+        </div>
+      </div>
+
+      {/* eSIM 卡片清單（多張並列，逐張可補發 / 退款） */}
+      {esims.map((e, i) => {
+        const canRetry = e.status === 'PAID' || e.status === 'ESIM_PENDING'
+        const canRefund = ['PAID', 'COMPLETED', 'ESIM_PENDING'].includes(e.status)
+        const busy = actingId === e.id
+        const pname = e.orderItems[0]?.productName ?? '—'
+        return (
+          <div key={e.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* 卡片標頭：序號 + 狀態 + 操作 */}
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-50">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {isBundle && <span className="text-xs font-bold text-white bg-gray-900 rounded-md px-1.5 py-0.5">eSIM {i + 1}</span>}
+                  <Pill status={e.status} />
+                </div>
+                <p className="text-sm font-semibold text-gray-800 mt-1.5 truncate">{pname}</p>
+                {isBundle && e.orderNumber && <p className="text-xs text-gray-400 font-mono mt-0.5">{e.orderNumber}</p>}
+              </div>
+              {(canRetry || canRefund) && (
+                <div className="flex gap-2 flex-shrink-0">
+                  {canRetry && <button onClick={() => retry(e.id)} disabled={busy} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">{busy ? '…' : '補發'}</button>}
+                  {canRefund && <button onClick={() => openRefund(e)} disabled={busy} className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">{busy ? '…' : '退款'}</button>}
+                </div>
+              )}
+            </div>
+
+            {/* eSIM 開卡資訊 */}
+            <div className="px-5 py-2">
+              <Row label="兌換碼 rcode" value={e.esimRcode ?? <span className="text-gray-300">尚未取得</span>} mono />
+              <Row label="QR Code" value={e.esimQrcode ? <a href={e.esimQrcode} target="_blank" rel="noreferrer" className="text-blue-600 underline text-sm">開啟</a> : dash} />
+              <Row label="ICCID" value={e.esimIccid ?? dash} mono />
+              <Row label="可用期間" value={e.activationStart ? `${dt(e.activationStart)} ~ ${dt(e.activationEnd)}` : dash} />
+              <Row label="開始安裝 / 啟用" value={`${e.redeemedAt ? dt(e.redeemedAt) : '—'} / ${e.activatedAt ? dt(e.activatedAt) : '—'}`} />
+              <Row label="世界移動單號" value={e.wmOrderId ? `${e.wmOrderId}${e.wmOrderSn ? `（${e.wmOrderSn}）` : ''}` : <span className="text-gray-300">尚未下單</span>} mono />
+              {e.retryCount > 0 && <Row label="補發重試" value={`${e.retryCount} 次`} />}
+            </div>
+
+            {e.failureReason && (
+              <div className="mx-5 mb-3 bg-red-50 border border-red-100 rounded-lg p-3">
+                <p className="text-xs font-semibold text-red-700">開卡 / 付款失敗原因</p>
+                <p className="text-sm text-red-600 mt-0.5">{e.failureReason}</p>
+              </div>
+            )}
+
+            {/* 金額（逐張） */}
+            <div className="px-5 py-3 bg-gray-50/70 border-t border-gray-100 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-gray-500">
+              <span>實付 <b className="text-sm text-gray-900">NT${e.totalPaid.toLocaleString()}</b></span>
+              {e.discountAmount > 0 && <span>原價 NT${e.subtotal.toLocaleString()}・折 NT${e.discountAmount.toLocaleString()}</span>}
+              {e.orderCoupons.length > 0 && <span>{e.orderCoupons.map(c => `${COUPON_LABEL[c.coupon.type] ?? c.coupon.type}（${fold(c.coupon.discount)}）`).join('、')}</span>}
+              {e.commission && <span>分潤 NT${e.commission.commissionAmount}（{Math.round(Number(e.commission.ownerRate) * 100)}%・{COMMISSION_STATUS[e.commission.status] ?? e.commission.status}）</span>}
+            </div>
+          </div>
+        )
+      })}
+
+      <RefundConfirmDialog target={refundTarget} onClose={() => setRefundTarget(null)} onConfirm={doRefund} />
     </div>
   )
 }
