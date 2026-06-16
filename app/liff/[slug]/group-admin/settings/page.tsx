@@ -91,7 +91,7 @@ export default function GroupAdminSettingsPage() {
             onChange={e => setRebateRate(e.target.value)}
             className="flex-1"
           />
-          <span className="text-xl font-bold w-16 text-right" style={{ color: C.primary }}>{rebateRate}%</span>
+          <span className="text-xl font-bold w-16 text-right" style={{ color: C.primaryText }}>{rebateRate}%</span>
         </div>
         {(() => {
           const r = parseInt(rebateRate) || 0

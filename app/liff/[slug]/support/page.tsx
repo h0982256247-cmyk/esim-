@@ -67,7 +67,7 @@ export default function SupportPage() {
           width: 46, height: 46, borderRadius: 14, flexShrink: 0,
           background: C.light,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: C.primary,
+          color: C.primaryText,
         }}>
           <LineIcon />
         </div>

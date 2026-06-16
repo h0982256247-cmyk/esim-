@@ -684,7 +684,7 @@ function CheckoutContent() {
       <div style={{ padding: '20px 20px 8px' }}>
         <button
           onClick={() => router.back()}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: C.primary, fontSize: 14 }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: C.primaryText, fontSize: 14 }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
@@ -708,7 +708,7 @@ function CheckoutContent() {
                 共 {bundleQty} 張 eSIM
               </p>
               <span style={{
-                fontSize: 12, fontWeight: 700, color: C.primary,
+                fontSize: 12, fontWeight: 700, color: C.primaryText,
                 background: C.light, borderRadius: 100, padding: '3px 12px',
               }}>
                 {bundleItems.length} 項
@@ -742,12 +742,12 @@ function CheckoutContent() {
                       <p style={{ fontSize: 10.5, color: '#94a3b8', margin: 0, textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
                         NT${(item.sellPrice * item.qty).toLocaleString()}
                       </p>
-                      <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: '1px 0 0', fontVariantNumeric: 'tabular-nums' }}>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: C.primaryText, margin: '1px 0 0', fontVariantNumeric: 'tabular-nums' }}>
                         NT${(item.sellPrice * item.qty - lineDiscounts[idx]).toLocaleString()}
                       </p>
                     </>
                   ) : (
-                    <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                    <p style={{ fontSize: 14, fontWeight: 800, color: C.primaryText, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
                       NT${(item.sellPrice * item.qty).toLocaleString()}
                     </p>
                   )}
@@ -803,12 +803,12 @@ function CheckoutContent() {
                 <NativeSimBadge isNative={product!.isNativeSim} />
               </div>
               {discount > 0 ? (
-                <p style={{ fontSize: 20, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <p style={{ fontSize: 20, fontWeight: 800, color: C.primaryText, margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'baseline', gap: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', textDecoration: 'line-through' }}>NT${product!.sellPrice.toLocaleString()}</span>
                   <span>NT${displayPrice.toLocaleString()}</span>
                 </p>
               ) : (
-                <p style={{ fontSize: 20, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.02em' }}>
+                <p style={{ fontSize: 20, fontWeight: 800, color: C.primaryText, margin: 0, letterSpacing: '-0.02em' }}>
                   NT${product!.sellPrice.toLocaleString()}
                 </p>
               )}
@@ -867,7 +867,7 @@ function CheckoutContent() {
                         <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>{c.level} 級券</p>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 15, fontWeight: 800, color: C.primary }}>
+                        <span style={{ fontSize: 15, fontWeight: 800, color: C.primaryText }}>
                           {Math.round((1 - c.discount) * 100)}% OFF
                         </span>
                         <div
@@ -981,7 +981,7 @@ function CheckoutContent() {
                               style={{
                                 display: 'flex', alignItems: 'center', gap: 4,
                                 background: 'none', border: 'none', padding: '0 0 12px',
-                                fontSize: 13, color: C.primary, cursor: 'pointer', fontWeight: 600,
+                                fontSize: 13, color: C.primaryText, cursor: 'pointer', fontWeight: 600,
                               }}
                             >
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1113,7 +1113,7 @@ function CheckoutContent() {
             borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 10, marginTop: 2,
           }}>
             <span style={{ color: '#1a1a1a' }}>實付金額</span>
-            <span style={{ color: C.primary, fontSize: 18, letterSpacing: '-0.02em' }}>NT${displayPrice.toLocaleString()}</span>
+            <span style={{ color: C.primaryText, fontSize: 18, letterSpacing: '-0.02em' }}>NT${displayPrice.toLocaleString()}</span>
           </div>
         </div>
 
@@ -1192,7 +1192,7 @@ function CheckoutContent() {
             {discount > 0 && (
               <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, textDecoration: 'line-through' }}>NT${basePrice.toLocaleString()}</p>
             )}
-            <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+            <p style={{ fontSize: 24, fontWeight: 800, color: C.primaryText, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
               NT${displayPrice.toLocaleString()}
             </p>
             {discount > 0 && (

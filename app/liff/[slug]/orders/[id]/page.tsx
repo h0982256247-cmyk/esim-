@@ -305,7 +305,7 @@ export default function OrderDetailPage() {
                 size: 'md' as const,
                 weight: 'bold' as const,
                 wrap: true,
-                color: C.primary,
+                color: C.primaryText,
               },
               {
                 type: 'text' as const,
@@ -335,7 +335,7 @@ export default function OrderDetailPage() {
               {
                 type: 'button' as const,
                 style: 'primary' as const,
-                color: C.primary,
+                color: C.primaryText,
                 action: {
                   type: 'uri' as const,
                   label: '查看並接受 eSIM',
@@ -421,7 +421,7 @@ export default function OrderDetailPage() {
   if (notFound || !order) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 12 }}>
       <p style={{ color: S.faint }}>訂單不存在</p>
-      <button onClick={() => router.push(`${base}/orders`)} style={{ color: C.primary, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+      <button onClick={() => router.push(`${base}/orders`)} style={{ color: C.primaryText, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
         查看所有訂單
       </button>
     </div>
@@ -435,7 +435,7 @@ export default function OrderDetailPage() {
 
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
-        <button onClick={() => router.push(`${base}/orders`)} style={{ fontSize: 13, color: C.primary, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <button onClick={() => router.push(`${base}/orders`)} style={{ fontSize: 13, color: C.primaryText, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
@@ -459,10 +459,10 @@ export default function OrderDetailPage() {
         <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 26, lineHeight: 1 }}>🎁</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 800, color: C.primary, margin: 0 }}>本筆已回饋 {zheLabel(repurchaseCoupon.discount)} 回購券</p>
+            <p style={{ fontSize: 14, fontWeight: 800, color: C.primaryText, margin: 0 }}>本筆已回饋 {zheLabel(repurchaseCoupon.discount)} 回購券</p>
             <p style={{ fontSize: 12, color: S.muted, margin: '2px 0 0' }}>下次購買即可使用，於「優惠券」查看</p>
           </div>
-          <button onClick={() => router.push(`${base}/coupons`)} style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: C.primary, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 100, padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>查看</button>
+          <button onClick={() => router.push(`${base}/coupons`)} style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: C.primaryText, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 100, padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>查看</button>
         </div>
       )}
 
@@ -481,7 +481,7 @@ export default function OrderDetailPage() {
               </div>
             )}
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#fff', border: `1px solid ${C.border}`, color: C.primary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#fff', border: `1px solid ${C.border}`, color: C.primaryText, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
                 <IconSim size={24} />
               </div>
               <h2 style={{ fontSize: 16, fontWeight: 800, color: S.ink, margin: '0 0 4px' }}>eSIM 已準備好</h2>
@@ -554,7 +554,7 @@ export default function OrderDetailPage() {
                   style={{
                     width: '100%', background: S.white,
                     border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 16px',
-                    fontSize: 14, fontWeight: 700, color: C.primary,
+                    fontSize: 14, fontWeight: 700, color: C.primaryText,
                     cursor: sharing ? 'wait' : 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   }}
@@ -696,7 +696,7 @@ export default function OrderDetailPage() {
                   onClick={fetchUsage}
                   disabled={usageLoading}
                   style={{
-                    fontSize: 12, color: C.primary,
+                    fontSize: 12, color: C.primaryText,
                     background: usageLoading ? C.light : S.white,
                     border: `1px solid ${C.border}`, borderRadius: 100, padding: '5px 14px',
                     cursor: usageLoading ? 'not-allowed' : 'pointer',
@@ -848,7 +848,7 @@ export default function OrderDetailPage() {
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, borderTop: `1px solid ${S.line}`, paddingTop: 12, marginTop: 2 }}>
             <span style={{ color: S.ink }}>實付金額</span>
-            <span style={{ color: C.primary, letterSpacing: '-0.02em' }}>NT${order.totalPaid.toLocaleString()}</span>
+            <span style={{ color: C.primaryText, letterSpacing: '-0.02em' }}>NT${order.totalPaid.toLocaleString()}</span>
           </div>
         </div>
         <div style={{ borderTop: `1px solid ${S.line}`, paddingTop: 12, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: S.faint }}>

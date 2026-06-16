@@ -62,7 +62,7 @@ export default function GroupAdminCouponsPage() {
     <div className="px-4 py-5">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-xl font-bold">發送活動券</h1>
-        <span className="text-sm text-gray-500">本月剩餘 <span className="font-bold" style={{ color: C.primary }}>{quota}</span>{cap != null ? ` / ${cap}` : ''} 次</span>
+        <span className="text-sm text-gray-500">本月剩餘 <span className="font-bold" style={{ color: C.primaryText }}>{quota}</span>{cap != null ? ` / ${cap}` : ''} 次</span>
       </div>
 
       <div className="mb-4">
@@ -81,7 +81,7 @@ export default function GroupAdminCouponsPage() {
       <div className="flex justify-between items-center mb-2">
         <p className="text-sm text-gray-500">選擇發送對象（共 {members.length} 位成員）</p>
         {members.length > 0 && (
-          <button type="button" onClick={toggleAll} className="text-xs font-medium" style={{ color: C.primary }}>
+          <button type="button" onClick={toggleAll} className="text-xs font-medium" style={{ color: C.primaryText }}>
             {allSelected ? '取消全選' : '全選'}
           </button>
         )}

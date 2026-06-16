@@ -91,7 +91,7 @@ export default function ProductDetailPage() {
   if (notFound || !product) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16 }}>
       <p style={{ color: S.faint, fontSize: 14 }}>商品不存在或已下架</p>
-      <button onClick={() => router.back()} style={{ color: C.primary, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer' }}>返回上一頁</button>
+      <button onClick={() => router.back()} style={{ color: C.primaryText, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer' }}>返回上一頁</button>
     </div>
   )
 
@@ -196,7 +196,7 @@ export default function ProductDetailPage() {
                   <p style={{ fontSize: 11, color: S.faint, margin: 0, textDecoration: 'line-through' }}>
                     NT${product.sellPrice.toLocaleString()}
                   </p>
-                  <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                  <p style={{ fontSize: 24, fontWeight: 800, color: C.primaryText, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
                     NT${bestPrice.toLocaleString()}
                   </p>
                   <p style={{ fontSize: 11, color: '#16a34a', marginTop: 1, fontWeight: 600 }}>
@@ -206,7 +206,7 @@ export default function ProductDetailPage() {
               ) : (
                 <>
                   <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>售價</p>
-                  <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                  <p style={{ fontSize: 24, fontWeight: 800, color: C.primaryText, margin: 0, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
                     NT${product.sellPrice.toLocaleString()}
                   </p>
                 </>

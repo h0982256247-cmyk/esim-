@@ -313,7 +313,7 @@ export default function OrdersPage() {
             type: 'box' as const, layout: 'vertical' as const, spacing: 'md',
             contents: [
               { type: 'text' as const, text: `你收到一張來自「${brandName}」的 eSIM`, weight: 'bold' as const, size: 'lg' as const, color: '#1a1a1a', wrap: true },
-              { type: 'text' as const, text: planLabel, size: 'md' as const, weight: 'bold' as const, wrap: true, color: C.primary },
+              { type: 'text' as const, text: planLabel, size: 'md' as const, weight: 'bold' as const, wrap: true, color: C.primaryText },
               { type: 'text' as const, text: '點下方按鈕完成領取，即可開始使用', size: 'sm' as const, color: '#475569', wrap: true },
               { type: 'separator' as const, margin: 'md' as const },
               { type: 'text' as const, text: '⚠ 連結 7 天內有效，請盡快領取', size: 'xs' as const, color: '#94a3b8', wrap: true },
@@ -322,7 +322,7 @@ export default function OrdersPage() {
           footer: {
             type: 'box' as const, layout: 'vertical' as const, spacing: 'sm',
             contents: [
-              { type: 'button' as const, style: 'primary' as const, color: C.primary,
+              { type: 'button' as const, style: 'primary' as const, color: C.primaryText,
                 action: { type: 'uri' as const, label: '查看並接受 eSIM', uri: giftLink } },
             ],
           },

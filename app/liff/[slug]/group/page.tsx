@@ -129,7 +129,7 @@ export default function GroupPage() {
           footer: {
             type: 'box' as const, layout: 'vertical' as const, paddingAll: '16px' as const,
             contents: [
-              { type: 'button' as const, style: 'primary' as const, color: C.primary, height: 'md' as const,
+              { type: 'button' as const, style: 'primary' as const, color: C.primaryText, height: 'md' as const,
                 action: { type: 'uri' as const, label: '立即加入', uri: inviteUrl } },
             ],
           },
@@ -194,7 +194,7 @@ export default function GroupPage() {
         {joinedInfo.couponDiscount != null ? (
           <>
             <p style={{ fontSize: 14, color: S.muted, margin: '0 0 2px' }}>恭喜獲得入群優惠券</p>
-            <p style={{ fontSize: 30, fontWeight: 800, color: C.primary, margin: '0 0 18px' }}>{zheLabel(joinedInfo.couponDiscount)}</p>
+            <p style={{ fontSize: 30, fontWeight: 800, color: C.primaryText, margin: '0 0 18px' }}>{zheLabel(joinedInfo.couponDiscount)}</p>
           </>
         ) : (
           <p style={{ fontSize: 14, color: S.muted, margin: '0 0 18px' }}>歡迎加入社群！</p>
@@ -245,7 +245,7 @@ export default function GroupPage() {
               <p style={{ fontSize: 11, color: S.faint, fontWeight: 600, letterSpacing: '0.06em', margin: '0 0 10px' }}>邀請碼</p>
               {/* 票券式邀請碼 */}
               <div style={{ background: C.light, border: `1.5px dashed ${C.border}`, borderRadius: 12, padding: '15px 14px', textAlign: 'center', marginBottom: 14 }}>
-                <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 28, fontWeight: 800, color: C.primary, letterSpacing: '0.22em', margin: 0 }}>
+                <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 28, fontWeight: 800, color: C.primaryText, letterSpacing: '0.22em', margin: 0 }}>
                   {ownedGroup.inviteCode}
                 </p>
               </div>
@@ -343,7 +343,7 @@ export default function GroupPage() {
             </div>
             <div style={{ flex: 1, background: S.white, border: `1px solid ${S.line}`, borderRadius: 14, padding: '14px 16px', textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               <p style={{ fontSize: 11, color: S.faint, margin: 0 }}>已省金額</p>
-              <p style={{ fontSize: 24, fontWeight: 800, color: C.primary, margin: '2px 0 0' }}>NT${memberStats.totalSaved.toLocaleString()}</p>
+              <p style={{ fontSize: 24, fontWeight: 800, color: C.primaryText, margin: '2px 0 0' }}>NT${memberStats.totalSaved.toLocaleString()}</p>
             </div>
           </div>
         )}
@@ -351,10 +351,10 @@ export default function GroupPage() {
         {/* 會員回饋：讓會員知道「每次購買都會拿到回購券」 */}
         {Number(membership.group.rebateRate) > 0 && (
           <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px', marginTop: 20 }}>
-            <p style={{ fontSize: 13, fontWeight: 800, color: C.primary, margin: 0 }}>🎁 社群會員專屬回饋</p>
+            <p style={{ fontSize: 13, fontWeight: 800, color: C.primaryText, margin: 0 }}>🎁 社群會員專屬回饋</p>
             <p style={{ fontSize: 13, color: S.muted, margin: '6px 0 0', lineHeight: 1.7 }}>
               每次在本社群購買 eSIM，結帳完成後都會自動獲得下次可用的
-              <span style={{ fontWeight: 800, color: C.primary }}>「{zheLabel(Math.round((1 - Number(membership.group.rebateRate)) * 100) / 100)} 回購券」</span>
+              <span style={{ fontWeight: 800, color: C.primaryText }}>「{zheLabel(Math.round((1 - Number(membership.group.rebateRate)) * 100) / 100)} 回購券」</span>
               ——買越多、省越多！
             </p>
           </div>
@@ -396,7 +396,7 @@ export default function GroupPage() {
       {/* hero */}
       <div style={{ textAlign: 'center', marginBottom: 24 }}>
         <div style={{ width: 72, height: 72, borderRadius: 20, background: C.light, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={C.primaryText} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19" />
             <circle cx="10" cy="8" r="3.2" />
             <path d="M20 19v-1.4a3.5 3.5 0 0 0-2.7-3.4" />
@@ -409,11 +409,11 @@ export default function GroupPage() {
 
       {/* 入群回饋提示 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.light, border: `1px solid ${C.border}`, borderRadius: 14, padding: '13px 16px', marginBottom: 20 }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.primaryText} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
           <path d="M3 9.5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v.4a1.9 1.9 0 0 0 0 3.7v.4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-.4a1.9 1.9 0 0 0 0-3.7v-.4Z" />
           <path d="M14 7.5v9" strokeDasharray="2 2.4" />
         </svg>
-        <p style={{ fontSize: 13, color: C.primary, fontWeight: 700, margin: 0, lineHeight: 1.45 }}>成功加入即享入群折扣券，買 eSIM 更省。</p>
+        <p style={{ fontSize: 13, color: C.primaryText, fontWeight: 700, margin: 0, lineHeight: 1.45 }}>成功加入即享入群折扣券，買 eSIM 更省。</p>
       </div>
 
       {/* 填寫邀請碼 */}

@@ -85,11 +85,11 @@ export default function GroupAdminDashboard() {
         <button onClick={() => router.push(`${base}/group-admin/coupons`)} className="bg-white rounded-xl border p-4 shadow-sm text-left">
           <p className="text-xs text-gray-400 mb-1">本月發券剩餘</p>
           <p className="text-2xl font-bold text-gray-800">{group.activityCouponQuota} 次</p>
-          <p className="text-xs font-semibold mt-1" style={{ color: C.primary }}>前往發券 ›</p>
+          <p className="text-xs font-semibold mt-1" style={{ color: C.primaryText }}>前往發券 ›</p>
         </button>
         <button onClick={() => router.push(`${base}/group-admin/revenue`)} className="bg-white rounded-xl border p-4 shadow-sm text-left">
           <p className="text-xs text-gray-400 mb-1">提領</p>
-          <p className="text-base font-bold mt-1" style={{ color: C.primary }}>查看 / 申請 ›</p>
+          <p className="text-base font-bold mt-1" style={{ color: C.primaryText }}>查看 / 申請 ›</p>
         </button>
       </div>
     </div>

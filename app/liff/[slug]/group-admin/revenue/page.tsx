@@ -106,16 +106,16 @@ export default function RevenuePage() {
     <div className="px-4 py-5">
       <h1 className="text-xl font-bold mb-2">收益中心</h1>
       <div className="rounded-xl p-4 mb-4" style={{ background: C.light, border: `1px solid ${C.border}` }}>
-        <p className="text-sm" style={{ color: C.primary }}>本月累積（待結算）</p>
-        <p className="text-3xl font-extrabold" style={{ color: C.primary }}>NT${pendingBalance.toLocaleString()}</p>
-        <p className="text-xs mt-1" style={{ color: C.primary, opacity: 0.8 }}>每月 1 號結算；結算後可於「提領」申請撥款</p>
+        <p className="text-sm" style={{ color: C.primaryText }}>本月累積（待結算）</p>
+        <p className="text-3xl font-extrabold" style={{ color: C.primaryText }}>NT${pendingBalance.toLocaleString()}</p>
+        <p className="text-xs mt-1" style={{ color: C.primaryText, opacity: 0.8 }}>每月 1 號結算；結算後可於「提領」申請撥款</p>
       </div>
 
       <div className="flex border-b mb-4">
         {(['commissions', 'settlements', 'withdraw'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className="flex-1 pb-2 text-sm font-medium border-b-2 transition"
-            style={tab === t ? { borderColor: C.primary, color: C.primary } : { borderColor: 'transparent', color: '#9ca3af' }}
+            style={tab === t ? { borderColor: C.primary, color: C.primaryText } : { borderColor: 'transparent', color: '#9ca3af' }}
           >
             {t === 'commissions' ? '分潤明細' : t === 'settlements' ? '每月結算' : '提領'}
           </button>
@@ -148,7 +148,7 @@ export default function RevenuePage() {
                     <p className="text-xs text-gray-400">{c.order.paidAt ? new Date(c.order.paidAt).toLocaleDateString('zh-TW') : '—'}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold" style={{ color: C.primary }}>+NT${c.commissionAmount}</p>
+                    <p className="font-bold" style={{ color: C.primaryText }}>+NT${c.commissionAmount}</p>
                     <span className={`text-xs ${s.color}`}>{s.text}</span>
                   </div>
                 </div>
@@ -219,7 +219,7 @@ export default function RevenuePage() {
                       <div key={m.period} className="flex items-center justify-between border rounded-lg px-3 py-2">
                         <div>
                           <p className="font-semibold text-sm">{m.period.replace('-', '/')} 月結</p>
-                          <p className="text-xs" style={{ color: C.primary }}>NT${m.amount.toLocaleString()}</p>
+                          <p className="text-xs" style={{ color: C.primaryText }}>NT${m.amount.toLocaleString()}</p>
                         </div>
                         <button
                           onClick={() => handleWithdrawMonth(m.period)}

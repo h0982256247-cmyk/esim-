@@ -39,7 +39,7 @@ export default function GroupAdminLayout({ children }: { children: React.ReactNo
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-lg mx-auto">
         <div className="bg-white border-b px-4 py-3 flex items-center gap-2">
-          <span className="text-sm font-semibold" style={{ color: C.primary }}>社群主後台</span>
+          <span className="text-sm font-semibold" style={{ color: C.primaryText }}>社群主後台</span>
         </div>
         <div className="pb-20">{children}</div>
       </div>

@@ -48,7 +48,7 @@ export default function GroupAdminOrdersPage() {
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-500">實付 NT${c.paidAmount}</p>
-                <p className="font-bold" style={{ color: C.primary }}>分潤 +NT${c.commissionAmount}</p>
+                <p className="font-bold" style={{ color: C.primaryText }}>分潤 +NT${c.commissionAmount}</p>
               </div>
             </div>
           </div>

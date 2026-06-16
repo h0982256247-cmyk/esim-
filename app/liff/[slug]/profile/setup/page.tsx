@@ -119,10 +119,10 @@ export default function ProfileSetup() {
           {!alreadyFilled && (
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 14,
-              background: C.light, border: `1px solid ${C.border}`, color: C.primary,
+              background: C.light, border: `1px solid ${C.border}`, color: C.primaryText,
               fontSize: 13, fontWeight: 700, padding: '7px 14px', borderRadius: 100,
             }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.primaryText} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 8a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 000-4z" />
                 <path d="M14 6.5v11" strokeDasharray="2 2.5" />
               </svg>
