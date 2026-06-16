@@ -95,7 +95,7 @@ function UsersContent() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['會員', '所屬平台', '社群身份', '訂單 / 券', '加入時間', ''].map(h => (
+                {['會員', '所屬平台', '社群身份', '訂單 / 有效券', '加入時間', ''].map(h => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>

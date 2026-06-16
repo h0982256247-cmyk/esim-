@@ -50,7 +50,14 @@ export async function GET(req: NextRequest) {
         tenantAdmin: { select: { id: true, name: true, brandName: true } },
         groupMembership: { select: { group: { select: { name: true } } } },
         ownedGroup: { select: { name: true, status: true } },
-        _count: { select: { orders: true, coupons: true } },
+        // 券數與會員詳情的「有效券」一致：只計未使用且未過期者（排除已用／已過期），
+        // 否則列表顯示全部張數會與詳情頁對不起來。
+        _count: {
+          select: {
+            orders: true,
+            coupons: { where: { usedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } },
+          },
+        },
       },
     }),
     prisma.user.count({ where }),
