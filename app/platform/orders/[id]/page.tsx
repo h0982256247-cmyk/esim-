@@ -56,7 +56,6 @@ const COUPON_LABEL: Record<string, string> = {
 const COMMISSION_STATUS: Record<string, string> = { SETTLED: '已結算', CANCELLED: '已取消', PENDING: '待結算' }
 function fold(d: number) { const n = Math.round(d * 100); return n % 10 === 0 ? `${n / 10} 折` : `${n} 折` }
 function dt(s: string | null) { return s ? new Date(s).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' }
-const dash = <span className="text-gray-300">—</span>
 
 function Pill({ status }: { status: string }) {
   const s = STATUS[status] ?? { text: status, cls: 'bg-gray-100 text-gray-500' }
@@ -67,20 +66,41 @@ function Pill({ status }: { status: string }) {
   )
 }
 
-function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+function CopyBtn({ text }: { text: string }) {
+  const [done, setDone] = useState(false)
   return (
-    <div className="flex justify-between gap-4 py-2 border-b border-gray-50 last:border-0">
-      <span className="text-xs text-gray-400 flex-shrink-0">{label}</span>
-      <span className={`text-right break-all text-gray-700 ${mono ? 'font-mono text-xs select-all' : 'text-sm'}`}>{value}</span>
+    <button
+      type="button"
+      onClick={async () => { try { await navigator.clipboard.writeText(text); setDone(true); window.setTimeout(() => setDone(false), 1500) } catch { /* clipboard 不可用時略過 */ } }}
+      className="flex-shrink-0 p-1 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition"
+      title="複製"
+    >
+      {done
+        ? <svg className="w-3.5 h-3.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+        : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><rect x="9" y="9" width="11" height="11" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="M5 15V5a2 2 0 012-2h10" /></svg>}
+    </button>
+  )
+}
+
+const SecLabel = ({ children }: { children: React.ReactNode }) => (
+  <p className="text-xs font-semibold text-gray-400 tracking-wide mb-2.5">{children}</p>
+)
+const Muted = ({ children }: { children: React.ReactNode }) => <span className="text-gray-300">{children}</span>
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] text-gray-400 mb-1">{label}</p>
+      <div className="text-sm text-gray-800 break-all">{children}</div>
     </div>
   )
 }
 
-function SummaryCell({ label, value, mono, full }: { label: string; value: React.ReactNode; mono?: boolean; full?: boolean }) {
+function KV({ label, children, mono }: { label: string; children: React.ReactNode; mono?: boolean }) {
   return (
-    <div className={full ? 'col-span-2' : ''}>
-      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-      <p className={`text-gray-800 break-all ${mono ? 'font-mono text-xs select-all' : 'text-sm font-medium'}`}>{value}</p>
+    <div className="flex justify-between gap-3">
+      <span className="text-xs text-gray-400 flex-shrink-0">{label}</span>
+      <span className={`text-right break-all text-gray-700 ${mono ? 'font-mono text-xs' : 'text-sm'}`}>{children}</span>
     </div>
   )
 }
@@ -170,99 +190,227 @@ export default function PlatformOrderDetail() {
   const { user, payment } = d
   const esims = d.esims
   const isBundle = esims.length > 1
+  const single = esims[0]
   const totalPaid = esims.reduce((s, e) => s + e.totalPaid, 0)
+  const totalSubtotal = esims.reduce((s, e) => s + e.subtotal, 0)
+  const totalDiscount = esims.reduce((s, e) => s + e.discountAmount, 0)
+  const totalCommission = esims.reduce((s, e) => s + (e.commission?.commissionAmount ?? 0), 0)
+  const hasCommission = esims.some(e => e.commission)
   const refundableCount = esims.filter(e => REFUNDABLE(e.status)).length
 
+  const btn = {
+    retry: 'bg-blue-600 hover:bg-blue-700 text-white',
+    refundOutline: 'bg-white border border-red-200 text-red-600 hover:bg-red-50',
+    refundSolid: 'bg-red-600 hover:bg-red-700 text-white',
+  }
+
   return (
-    <div className="max-w-3xl mx-auto space-y-4 pb-12">
-      {/* Header */}
-      <div className="flex items-center gap-3 flex-wrap">
+    <div className="max-w-5xl mx-auto pb-12">
+      {/* Header：麵包屑 + 訂單號 + 狀態(單張) / 合購標籤 + 操作 */}
+      <div className="flex items-center gap-3 flex-wrap mb-5">
         <button onClick={() => router.push('/platform/orders')} className="text-gray-400 hover:text-gray-600 text-sm">← 訂單管理</button>
         <span className="text-gray-300">/</span>
         <h1 className="font-mono text-lg font-bold text-gray-800">{d.orderNumber ?? `#${d.focusedId.slice(-8).toUpperCase()}`}</h1>
-        {isBundle && <span className="text-xs font-semibold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full">合購 · {esims.length} 張 eSIM</span>}
-        {isBundle && refundableCount > 1 && (
-          <button onClick={openBundleRefund} disabled={actingId === 'bundle'} className="ml-auto text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">
-            {actingId === 'bundle' ? '…' : `整捆退款（${refundableCount} 張）`}
-          </button>
-        )}
-      </div>
-      {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
-
-      {/* 訂單摘要（會員 + 付款，整捆共用） */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-800">訂單摘要</h2>
-          <div className="text-right">
-            <span className="text-xs text-gray-400">{isBundle ? '合計實付' : '實付'}</span>
-            <span className="ml-2 text-xl font-extrabold text-gray-900">NT${totalPaid.toLocaleString()}</span>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-          <SummaryCell label="會員" value={user.displayName} />
-          <SummaryCell label="付款方式" value={payment.paymentMethod === 'CREDIT_CARD' ? '信用卡' : 'LINE Pay'} />
-          <SummaryCell label="手機" value={user.phone ?? <span className="text-gray-300">未填</span>} />
-          <SummaryCell label="付款 / 建立時間" value={`${dt(payment.paidAt)} / ${dt(payment.createdAt)}`} />
-          <SummaryCell label="Email" value={user.email ?? <span className="text-gray-300">未填</span>} />
-          <SummaryCell label="LINE UID" value={user.lineUid} mono />
-          {payment.tapPayRecTradeId && <SummaryCell label="TapPay 交易號" value={payment.tapPayRecTradeId} mono full />}
-        </div>
-      </div>
-
-      {/* eSIM 卡片清單（多張並列，逐張可補發 / 退款） */}
-      {esims.map((e, i) => {
-        const canRetry = e.status === 'PAID' || e.status === 'ESIM_PENDING'
-        const canRefund = ['PAID', 'COMPLETED', 'ESIM_PENDING'].includes(e.status)
-        const busy = actingId === e.id
-        const pname = e.orderItems[0]?.productName ?? '—'
-        return (
-          <div key={e.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            {/* 卡片標頭：序號 + 狀態 + 操作 */}
-            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-50">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {isBundle && <span className="text-xs font-bold text-white bg-gray-900 rounded-md px-1.5 py-0.5">eSIM {i + 1}</span>}
-                  <Pill status={e.status} />
-                </div>
-                <p className="text-sm font-semibold text-gray-800 mt-1.5 truncate">{pname}</p>
-                {isBundle && e.orderNumber && <p className="text-xs text-gray-400 font-mono mt-0.5">{e.orderNumber}</p>}
-              </div>
-              {(canRetry || canRefund) && (
-                <div className="flex gap-2 flex-shrink-0">
-                  {canRetry && <button onClick={() => retry(e.id)} disabled={busy} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">{busy ? '…' : '補發'}</button>}
-                  {canRefund && <button onClick={() => openRefund(e)} disabled={busy} className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">{busy ? '…' : '退款'}</button>}
-                </div>
-              )}
-            </div>
-
-            {/* eSIM 開卡資訊 */}
-            <div className="px-5 py-2">
-              <Row label="兌換碼 rcode" value={e.esimRcode ?? <span className="text-gray-300">尚未取得</span>} mono />
-              <Row label="QR Code" value={e.esimQrcode ? <a href={e.esimQrcode} target="_blank" rel="noreferrer" className="text-blue-600 underline text-sm">開啟</a> : dash} />
-              <Row label="ICCID" value={e.esimIccid ?? dash} mono />
-              <Row label="可用期間" value={e.activationStart ? `${dt(e.activationStart)} ~ ${dt(e.activationEnd)}` : dash} />
-              <Row label="開始安裝 / 啟用" value={`${e.redeemedAt ? dt(e.redeemedAt) : '—'} / ${e.activatedAt ? dt(e.activatedAt) : '—'}`} />
-              <Row label="世界移動單號" value={e.wmOrderId ? `${e.wmOrderId}${e.wmOrderSn ? `（${e.wmOrderSn}）` : ''}` : <span className="text-gray-300">尚未下單</span>} mono />
-              {e.retryCount > 0 && <Row label="補發重試" value={`${e.retryCount} 次`} />}
-            </div>
-
-            {e.failureReason && (
-              <div className="mx-5 mb-3 bg-red-50 border border-red-100 rounded-lg p-3">
-                <p className="text-xs font-semibold text-red-700">開卡 / 付款失敗原因</p>
-                <p className="text-sm text-red-600 mt-0.5">{e.failureReason}</p>
-              </div>
+        {isBundle
+          ? <span className="text-xs font-semibold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full">合購 · {esims.length} 張 eSIM</span>
+          : <Pill status={single.status} />}
+        <div className="ml-auto flex gap-2">
+          {isBundle
+            ? (refundableCount > 1 && (
+                <button onClick={openBundleRefund} disabled={actingId === 'bundle'} className={`text-sm font-medium px-4 py-2 rounded-xl disabled:opacity-50 transition ${btn.refundSolid}`}>
+                  {actingId === 'bundle' ? '處理中…' : `整捆退款（${refundableCount} 張）`}
+                </button>
+              ))
+            : (
+              <>
+                {(single.status === 'PAID' || single.status === 'ESIM_PENDING') && (
+                  <button onClick={() => retry(single.id)} disabled={actingId === single.id} className={`text-sm font-medium px-4 py-2 rounded-xl disabled:opacity-50 transition ${btn.retry}`}>
+                    {actingId === single.id ? '處理中…' : '補發 eSIM'}
+                  </button>
+                )}
+                {REFUNDABLE(single.status) && (
+                  <button onClick={() => openRefund(single)} disabled={actingId === single.id} className={`text-sm font-medium px-4 py-2 rounded-xl disabled:opacity-50 transition ${btn.refundOutline}`}>
+                    退款
+                  </button>
+                )}
+              </>
             )}
+        </div>
+      </div>
+      {msg && <p className={`text-sm mb-4 ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
 
-            {/* 金額（逐張） */}
-            <div className="px-5 py-3 bg-gray-50/70 border-t border-gray-100 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-gray-500">
-              <span>實付 <b className="text-sm text-gray-900">NT${e.totalPaid.toLocaleString()}</b></span>
-              {e.discountAmount > 0 && <span>原價 NT${e.subtotal.toLocaleString()}・折 NT${e.discountAmount.toLocaleString()}</span>}
-              {e.orderCoupons.length > 0 && <span>{e.orderCoupons.map(c => `${COUPON_LABEL[c.coupon.type] ?? c.coupon.type}（${fold(c.coupon.discount)}）`).join('、')}</span>}
-              {e.commission && <span>分潤 NT${e.commission.commissionAmount}（{Math.round(Number(e.commission.ownerRate) * 100)}%・{COMMISSION_STATUS[e.commission.status] ?? e.commission.status}）</span>}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        {/* ── 左：eSIM 卡片 ── */}
+        <div className="lg:col-span-2 space-y-4">
+          {esims.map((e, i) => {
+            const canRetry = e.status === 'PAID' || e.status === 'ESIM_PENDING'
+            const canRefund = REFUNDABLE(e.status)
+            const busy = actingId === e.id
+            const pname = e.orderItems[0]?.productName ?? '—'
+            const hasCred = !!e.esimRcode
+            const installed = !!e.activationStart
+            const hasInstall = !!(e.redeemedAt || e.activatedAt)
+            return (
+              <div key={e.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+                {/* 卡頭 */}
+                <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-50">
+                  <div className="min-w-0">
+                    {isBundle && (
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span className="text-xs font-bold text-white bg-gray-900 rounded-md px-1.5 py-0.5">eSIM {i + 1}</span>
+                        <Pill status={e.status} />
+                      </div>
+                    )}
+                    <p className="text-base font-bold text-gray-800 truncate">{pname}</p>
+                    {isBundle && e.orderNumber && <p className="text-xs text-gray-400 font-mono mt-0.5">{e.orderNumber}</p>}
+                  </div>
+                  {isBundle && (canRetry || canRefund) && (
+                    <div className="flex gap-2 flex-shrink-0">
+                      {canRetry && <button onClick={() => retry(e.id)} disabled={busy} className={`text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50 transition ${btn.retry}`}>{busy ? '…' : '補發'}</button>}
+                      {canRefund && <button onClick={() => openRefund(e)} disabled={busy} className={`text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50 transition ${btn.refundOutline}`}>退款</button>}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 space-y-5">
+                  {/* 開卡憑證 */}
+                  <section>
+                    <SecLabel>開卡憑證</SecLabel>
+                    {hasCred ? (
+                      <div className="rounded-xl bg-blue-50/40 border border-blue-100 p-4">
+                        <p className="text-[11px] text-gray-400 mb-1">兌換碼 rcode</p>
+                        <div className="flex items-center gap-2">
+                          <code className="font-mono text-base font-bold text-gray-900 break-all select-all">{e.esimRcode}</code>
+                          <CopyBtn text={e.esimRcode!} />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-blue-100/70">
+                          <div className="min-w-0">
+                            <p className="text-[11px] text-gray-400 mb-1">ICCID</p>
+                            {e.esimIccid
+                              ? <div className="flex items-center gap-1.5"><code className="font-mono text-xs text-gray-700 break-all select-all">{e.esimIccid}</code><CopyBtn text={e.esimIccid} /></div>
+                              : <Muted>—</Muted>}
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-gray-400 mb-1">QR Code</p>
+                            {e.esimQrcode
+                              ? <a href={e.esimQrcode} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 bg-white border border-blue-200 rounded-lg px-2.5 py-1 hover:bg-blue-50 transition">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                  開啟 QR
+                                </a>
+                              : <Muted>—</Muted>}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 text-center">
+                        <p className="text-sm text-gray-400">尚未開卡{e.status === 'PAID' ? '（可按「補發」觸發開卡）' : ''}</p>
+                      </div>
+                    )}
+                  </section>
+
+                  {/* 使用狀態 */}
+                  <section>
+                    <SecLabel>使用狀態</SecLabel>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                      <Field label="可用期間">{installed ? `${dt(e.activationStart)} ~ ${dt(e.activationEnd)}` : <Muted>尚未啟用</Muted>}</Field>
+                      <Field label="開始安裝 / 啟用">{hasInstall ? `${e.redeemedAt ? dt(e.redeemedAt) : '—'} / ${e.activatedAt ? dt(e.activatedAt) : '—'}` : <Muted>尚未安裝</Muted>}</Field>
+                    </div>
+                  </section>
+
+                  {/* 供應商 */}
+                  <section>
+                    <SecLabel>供應商（世界移動）</SecLabel>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                      <Field label="下單單號">{e.wmOrderId ? <span className="font-mono text-xs">{e.wmOrderId}</span> : <Muted>尚未下單</Muted>}</Field>
+                      <Field label="eSIM 信件單號">{e.wmOrderSn ? <span className="font-mono text-xs">{e.wmOrderSn}</span> : <Muted>—</Muted>}</Field>
+                      {e.retryCount > 0 && <Field label="補發重試">{e.retryCount} 次</Field>}
+                    </div>
+                  </section>
+
+                  {e.failureReason && (
+                    <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+                      <p className="text-xs font-semibold text-red-700">開卡 / 付款失敗原因</p>
+                      <p className="text-sm text-red-600 mt-0.5">{e.failureReason}</p>
+                    </div>
+                  )}
+
+                  {/* 合購時顯示此張金額拆解（單張的明細在右側摘要） */}
+                  {isBundle && (
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 pt-3 border-t border-gray-50 text-xs text-gray-500">
+                      <span>實付 <b className="text-sm text-gray-900">NT${e.totalPaid.toLocaleString()}</b></span>
+                      {e.discountAmount > 0 && <span>原價 NT${e.subtotal.toLocaleString()}・折 NT${e.discountAmount.toLocaleString()}</span>}
+                      {e.orderCoupons.length > 0 && <span>{e.orderCoupons.map(c => `${COUPON_LABEL[c.coupon.type] ?? c.coupon.type}（${fold(c.coupon.discount)}）`).join('、')}</span>}
+                      {e.commission && <span>分潤 NT${e.commission.commissionAmount}</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* ── 右：訂單摘要（sticky）── */}
+        <div className="lg:sticky lg:top-6">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+            {/* 會員 */}
+            <div className="p-5">
+              <SecLabel>會員</SecLabel>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">{user.displayName.slice(0, 2).toUpperCase()}</div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{user.displayName}</p>
+                  <p className="text-[10px] text-gray-400 font-mono truncate">{user.lineUid}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <KV label="手機">{user.phone ?? <Muted>未填</Muted>}</KV>
+                <KV label="Email">{user.email ?? <Muted>未填</Muted>}</KV>
+              </div>
+            </div>
+
+            {/* 付款 */}
+            <div className="p-5">
+              <SecLabel>付款</SecLabel>
+              <div className="space-y-2">
+                <KV label="付款方式">{payment.paymentMethod === 'CREDIT_CARD' ? '信用卡' : 'LINE Pay'}</KV>
+                <KV label="付款時間">{dt(payment.paidAt)}</KV>
+                <KV label="建立時間">{dt(payment.createdAt)}</KV>
+                {payment.tapPayRecTradeId && (
+                  <div className="flex justify-between gap-3 items-start">
+                    <span className="text-xs text-gray-400 flex-shrink-0">TapPay 交易號</span>
+                    <span className="flex items-center gap-1 min-w-0">
+                      <span className="font-mono text-xs text-gray-700 break-all text-right">{payment.tapPayRecTradeId}</span>
+                      <CopyBtn text={payment.tapPayRecTradeId} />
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 金額明細 */}
+            <div className="p-5">
+              <SecLabel>金額明細</SecLabel>
+              <div className="space-y-2">
+                <KV label="原價">NT${totalSubtotal.toLocaleString()}</KV>
+                <KV label="折扣">- NT${totalDiscount.toLocaleString()}</KV>
+                <div className="flex justify-between items-baseline pt-2 mt-1 border-t border-gray-100">
+                  <span className="text-sm font-semibold text-gray-700">{isBundle ? `合計實付（${esims.length} 張）` : '實付'}</span>
+                  <span className="text-lg font-extrabold text-gray-900">NT${totalPaid.toLocaleString()}</span>
+                </div>
+                {!isBundle && single.orderCoupons.length > 0 && (
+                  <KV label="使用優惠券">{single.orderCoupons.map(c => `${COUPON_LABEL[c.coupon.type] ?? c.coupon.type}（${fold(c.coupon.discount)}）`).join('、')}</KV>
+                )}
+                {hasCommission && (
+                  <KV label="社群分潤">
+                    NT${totalCommission.toLocaleString()}
+                    {!isBundle && single.commission && <span className="text-gray-400">（{Math.round(Number(single.commission.ownerRate) * 100)}%・{COMMISSION_STATUS[single.commission.status] ?? single.commission.status}）</span>}
+                  </KV>
+                )}
+              </div>
             </div>
           </div>
-        )
-      })}
+        </div>
+      </div>
 
       <RefundConfirmDialog target={refundTarget} onClose={() => setRefundTarget(null)} onConfirm={doRefund} />
     </div>
