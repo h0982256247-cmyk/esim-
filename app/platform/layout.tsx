@@ -138,6 +138,8 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
   const router = useRouter()
   const [admin, setAdmin] = useState<AdminInfo | null>(null)
   const [searchQ, setSearchQ] = useState('')
+  const [notif, setNotif] = useState<{ items: { key: string; label: string; count: number; href: string }[]; total: number }>({ items: [], total: 0 })
+  const [notifOpen, setNotifOpen] = useState(false)
 
   // 頂欄搜尋：像訂單編號（含「-」或 ESM/ORD 開頭）→ 訂單管理；否則 → 會員管理（依暱稱）。
   const onSearch = (e: React.FormEvent) => {
@@ -160,6 +162,15 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
       })
       .catch(() => router.replace('/platform/login'))
   }, [pathname, router])
+
+  // 通知鈴：每次切頁重抓待辦計數（輕量 count），佇列清空後紅點即消失
+  useEffect(() => {
+    if (pathname === '/platform/login') return
+    fetch('/api/platform/notifications')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.items) setNotif(d) })
+      .catch(() => {})
+  }, [pathname])
 
   if (pathname === '/platform/login') return <>{children}</>
 
@@ -266,19 +277,37 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
               className="pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl w-56 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
             />
           </form>
-          {/* Icons */}
-          <button className="relative p-2 rounded-xl hover:bg-gray-50 transition text-gray-400 hover:text-gray-600">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white" />
-          </button>
-          <button className="p-2 rounded-xl hover:bg-gray-50 transition text-gray-400 hover:text-gray-600">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
+          {/* 通知鈴：待辦佇列計數，紅點只在有待辦時亮 */}
+          <div className="relative">
+            <button onClick={() => setNotifOpen(o => !o)} className="relative p-2 rounded-xl hover:bg-gray-50 transition text-gray-400 hover:text-gray-600">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              {notif.total > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white" />}
+            </button>
+            {notifOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl ring-1 ring-black/5 z-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-800">待辦通知</p>
+                    {notif.total > 0
+                      ? <span className="text-xs font-medium text-red-500">{notif.total} 項待處理</span>
+                      : <span className="text-xs text-gray-400">目前無待辦</span>}
+                  </div>
+                  <div className="py-1">
+                    {notif.items.map(it => (
+                      <button key={it.key} onClick={() => { setNotifOpen(false); router.push(it.href) }}
+                        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition text-left">
+                        <span className="text-sm text-gray-600">{it.label}</span>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${it.count > 0 ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-400'}`}>{it.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           {/* User avatar */}
           {admin && (
             <div className="flex items-center gap-2 pl-2 border-l border-gray-100">
