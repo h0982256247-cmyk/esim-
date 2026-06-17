@@ -167,7 +167,7 @@ export default function LiffHomePage() {
           colors={C}
           showSetup={showSetup}
           onDismissSetup={() => setShowSetup(false)}
-          onSelectCountry={code => router.push(`/liff/${slug}/products?country=${code}`)}
+          onSelectCountry={code => router.push(`/liff/${slug}/products?country=${encodeURIComponent(code)}`)}
           onNavigate={handleNavigate}
           onSearch={q => router.push(`/liff/${slug}/products${q}`)}
         />

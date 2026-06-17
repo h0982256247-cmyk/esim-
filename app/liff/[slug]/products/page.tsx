@@ -226,7 +226,7 @@ function ProductsContent() {
         showSetup={showSetup}
         colors={C}
         logoUrl={tenant?.logoUrl ?? null}
-        onSelectCountry={code => router.push(`/liff/${slug}/products?country=${code}`)}
+        onSelectCountry={code => router.push(`/liff/${slug}/products?country=${encodeURIComponent(code)}`)}
         onSelectProduct={id => router.push(`/liff/${slug}/products/${id}`)}
         onBack={() => router.push(`/liff/${slug}/products`)}
         onDismissSetup={dismissSetup}
