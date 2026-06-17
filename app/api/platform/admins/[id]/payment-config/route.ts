@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
-import { getPaymentConfigs, getPaymentConfig, upsertPaymentConfig, maskSecret } from '@/lib/services/tenant-config'
+import { getPaymentConfigs, getPaymentConfig, upsertPaymentConfig, setPaymentConfigActive, maskSecret } from '@/lib/services/tenant-config'
 import { PlatformAdminRole } from '@prisma/client'
 
 type Params = { params: Promise<{ id: string }> }
@@ -77,6 +77,31 @@ export async function PUT(req: NextRequest, { params }: Params) {
       appId: appId || undefined,
       appKey: finalAppKey,
     })
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 400 })
+  }
+}
+
+// PATCH /api/platform/admins/:id/payment-config — 切換前台顯示開關（只動 isActive）
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const auth = await requirePlatformAuth(req)
+  if (auth instanceof NextResponse) return auth
+  if (auth.role !== PlatformAdminRole.SUPER_ADMIN) {
+    return NextResponse.json({ error: '權限不足' }, { status: 403 })
+  }
+  const { id } = await params
+  const { gateway, isActive } = await req.json()
+  if (!gateway || typeof isActive !== 'boolean') {
+    return NextResponse.json({ error: '參數不完整' }, { status: 400 })
+  }
+  // 必須已有該金流設定才能開關（沒設定 Merchant ID/金鑰就無從付款）
+  const existing = await getPaymentConfig(id, gateway)
+  if (!existing) {
+    return NextResponse.json({ error: '請先完成該金流設定（Merchant ID／金鑰）再開啟' }, { status: 400 })
+  }
+  try {
+    await setPaymentConfigActive(id, gateway, isActive)
     return NextResponse.json({ ok: true })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 })

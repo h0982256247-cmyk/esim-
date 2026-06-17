@@ -49,20 +49,32 @@ export async function GET(req: NextRequest) {
 
   if (tenantAdminId) {
     // service 統一回解密值；appKey 是前端 client key，可回傳給 SDK（partnerKey 不在此回）
-    const cfg = await getPaymentConfig(tenantAdminId, 'tappay_credit')
-    if (cfg?.appId && cfg?.appKey) {
+    // 信用卡 / LINE Pay 共用同一個 TapPay App（appId/appKey），故 SDK 設定取任一可用者。
+    const [credit, linepay] = await Promise.all([
+      getPaymentConfig(tenantAdminId, 'tappay_credit'),
+      getPaymentConfig(tenantAdminId, 'tappay_linepay'),
+    ])
+    // 前台是否顯示各支付：需「已設定金鑰」且「啟用開關開啟」。
+    const methods = {
+      creditCard: !!(credit?.isActive && credit?.appId && credit?.appKey),
+      linePay:    !!(linepay?.isActive && (linepay?.appId || credit?.appId) && (linepay?.appKey || credit?.appKey)),
+    }
+    const sdk = (credit?.appId && credit?.appKey) ? credit : (linepay?.appId && linepay?.appKey ? linepay : null)
+    if (sdk?.appId && sdk?.appKey) {
       return NextResponse.json({
-        appId: parseInt(cfg.appId),
-        appKey: cfg.appKey,
-        env: cfg.env === 'production' ? 'production' : 'sandbox',
+        appId: parseInt(sdk.appId),
+        appKey: sdk.appKey,
+        env: sdk.env === 'production' ? 'production' : 'sandbox',
+        methods,
       })
     }
   }
 
-  // Fallback：env 多半沒設，但保留路徑供本地開發
+  // Fallback：env 多半沒設，但保留路徑供本地開發（預設兩種支付都顯示）
   return NextResponse.json({
     appId: parseInt(process.env.NEXT_PUBLIC_TAPPAY_APP_ID ?? '0'),
     appKey: process.env.NEXT_PUBLIC_TAPPAY_APP_KEY ?? '',
     env: process.env.NEXT_PUBLIC_TAPPAY_ENV === 'production' ? 'production' : 'sandbox',
+    methods: { creditCard: true, linePay: true },
   })
 }

@@ -98,7 +98,8 @@ export async function upsertPaymentConfig(
         env: input.env,
         appId: input.appId,
         appKey: encryptedAppKey,
-        isActive: true,
+        // 不在此強制 isActive=true：前台顯示與否由獨立的啟用開關控制，
+        // 重存金鑰/Merchant ID 不應意外把被關閉的支付方式重新打開。
       },
     })
   }
@@ -112,6 +113,14 @@ export async function upsertPaymentConfig(
       appId: input.appId,
       appKey: encryptedAppKey,
     },
+  })
+}
+
+/** 切換某金流前台啟用狀態（前端是否顯示此支付）。只動 isActive，不碰金鑰。 */
+export async function setPaymentConfigActive(adminId: string, gateway: string, isActive: boolean) {
+  return prisma.tenantPaymentConfig.update({
+    where: { adminId_gateway: { adminId, gateway } },
+    data: { isActive },
   })
 }
 

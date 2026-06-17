@@ -159,6 +159,8 @@ function CheckoutContent() {
   const [selectedCouponIds, setSelectedCouponIds] = useState<string[]>([])
   const [autoSelectedIds, setAutoSelectedIds] = useState<string[]>([])  // 記錄自動帶入的組合
   const [paymentMethod, setPaymentMethod] = useState<'CREDIT_CARD' | 'LINE_PAY'>('CREDIT_CARD')
+  // 平台商可在後台關閉某支付；關閉者前台不顯示。預設兩者皆開（env fallback / 尚未載入時）。
+  const [methods, setMethods] = useState<{ creditCard: boolean; linePay: boolean }>({ creditCard: true, linePay: true })
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [comboError, setComboError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -267,10 +269,17 @@ function CheckoutContent() {
         const url = qs ? `/api/liff/payment-config?${qs}` : '/api/liff/payment-config'
         const res = await fetch(url).then(r => r.json())
         setTapPayConfig(res)
+        if (res?.methods) setMethods(res.methods)
       } catch { /* fallback handled server-side */ }
     }
     fetchConfig()
   }, [liff])
+
+  // 若目前選的支付被平台商關閉，自動切到另一個可用的支付
+  useEffect(() => {
+    if (paymentMethod === 'CREDIT_CARD' && !methods.creditCard && methods.linePay) setPaymentMethod('LINE_PAY')
+    else if (paymentMethod === 'LINE_PAY' && !methods.linePay && methods.creditCard) setPaymentMethod('CREDIT_CARD')
+  }, [methods, paymentMethod])
 
   useEffect(() => () => {
     if (pollRef.current) clearInterval(pollRef.current)
@@ -904,6 +913,7 @@ function CheckoutContent() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
             {/* 信用卡：可展開的同一框格，刷卡欄位就在框內 */}
+            {methods.creditCard && (
             <div style={{
               borderRadius: 14,
               border: `1.5px solid ${cc ? C.primary : 'rgba(0,0,0,0.07)'}`,
@@ -1051,8 +1061,10 @@ function CheckoutContent() {
                 </div>
               )}
             </div>
+            )}
 
             {/* LINE Pay */}
+            {methods.linePay && (
             <div>
               <label
                 onClick={() => setPaymentMethod('LINE_PAY')}
@@ -1087,6 +1099,13 @@ function CheckoutContent() {
                 </p>
               )}
             </div>
+            )}
+
+            {!methods.creditCard && !methods.linePay && (
+              <p style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center', padding: '12px 0' }}>
+                目前未開放線上付款，請聯絡客服。
+              </p>
+            )}
           </div>
         </div>
 

@@ -75,7 +75,7 @@ export default function AdminDetailPage() {
   const [paymentConfigs, setPaymentConfigs] = useState<PaymentConfig[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [activeTab, setActiveTab] = useState<Tab>('品牌設定')
+  const [activeTab, setActiveTab] = useState<Tab>('概覽')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -162,39 +162,54 @@ export default function AdminDetailPage() {
 
 // ─── Overview Tab ─────────────────────────────────────────────────
 
+function StatIcon({ kind }: { kind: string }) {
+  const common = { className: 'w-4 h-4', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: 1.8 } as const
+  switch (kind) {
+    case 'money': return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 9v1m0-10c1.11 0 2.08.402 2.599 1M9.4 15c.52.6 1.49 1 2.6 1" /></svg>
+    case 'order': return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+    case 'check': return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+    case 'alert': return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+    default: return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2h5" /><circle cx="12" cy="8" r="4" /></svg>
+  }
+}
+
 function OverviewTab({ admin, stats }: { admin: AdminDetail; stats: Stats | null }) {
-  const statCards = stats ? [
-    { label: '會員數', value: stats.totalUsers.toLocaleString() },
-    { label: '社群總數', value: (stats.pendingGroups + stats.approvedGroups).toLocaleString() },
-    { label: '已核准社群', value: stats.approvedGroups.toLocaleString() },
-    { label: '訂單數', value: stats.totalOrders.toLocaleString() },
-    { label: '總營收', value: `NT$ ${stats.totalRevenue.toLocaleString()}` },
-    { label: '待結算分潤', value: `NT$ ${Number(stats.pendingCommissions).toLocaleString()}` },
-    { label: '待審社群', value: stats.pendingGroups.toLocaleString() },
-    { label: 'eSIM 補發中', value: stats.esimPendingOrders.toLocaleString() },
+  const money = (n: number) => `NT$ ${Number(n).toLocaleString()}`
+  const cards = stats ? [
+    { label: '會員數',      value: stats.totalUsers.toLocaleString(),                              tint: 'bg-blue-50 text-blue-600',     kind: 'people' },
+    { label: '社群總數',    value: (stats.pendingGroups + stats.approvedGroups).toLocaleString(),  tint: 'bg-violet-50 text-violet-600', kind: 'people' },
+    { label: '已核准社群',  value: stats.approvedGroups.toLocaleString(),                          tint: 'bg-emerald-50 text-emerald-600', kind: 'check' },
+    { label: '訂單數',      value: stats.totalOrders.toLocaleString(),                             tint: 'bg-sky-50 text-sky-600',       kind: 'order' },
+    { label: '總營收',      value: money(stats.totalRevenue),                                      tint: 'bg-blue-50 text-blue-600',     kind: 'money' },
+    { label: '待結算分潤',  value: money(stats.pendingCommissions),                                tint: 'bg-amber-50 text-amber-600',   kind: 'money' },
+    { label: '待審社群',    value: stats.pendingGroups.toLocaleString(),                           tint: stats.pendingGroups > 0 ? 'bg-amber-50 text-amber-600' : 'bg-gray-50 text-gray-400', kind: 'alert' },
+    { label: 'eSIM 補發中', value: stats.esimPendingOrders.toLocaleString(),                       tint: stats.esimPendingOrders > 0 ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-400', kind: 'alert' },
   ] : []
 
   return (
-    <div className="space-y-6">
-      {/* Basic info */}
-      <div className="bg-white rounded-2xl border shadow-sm p-5">
-        <h2 className="font-semibold text-sm text-gray-500 mb-3">基本資料</h2>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
-          <InfoRow label="電子郵件" value={admin.email} />
-          <InfoRow label="角色" value="Platform Admin" />
-          <InfoRow label="讓利上限" value={`${Math.round(Number(admin.maxRebateRate) * 100)}%`} />
-          <InfoRow label="建立時間" value={new Date(admin.createdAt).toLocaleDateString('zh-TW')} />
+    <div className="space-y-5">
+      {/* 基本資料 */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h2 className="text-sm font-semibold text-gray-800 mb-3">基本資料</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4">
+          <Cell label="電子郵件" value={admin.email} />
+          <Cell label="角色" value="Platform Admin" />
+          <Cell label="讓利上限" value={`${Math.round(Number(admin.maxRebateRate) * 100)}%`} />
+          <Cell label="建立時間" value={new Date(admin.createdAt).toLocaleDateString('zh-TW')} />
         </div>
       </div>
 
-      {/* Stats */}
+      {/* 數據統計 */}
       {stats && (
         <div>
-          <h2 className="font-semibold text-sm text-gray-500 mb-3">數據統計</h2>
-          <div className="grid grid-cols-4 gap-3">
-            {statCards.map(c => (
-              <div key={c.label} className="bg-white rounded-2xl border shadow-sm p-4">
-                <p className="text-xs text-gray-400 mb-1">{c.label}</p>
+          <h2 className="text-sm font-semibold text-gray-800 mb-3">數據統計</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {cards.map(c => (
+              <div key={c.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-all">
+                <div className="flex items-center gap-2.5 mb-2.5">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${c.tint}`}><StatIcon kind={c.kind} /></div>
+                  <p className="text-xs text-gray-400">{c.label}</p>
+                </div>
                 <p className="text-xl font-bold text-gray-800">{c.value}</p>
               </div>
             ))}
@@ -205,11 +220,11 @@ function OverviewTab({ admin, stats }: { admin: AdminDetail; stats: Stats | null
   )
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function Cell({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <span className="text-gray-400">{label}：</span>
-      <span className="text-gray-800 font-medium">{value}</span>
+    <div className="min-w-0">
+      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+      <p className="text-sm font-medium text-gray-800 break-all">{value}</p>
     </div>
   )
 }
@@ -370,7 +385,7 @@ function PaymentConfigTab({
 
       {/* ── 各 Gateway 只設定 Merchant ID ──────── */}
       <div className="bg-gray-50 rounded-2xl border border-gray-200 p-1 space-y-1">
-        <p className="text-xs text-gray-400 px-3 py-2 font-medium">各金流 Merchant ID</p>
+        <p className="text-xs text-gray-400 px-3 py-2 font-medium">各金流 Merchant ID ·「前台顯示」開關控制結帳頁是否出現此支付</p>
         {gateways.map(gw => {
           const existing = configs.find(c => c.gateway === gw) ?? null
           return (
@@ -540,6 +555,25 @@ function MerchantIdCard({
   const [merchantId, setMerchantId] = useState(existing?.merchantId ?? '')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [active, setActive] = useState(existing?.isActive ?? false)
+  const [toggling, setToggling] = useState(false)
+
+  // 前台顯示開關：關閉後 LIFF 結帳不顯示此支付方式（只動 isActive，不碰金鑰）
+  const handleToggle = async () => {
+    if (!existing || toggling) return
+    const next = !active
+    setToggling(true)
+    setMsg(null)
+    const r = await fetch(`/api/platform/admins/${adminId}/payment-config`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gateway, isActive: next }),
+    }).then(x => x.json()).catch(() => ({ error: '連線失敗' }))
+    setToggling(false)
+    if (r.error) { setMsg({ ok: false, text: `❌ ${r.error}` }); return }
+    setActive(next)
+    onSaved()
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -570,18 +604,31 @@ function MerchantIdCard({
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-medium text-sm text-gray-800">{GATEWAY_LABEL[gateway] ?? gateway}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-medium text-sm text-gray-800">{GATEWAY_LABEL[gateway] ?? gateway}</p>
+            {existing && (
+              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+                {active ? '前台顯示中' : '前台已隱藏'}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-gray-400 mt-0.5">
-            {existing?.merchantId
-              ? `Merchant ID：${existing.merchantId}`
-              : '尚未設定 Merchant ID'}
+            {existing?.merchantId ? `Merchant ID：${existing.merchantId}` : '尚未設定 Merchant ID'}
           </p>
         </div>
-        <button onClick={() => setExpanded(p => !p)} className="text-xs text-blue-600 hover:underline">
-          {expanded ? '收起' : (existing?.merchantId ? '編輯' : '設定')}
-        </button>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {existing && (
+            <button onClick={handleToggle} disabled={toggling} title="關閉後前台結帳不顯示此支付方式"
+              className={`relative w-10 h-6 rounded-full transition disabled:opacity-40 ${active ? 'bg-blue-600' : 'bg-gray-200'}`}>
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${active ? 'translate-x-4' : ''}`} />
+            </button>
+          )}
+          <button onClick={() => setExpanded(p => !p)} className="text-xs text-blue-600 hover:underline">
+            {expanded ? '收起' : (existing?.merchantId ? '編輯' : '設定')}
+          </button>
+        </div>
       </div>
 
       {expanded && (
