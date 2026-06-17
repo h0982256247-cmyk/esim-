@@ -11,6 +11,7 @@ type RecentOrder = {
   id: string
   orderNo: string
   totalPaid: number
+  esimCount: number
   status: string
   createdAt: string
   userName: string
@@ -427,7 +428,10 @@ export default function PlatformDashboard() {
                 const s = ORDER_STATUS[o.status] ?? { label: o.status, cls: 'bg-gray-100 text-gray-500' }
                 return (
                   <tr key={o.id} onClick={() => router.push(`/platform/orders/${o.id}`)} className="hover:bg-gray-50 transition-colors cursor-pointer">
-                    <td className="px-5 py-3.5 font-mono text-xs text-blue-600">#{o.orderNo ?? o.id.slice(-8).toUpperCase()}</td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span className="font-mono text-xs text-blue-600">#{o.orderNo ?? o.id.slice(-8).toUpperCase()}</span>
+                      {o.esimCount > 1 && <span className="ml-2 text-[10px] font-semibold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full">合購 {o.esimCount} 張</span>}
+                    </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">{o.userName.slice(0, 2).toUpperCase()}</div>

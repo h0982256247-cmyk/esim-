@@ -290,24 +290,34 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     })
   }
 
-  // Recent 5 orders
-  const recentOrders = await prisma.order.findMany({
-    where: orderTenantWhere,
+  // Recent 5 orders — 同捆（共用 bundleId）合併為一列：代表列 = 單筆 或 bundle 第一張(seq=1)
+  const recentReps = await prisma.order.findMany({
+    where: { ...orderTenantWhere, OR: [{ bundleId: null }, { bundleSeq: 1 }] },
     orderBy: { createdAt: 'desc' },
     take: 5,
     select: {
       id: true,
-      wmOrderSn: true,
+      orderNumber: true,
       totalPaid: true,
       status: true,
       createdAt: true,
+      bundleId: true,
       user: { select: { displayName: true } },
-      orderItems: {
-        take: 1,
-        select: { productName: true },
-      },
+      orderItems: { take: 1, select: { productName: true } },
     },
   })
+  // 同捆張數與金額合計
+  const recentBundleIds = recentReps.map(o => o.bundleId).filter((b): b is string => !!b)
+  const recentAgg = new Map<string, { count: number; total: number }>()
+  if (recentBundleIds.length > 0) {
+    const aggs = await prisma.order.groupBy({
+      by: ['bundleId'],
+      where: { bundleId: { in: recentBundleIds } },
+      _count: { _all: true },
+      _sum: { totalPaid: true },
+    })
+    for (const a of aggs) if (a.bundleId) recentAgg.set(a.bundleId, { count: a._count._all, total: a._sum.totalPaid ?? 0 })
+  }
 
   return {
     totalUsers,
@@ -329,14 +339,18 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     ordersIncluded:  margin.ordersIncluded,
     ordersExcluded:  margin.ordersExcluded,
     riskAlerts,
-    recentOrders: recentOrders.map(o => ({
-      id: o.id,
-      orderNo: o.wmOrderSn ?? o.id.slice(-8).toUpperCase(),
-      totalPaid: o.totalPaid,
-      status: o.status,
-      createdAt: o.createdAt.toISOString(),
-      userName: o.user?.displayName ?? '—',
-      productName: o.orderItems[0]?.productName ?? '—',
-    })),
+    recentOrders: recentReps.map(o => {
+      const agg = o.bundleId ? recentAgg.get(o.bundleId) : undefined
+      return {
+        id: o.id,
+        orderNo: o.orderNumber ?? o.id.slice(-8).toUpperCase(),
+        totalPaid: agg?.total ?? o.totalPaid,
+        esimCount: agg?.count ?? 1,
+        status: o.status,
+        createdAt: o.createdAt.toISOString(),
+        userName: o.user?.displayName ?? '—',
+        productName: o.orderItems[0]?.productName ?? '—',
+      }
+    }),
   }
 }
