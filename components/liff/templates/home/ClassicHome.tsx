@@ -73,7 +73,7 @@ export default function ClassicHome({
           <div style={{
             width: 46, height: 46, borderRadius: '50%', overflow: 'hidden',
             background: '#fff', flexShrink: 0,
-            boxShadow: '3px 4px 0 rgba(0,0,0,0.10)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.07)',
             border: '2px solid rgba(0,0,0,0.06)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
@@ -94,7 +94,7 @@ export default function ClassicHome({
             border: searchOpen ? `2px solid ${C.primary}` : '2px solid rgba(0,0,0,0.06)',
             cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: searchOpen ? `3px 4px 0 ${C.primary}40` : '3px 4px 0 rgba(0,0,0,0.10)',
+            boxShadow: searchOpen ? `0 6px 16px ${C.primary}33` : '0 4px 12px rgba(0,0,0,0.07)',
             transition: 'box-shadow 0.2s, border 0.2s',
           }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -112,7 +112,7 @@ export default function ClassicHome({
               <div style={{
                 background: '#fff', borderRadius: 18, display: 'flex', alignItems: 'center',
                 gap: 10, padding: '0 14px',
-                boxShadow: '4px 4px 0 rgba(0,0,0,0.08)',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
                 border: '2px solid rgba(0,0,0,0.07)',
               }}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.2" strokeLinecap="round">
@@ -167,7 +167,7 @@ export default function ClassicHome({
               border: '2px solid rgba(0,0,0,0.10)',
               borderRadius: 18, flexShrink: 0,
               padding: '0 18px', cursor: 'pointer', color: '#fff', fontWeight: 700, fontSize: 14,
-              height: 48, boxShadow: '4px 4px 0 rgba(0,0,0,0.12)',
+              height: 48, boxShadow: '0 6px 16px rgba(0,0,0,0.10)',
               display: 'flex', alignItems: 'center', gap: 5,
             }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -192,7 +192,7 @@ export default function ClassicHome({
           position: 'relative', overflow: 'hidden', minHeight: 180,
           backgroundImage: 'url(https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=800&q=80)',
           backgroundSize: 'cover', backgroundPosition: 'center 40%',
-          boxShadow: `6px 8px 0 ${C.primary}38`,
+          boxShadow: `0 14px 30px ${C.primary}30`,
           border: `2px solid ${C.primary}2e`,
         }}>
           {/* 品牌色漸層遮罩（隨租戶主色換皮） */}
@@ -216,7 +216,7 @@ export default function ClassicHome({
               background: '#fff', border: '2px solid rgba(255,255,255,0.8)', borderRadius: 22,
               padding: '9px 20px', cursor: 'pointer',
               fontSize: 13, fontWeight: 800, color: C.primary,
-              boxShadow: '3px 4px 0 rgba(0,0,0,0.15)',
+              boxShadow: '0 6px 16px rgba(0,0,0,0.14)',
             }}>
               立即選購 →
             </button>
@@ -236,13 +236,13 @@ export default function ClassicHome({
                 padding: '16px 4px 14px', display: 'flex', flexDirection: 'column',
                 alignItems: 'center', gap: 9, cursor: 'pointer',
                 animation: `fadeUp 0.4s ${i * 0.05}s ease both`,
-                boxShadow: '4px 5px 0 rgba(0,0,0,0.10)',
+                boxShadow: '0 6px 16px rgba(0,0,0,0.07)',
               }}>
               <div style={{
                 width: 46, height: 46, borderRadius: 15,
                 background: 'rgba(255,255,255,0.65)',
                 border: '1.5px solid rgba(255,255,255,0.9)',
-                boxShadow: '2px 2px 0 rgba(0,0,0,0.08)',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <Icon color={color} size={23} />
