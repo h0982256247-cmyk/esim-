@@ -9,6 +9,7 @@ type Order = {
   id: string; status: string; totalPaid: number; paymentMethod: string
   paidAt: string | null; createdAt: string; retryCount: number
   orderNumber: string | null; tapPayOrderId: string | null
+  bundleId: string | null; esimCount: number; bundleTotal: number
   user: { displayName: string }
   orderItems: { productName: string }[]
 }
@@ -129,11 +130,11 @@ function OrdersContent() {
                 return (
                   <tr key={o.id} onClick={()=>router.push(`/platform/orders/${o.id}`)} className="hover:bg-gray-50 transition-colors cursor-pointer">
                     <td className="px-5 py-3.5">
-                      <p className="font-mono text-xs font-semibold text-gray-700">{o.orderNumber??`#${o.id.slice(-8).toUpperCase()}`}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">
-                        {o.orderItems[0]?.productName??'—'}
-                        {o.orderItems.length>1&&<span className="text-gray-400">　等 {o.orderItems.length} 張</span>}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-mono text-xs font-semibold text-gray-700">{o.orderNumber??`#${o.id.slice(-8).toUpperCase()}`}</p>
+                        {o.esimCount>1&&<span className="text-[10px] font-semibold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">合購 {o.esimCount} 張</span>}
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5">{o.orderItems[0]?.productName??'—'}</p>
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
@@ -143,7 +144,10 @@ function OrdersContent() {
                         <span className="text-sm font-medium text-gray-700">{o.user.displayName}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 font-semibold text-gray-800">NT${o.totalPaid.toLocaleString()}</td>
+                    <td className="px-5 py-3.5 font-semibold text-gray-800 whitespace-nowrap">
+                      NT${(o.esimCount>1?o.bundleTotal:o.totalPaid).toLocaleString()}
+                      {o.esimCount>1&&<span className="block text-[10px] font-normal text-gray-400">{o.esimCount} 張合計</span>}
+                    </td>
                     <td className="px-5 py-3.5 text-xs text-gray-500">{o.paymentMethod==='CREDIT_CARD'?'信用卡':'LINE Pay'}</td>
                     <td className="px-5 py-3.5">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${s.cls}`}>
@@ -152,15 +156,20 @@ function OrdersContent() {
                       {o.retryCount>0&&<span className="block text-xs text-gray-400 mt-0.5">重試 {o.retryCount} 次</span>}
                     </td>
                     <td className="px-5 py-3.5 text-xs text-gray-400">{new Date(o.createdAt).toLocaleDateString('zh-TW')}</td>
-                    <td className="px-5 py-3.5" onClick={e=>e.stopPropagation()}>
-                      <div className="flex gap-1.5">
-                        {(o.status==='PAID'||o.status==='ESIM_PENDING')&&(
-                          <button onClick={()=>handleRetry(o.id)} disabled={actionLoading===o.id} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">補發</button>
-                        )}
-                        {(o.status==='PAID'||o.status==='COMPLETED'||o.status==='ESIM_PENDING')&&(
-                          <button onClick={()=>openRefund(o)} disabled={actionLoading===o.id} className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">{actionLoading===o.id?'…':'退款'}</button>
-                        )}
-                      </div>
+                    <td className="px-5 py-3.5 whitespace-nowrap" onClick={e=>e.stopPropagation()}>
+                      {o.esimCount>1 ? (
+                        // 同捆：補發/退款逐張不同，導去詳情頁逐張或整捆處理，避免在列表誤觸單張
+                        <button onClick={()=>router.push(`/platform/orders/${o.id}`)} className="text-xs text-blue-600 hover:underline font-medium">管理 {o.esimCount} 張 →</button>
+                      ) : (
+                        <div className="flex gap-1.5">
+                          {(o.status==='PAID'||o.status==='ESIM_PENDING')&&(
+                            <button onClick={()=>handleRetry(o.id)} disabled={actionLoading===o.id} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">補發</button>
+                          )}
+                          {(o.status==='PAID'||o.status==='COMPLETED'||o.status==='ESIM_PENDING')&&(
+                            <button onClick={()=>openRefund(o)} disabled={actionLoading===o.id} className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">{actionLoading===o.id?'…':'退款'}</button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
