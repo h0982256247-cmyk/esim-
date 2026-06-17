@@ -15,9 +15,9 @@ const S = {
 
 // Country → fixed gradient (same hash as before)
 const COUNTRY_GRADIENTS = [
-  ['#667eea', '#764ba2'], ['#f093fb', '#f5576c'], ['#4facfe', '#00f2fe'],
-  ['#43e97b', '#38f9d7'], ['#fa709a', '#fee140'], ['#a18cd1', '#fbc2eb'],
-  ['#fccb90', '#d57eeb'], ['#96fbc4', '#f9f586'],
+  ['#5B6CF0', '#8B93F2'], ['#0EA5B5', '#3FC3CE'], ['#E0930E', '#EBB14E'],
+  ['#14A06B', '#46BB8C'], ['#EC6A5E', '#F2938A'], ['#B66BC4', '#CB94D5'],
+  ['#3E7BD6', '#6FA0E4'], ['#D9737E', '#E59AA2'],
 ]
 
 function getGradient(code: string) {
