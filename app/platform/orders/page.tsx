@@ -37,6 +37,7 @@ function OrdersContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const statusFilter = searchParams.get('status') ?? ''
+  const q = searchParams.get('q') ?? ''
   const page = parseInt(searchParams.get('page') ?? '1')
   const [orders, setOrders] = useState<Order[]>([])
   const [total, setTotal] = useState(0)
@@ -54,11 +55,11 @@ function OrdersContent() {
   }, [])
   const load = () => {
     setLoading(true)
-    fetch(`/api/platform/orders?page=${page}${statusFilter?`&status=${statusFilter}`:''}${filterTenantId?`&tenantAdminId=${filterTenantId}`:''}`)
+    fetch(`/api/platform/orders?page=${page}${statusFilter?`&status=${statusFilter}`:''}${q?`&q=${encodeURIComponent(q)}`:''}${filterTenantId?`&tenantAdminId=${filterTenantId}`:''}`)
       .then(r=>r.status===401?(router.replace('/platform/login'),null):r.json())
       .then(d=>{if(d){setOrders(d.orders);setTotal(d.total)}}).finally(()=>setLoading(false))
   }
-  useEffect(load, [page,statusFilter,filterTenantId,router])
+  useEffect(load, [page,statusFilter,q,filterTenantId,router])
   const handleRetry = async (id:string) => { setActionLoading(id); await fetch(`/api/platform/orders/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'retry_esim'})}); setActionLoading(null); load() }
 
   // 開啟退款視窗（列表頁為單張退款）：抓退款預覽 + 判斷是否整捆全退（決定是否退券），交給 RefundConfirmDialog。
@@ -94,7 +95,12 @@ function OrdersContent() {
     <div className="space-y-5">
       <RefundConfirmDialog target={refundTarget} onClose={()=>setRefundTarget(null)} onConfirm={doRefund} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-bold text-gray-800">訂單管理</h1><p className="text-sm text-gray-400 mt-0.5">共 {total} 筆訂單</p></div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">訂單管理</h1>
+          {q
+            ? <p className="text-sm text-gray-400 mt-0.5">搜尋「<span className="text-gray-600 font-medium">{q}</span>」找到 {total} 筆 · <button onClick={()=>router.push(statusFilter?`/platform/orders?status=${statusFilter}&page=1`:'/platform/orders?page=1')} className="text-blue-600 hover:underline">清除</button></p>
+            : <p className="text-sm text-gray-400 mt-0.5">共 {total} 筆訂單</p>}
+        </div>
         <div className="flex flex-wrap gap-1.5">
           {STATUS_OPTS.map(s=>(
             <button key={s} onClick={()=>router.push(s?`/platform/orders?status=${s}&page=1`:'/platform/orders?page=1')}

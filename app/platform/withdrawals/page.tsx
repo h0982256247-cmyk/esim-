@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import TenantScopeBar from '@/components/platform/TenantScopeBar'
 
 type BankInfo = { bankName: string; bankAccount: string; bankBranch?: string; bankHolderName: string }
 type Withdrawal = {
@@ -28,15 +29,29 @@ export default function WithdrawalsPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED'>('PENDING')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [currentRole, setCurrentRole] = useState<string | null>(null)
+  const [platformAdmins, setPlatformAdmins] = useState<{ id: string; name: string; brandName: string | null }[]>([])
+  const [filterTenantId, setFilterTenantId] = useState('')
+
+  useEffect(() => {
+    fetch('/api/platform/auth/me').then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.admin?.role) setCurrentRole(d.admin.role)
+      if (d?.admin?.role === 'SUPER_ADMIN') {
+        fetch('/api/platform/admins').then(r => r.json())
+          .then(a => setPlatformAdmins((a.admins ?? []).filter((x: { role: string }) => x.role === 'PLATFORM_ADMIN')))
+          .catch(() => {})
+      }
+    }).catch(() => {})
+  }, [])
 
   const load = () => {
     setLoading(true)
-    fetch('/api/admin/withdrawals')
+    fetch(`/api/admin/withdrawals${filterTenantId ? `?tenantAdminId=${filterTenantId}` : ''}`)
       .then(r => r.status === 401 ? (router.replace('/platform/login'), null) : r.json())
       .then(d => { if (d) setList(d.withdrawals ?? []) })
       .finally(() => setLoading(false))
   }
-  useEffect(load, [router])
+  useEffect(load, [router, filterTenantId])
 
   const act = async (id: string, action: 'approve' | 'reject' | 'pay') => {
     let note: string | null | undefined
@@ -68,6 +83,10 @@ export default function WithdrawalsPage() {
         <h1 className="text-2xl font-bold text-gray-800">提領審核</h1>
         <p className="text-sm text-gray-400 mt-0.5">社群主分潤提領申請</p>
       </div>
+
+      {currentRole === 'SUPER_ADMIN' && platformAdmins.length > 0 && (
+        <TenantScopeBar admins={platformAdmins} value={filterTenantId} onChange={setFilterTenantId} />
+      )}
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4">

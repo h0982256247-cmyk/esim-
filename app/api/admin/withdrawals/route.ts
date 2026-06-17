@@ -7,9 +7,10 @@ export async function GET(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
 
-  const tenantAdminId = auth.role === 'PLATFORM_ADMIN' ? auth.tenantAdminId
-    : auth.role === 'SUB_ADMIN' ? auth.tenantAdminId
-    : null  // SUPER_ADMIN sees all
+  // SUPER_ADMIN 預設看全部，亦可用 tenantAdminId 下鑽到單一白牌；其餘角色一律鎖自己租戶。
+  const tenantAdminId = auth.role === 'SUPER_ADMIN'
+    ? (req.nextUrl.searchParams.get('tenantAdminId') || null)
+    : auth.tenantAdminId
 
   const withdrawals = await getAllWithdrawalsForAdmin(tenantAdminId)
   return NextResponse.json({ withdrawals })

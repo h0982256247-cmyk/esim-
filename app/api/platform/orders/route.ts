@@ -28,9 +28,19 @@ export async function GET(req: NextRequest) {
         ? { status: statusParam as OrderStatus }
         : {}
 
+  // 搜尋：訂單編號 或 會員暱稱（Email 已加密無法比對，故不納入）
+  const q = (req.nextUrl.searchParams.get('q') ?? '').trim()
+  const searchWhere: Prisma.OrderWhereInput = q ? {
+    OR: [
+      { orderNumber: { contains: q, mode: 'insensitive' } },
+      { user: { displayName: { contains: q, mode: 'insensitive' } } },
+    ],
+  } : {}
+
   const where: Prisma.OrderWhereInput = {
     ...statusWhere,
     ...tenantWhere,
+    ...searchWhere,
   }
 
   const [orders, total] = await Promise.all([

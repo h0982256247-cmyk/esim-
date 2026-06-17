@@ -6,8 +6,13 @@ export async function GET(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
 
+  // SUPER_ADMIN 可用 tenantAdminId 下鑽到單一白牌；其餘角色一律鎖自己租戶。
+  const tenantAdminId = auth.role === 'SUPER_ADMIN'
+    ? (req.nextUrl.searchParams.get('tenantAdminId') || null)
+    : auth.tenantAdminId
+
   try {
-    const stats = await getDashboardStats(auth.tenantAdminId)
+    const stats = await getDashboardStats(tenantAdminId)
     // role 給前端判斷是否顯示「開站進度」（Super Admin 不顯示）。
     return NextResponse.json({ ...stats, role: auth.role })
   } catch (e) {
