@@ -40,6 +40,8 @@ type ValidateResult = {
 }
 
 type ApplyResult = { disabled: number; repriced: number; priceRaised: number; syncedAt: string }
+type GuardSample = { country: string; days: number; cap: string | null; sell: number; cost: number; newSell: number }
+type GuardState = { enabled: boolean; rate: number; belowCount: number; samples: GuardSample[] }
 
 function formatRelativeTime(iso: string | null): string {
   if (!iso) return '從未同步'
@@ -110,6 +112,10 @@ export default function PlatformProductsPage() {
 
   // 驗證後標記受影響的 product id，給表格 row 顯示需處理徽章
   const [affectedIds, setAffectedIds] = useState<Map<string, 'notfound' | 'mismatch'>>(new Map())
+
+  // 毛利保護（per-tenant）
+  const [guard, setGuard] = useState<GuardState | null>(null)
+  const [guardBusy, setGuardBusy] = useState(false)
 
   // Edit modal state
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
@@ -238,6 +244,39 @@ export default function PlatformProductsPage() {
     load()
   }
 
+  // ── 毛利保護 ──────────────────────────────────────────────
+  const loadGuard = () => {
+    fetch('/api/admin/products/margin-guard')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setGuard(d) })
+      .catch(() => {})
+  }
+  useEffect(loadGuard, [])
+
+  const patchGuard = async (patch: { enabled?: boolean; rate?: number }) => {
+    setGuardBusy(true)
+    const r = await fetch('/api/admin/products/margin-guard', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+    }).then(x => x.json()).catch(() => null)
+    setGuardBusy(false)
+    if (r?.error) window.alert(r.error)
+    else if (r) setGuard(r)
+  }
+
+  const handleRaiseMargin = async () => {
+    if (!guard || guard.belowCount === 0) return
+    const preview = guard.samples.slice(0, 3)
+      .map(s => `• ${s.country} ${s.days}天 ${s.cap ?? ''}：NT$${s.sell} → NT$${s.newSell}`).join('\n')
+    const more = guard.belowCount > 3 ? `\n…等共 ${guard.belowCount} 筆` : ''
+    if (!window.confirm(`將把毛利低於 ${guard.rate}% 的 ${guard.belowCount} 筆商品售價補到 ${guard.rate}% 毛利：\n${preview}${more}\n\n確定要套用嗎？`)) return
+    setGuardBusy(true)
+    const r = await fetch('/api/admin/products/margin-guard', { method: 'POST' }).then(x => x.json()).catch(() => null)
+    setGuardBusy(false)
+    if (r?.error) { window.alert(r.error); return }
+    window.alert(`已補價 ${r.raised} 筆`)
+    loadGuard(); load()
+  }
+
   const openEdit = (p: Product) => {
     setEditingProduct(p)
     setEditForm({
@@ -356,6 +395,56 @@ export default function PlatformProductsPage() {
           </button>
         </div>
       </div>
+
+      {/* 毛利保護設定列 */}
+      {guard && (
+        <div className="mb-4 flex items-center gap-3 flex-wrap bg-white border rounded-xl px-4 py-2.5">
+          <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+            <span>🛡️</span> 毛利保護
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={guard.enabled}
+            aria-label="毛利保護開關"
+            onClick={() => patchGuard({ enabled: !guard.enabled })}
+            disabled={guardBusy}
+            className={`relative w-9 h-5 rounded-full transition-colors disabled:opacity-50 ${guard.enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${guard.enabled ? 'translate-x-4' : ''}`} />
+          </button>
+          {guard.enabled ? (
+            <>
+              <label className="flex items-center gap-1.5 text-sm text-gray-600">
+                最低毛利
+                <input
+                  key={guard.rate}
+                  type="number" min={1} max={95} defaultValue={guard.rate}
+                  onBlur={e => { const v = parseInt(e.target.value); if (v && v !== guard.rate) patchGuard({ rate: v }) }}
+                  className="w-14 border rounded-lg px-2 py-1 text-center text-sm"
+                />
+                %
+              </label>
+              <button
+                onClick={handleRaiseMargin}
+                disabled={guardBusy || guard.belowCount === 0}
+                className="ml-auto bg-blue-600 text-white px-3.5 py-1.5 rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-40 flex items-center gap-1.5"
+              >
+                <span>↗</span> 一鍵補到 {guard.rate}%
+              </button>
+              {guard.belowCount > 0 ? (
+                <span className="w-full text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+                  <span>⚠️</span> 目前有 {guard.belowCount} 筆商品毛利低於 {guard.rate}%，點「一鍵補到 {guard.rate}%」可一次調整售價
+                </span>
+              ) : (
+                <span className="w-full text-xs text-green-700">✓ 目前所有上架商品毛利都達 {guard.rate}% 以上</span>
+              )}
+            </>
+          ) : (
+            <span className="text-xs text-gray-400">關閉中 · 開啟後可設定最低毛利門檻、一鍵補價，且驗證套用／匯入也會自動把售價補到門檻</span>
+          )}
+        </div>
+      )}
 
       {/* Search bar */}
       <div className="mb-4 relative">

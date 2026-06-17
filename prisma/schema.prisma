@@ -471,6 +471,9 @@ model PlatformAdmin {
   createdById  String?           @map("created_by_id")
   // 讓利上限（由 Super Admin 設定，Platform Admin 不可超過此值）
   maxRebateRate Decimal          @default(0.30) @db.Decimal(4, 2) @map("max_rebate_rate")
+  // 毛利保護：開啟後售價不得低於 minMarginRate 毛利（驗證套用/匯入/一鍵補價共用），預設關閉
+  marginGuardEnabled Boolean     @default(false) @map("margin_guard_enabled")
+  minMarginRate      Decimal     @default(0.40) @db.Decimal(4, 2) @map("min_margin_rate")
   // 白牌品牌設定（僅 PLATFORM_ADMIN 有效）
   tenantSlug   String?           @unique @map("tenant_slug")   // URL 識別碼，如 bii-travel
   brandName    String?           @map("brand_name")            // 顯示名稱，如「Bii旅」

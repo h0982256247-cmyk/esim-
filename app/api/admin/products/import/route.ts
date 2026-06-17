@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { requirePlatformAuth } from '@/lib/auth/platform'
-import { batchCreateProducts, type CsvProductRow } from '@/lib/services/product'
+import { batchCreateProducts, getMarginGuard, type CsvProductRow } from '@/lib/services/product'
 import { fetchSupplierProductMap } from '@/lib/services/esim'
 import { resolveCountry, parseProductNameSegments } from '@/lib/utils/country'
 import { parseCapacityFromName, normalizeCapacity } from '@/lib/utils/capacity'
@@ -346,7 +346,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await batchCreateProducts(rows, auth.tenantAdminId, supplierMap)
+    // 比照「驗證套用」：成本同步 WM、售價跟漲、毛利保護開啟則補到門檻
+    const marginGuard = await getMarginGuard(auth.tenantAdminId)
+    const result = await batchCreateProducts(rows, auth.tenantAdminId, supplierMap, marginGuard)
 
     const warns: string[] = []
     if (notFound      > 0) warns.push(`供應商查無 ${notFound} 筆`)

@@ -3,6 +3,7 @@ import { Prisma, ProductStatus, SupplierProductStatus, SupplierProductType } fro
 import type { SupplierProductMap } from './esim'
 import { resolveCountry, resolveCountryByPlanCode } from '@/lib/utils/country'
 import { parseCapacityFromName } from '@/lib/utils/capacity'
+import { sellPriceForCostChange, DEFAULT_MARGIN_GUARD, type MarginGuard } from '@/lib/utils/pricing'
 
 export async function getActiveProducts(countryCode?: string, tenantAdminId?: string | null) {
   return prisma.product.findMany({
@@ -229,10 +230,22 @@ const WM_PRODUCT_TYPE_MAP: Record<number, SupplierProductType> = {
 //
 // 為什麼 update 既有 Product 而非 delete+create：OrderItem.productId 是 FK，
 // 砍掉重練會破壞訂單關聯。保留 id 是唯一安全做法。
+// 取得租戶的毛利保護設定（驗證套用 / 匯入共用）。tenant 不明或查無 → 預設關閉。
+export async function getMarginGuard(tenantAdminId?: string | null): Promise<MarginGuard> {
+  if (!tenantAdminId) return { ...DEFAULT_MARGIN_GUARD }
+  const a = await prisma.platformAdmin.findUnique({
+    where: { id: tenantAdminId },
+    select: { marginGuardEnabled: true, minMarginRate: true },
+  })
+  if (!a) return { ...DEFAULT_MARGIN_GUARD }
+  return { enabled: a.marginGuardEnabled, rate: Number(a.minMarginRate) }
+}
+
 export async function batchCreateProducts(
   rows: CsvProductRow[],
   tenantAdminId?: string | null,
   supplierMap?: SupplierProductMap,
+  marginGuard: MarginGuard = DEFAULT_MARGIN_GUARD,
 ): Promise<{ count: number; created: number; updated: number }> {
   if (rows.length === 0) return { count: 0, created: 0, updated: 0 }
 
@@ -325,7 +338,14 @@ export async function batchCreateProducts(
   for (const row of rows) {
     const supplierId = supplierIdMap.get(row.supplierSkuId)
     if (!supplierId) throw new Error(`找不到 SupplierProduct.id for wmProductId=${row.supplierSkuId}`)
-    const data = buildProductData(row, supplierId, tenantAdminId ?? null)
+    // 成本/售價比照「驗證套用」：成本以 WM 即時價為準（與 SupplierProduct 一致）、
+    // 成本上升時售價維持固定利潤跟漲、毛利保護開啟則補到門檻。WM 無此方案 → 沿用 Excel 值。
+    const wmCost = supplierMap?.get(row.supplierSkuId)?.productPrice ?? row.costPrice
+    const sell = sellPriceForCostChange({
+      oldCost: row.costPrice, oldSell: row.sellPrice, newCost: wmCost,
+      guardEnabled: marginGuard.enabled, minMarginRate: marginGuard.rate,
+    })
+    const data = buildProductData(row, supplierId, tenantAdminId ?? null, { costPrice: wmCost, sellPrice: sell })
     const existingId = row.planCode
       ? existingByPlan.get(row.planCode)
       : existingBySkuNoPlan.get(supplierId)
@@ -426,6 +446,7 @@ function buildProductData(
   row: CsvProductRow,
   supplierId: string,
   tenantAdminId: string | null,
+  priceOverride?: { costPrice: number; sellPrice: number },
 ) {
   // 只挑 Product 真實欄位；**不可**用 `...row`：匯入端會在 row 上臨時掛
   // _rawProductName / _matchedByName（國家補強用），一旦被 spread 進
@@ -444,8 +465,8 @@ function buildProductData(
     description:   row.description ?? null,
     networkType:   row.networkType ?? null,
     isNativeSim:   row.isNativeSim ?? false,
-    sellPrice:     row.sellPrice,
-    costPrice:     row.costPrice,
+    sellPrice:     priceOverride?.sellPrice ?? row.sellPrice,
+    costPrice:     priceOverride?.costPrice ?? row.costPrice,
     sortOrder:     row.sortOrder ?? 0,
     tenantAdminId,
   }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
 import { fetchSupplierProductMap } from '@/lib/services/esim'
+import { getMarginGuard } from '@/lib/services/product'
+import { sellPriceForCostChange } from '@/lib/utils/pricing'
 import { Prisma, ProductStatus, SupplierProductStatus } from '@prisma/client'
 
 // POST /api/admin/products/validate/apply
@@ -35,6 +37,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 502 })
   }
 
+  // 毛利保護設定（per-tenant；售價跟漲與門檻補價共用同一條規則，見 lib/utils/pricing）
+  const guard = await getMarginGuard(auth.tenantAdminId)
+
   const toDisable: { productId: string; supplierProductId: string }[] = []
   const toReprice: { productId: string; supplierProductId: string; newCost: number; newSell: number }[] = []
   let priceRaised = 0   // 售價有跟漲的筆數（回報用）
@@ -50,15 +55,11 @@ export async function POST(req: NextRequest) {
     if (info.productPrice === p.costPrice) continue
 
     const newCost = info.productPrice
-    // 售價跟漲規則：只在成本「上升」時調，且維持固定利潤；若毛利掉到 40% 以下，補到剛好 40%。
-    // 成本下降 → 售價不動（毛利自然變好）。
-    let newSell = p.sellPrice
-    if (newCost > p.costPrice) {
-      const keepProfit = p.sellPrice + (newCost - p.costPrice)  // 維持原本的絕對利潤
-      const min40Margin = Math.ceil(newCost / 0.6)              // 毛利 ≥40% 的最低售價（(sell−cost)/sell≥0.4）
-      newSell = Math.max(keepProfit, min40Margin)
-      if (newSell !== p.sellPrice) priceRaised++
-    }
+    const newSell = sellPriceForCostChange({
+      oldCost: p.costPrice, oldSell: p.sellPrice, newCost,
+      guardEnabled: guard.enabled, minMarginRate: guard.rate,
+    })
+    if (newSell !== p.sellPrice) priceRaised++
     toReprice.push({ productId: p.id, supplierProductId: sp.id, newCost, newSell })
   }
 
