@@ -238,7 +238,9 @@ export async function getDashboardStats(tenantAdminId: string | null) {
     paymentConfigCount,
   ] = await Promise.all([
     prisma.user.count({ where: userTenantWhere }),
-    prisma.order.count({ where: orderTenantWhere }),
+    // 訂單總數以「購買」計：同捆（共用 bundleId）算 1 筆 → 只數代表列（單筆 或 bundle 第一張）。
+    // 與訂單管理列表一致；毛利率的「納入筆數」仍以 eSIM 計（各 eSIM 成本/營收獨立）。
+    prisma.order.count({ where: { ...orderTenantWhere, OR: [{ bundleId: null }, { bundleSeq: 1 }] } }),
     prisma.order.aggregate({
       where: paidOrderWhere,
       _sum: { totalPaid: true },
