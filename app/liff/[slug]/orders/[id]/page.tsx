@@ -121,6 +121,7 @@ export default function OrderDetailPage() {
   const [redeemTimeout, setRedeemTimeout] = useState(false)
   const [canOneClick, setCanOneClick] = useState(false)
   const [repurchaseCoupon, setRepurchaseCoupon] = useState<{ discount: number } | null>(null)
+  const [showRpPopup, setShowRpPopup] = useState(false)
   // 自訂確認彈窗（取代 window.confirm，避免 LINE 內建瀏覽器露出網址）
   const [dialog, setDialog] = useState<null | {
     title: string; lines: string[]; confirmLabel: string;
@@ -131,6 +132,15 @@ export default function OrderDetailPage() {
   const dismissToast = useCallback(() => setToast(null), [])
 
   useEffect(() => { setCanOneClick(supportsOneClickEsim()) }, [])
+
+  // 購買完成回購券慶祝彈窗：每筆訂單只跳一次（sessionStorage 記住，之後回看不再彈）
+  useEffect(() => {
+    if (!repurchaseCoupon || typeof window === 'undefined') return
+    const key = `esim_rp_seen_${id}`
+    if (window.sessionStorage.getItem(key)) return
+    window.sessionStorage.setItem(key, '1')
+    setShowRpPopup(true)
+  }, [repurchaseCoupon, id])
 
   // 從 TapPay (LINE Pay / 3DS) 跳轉回來時，網址會帶 ?status=<n>。
   // status=0 是付款成功（等 webhook fan-out），非零代表失敗或使用者取消。
@@ -453,6 +463,30 @@ export default function OrderDetailPage() {
         </div>
         <p style={{ fontSize: 12, color: S.faint, marginTop: 4 }}>{order.orderNumber ?? `#${order.id.slice(-8).toUpperCase()}`}</p>
       </div>
+
+      {/* 購買完成回購券慶祝彈窗 */}
+      {showRpPopup && repurchaseCoupon && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 80 }}
+          onClick={() => setShowRpPopup(false)}
+        >
+          <div style={{ background: '#fff', borderRadius: 20, padding: '28px 24px', maxWidth: 340, width: '100%', textAlign: 'center', boxShadow: '0 12px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 44, marginBottom: 6 }}>🎁</div>
+            <p style={{ fontSize: 18, fontWeight: 800, color: S.ink, margin: '0 0 6px' }}>購買完成，獲得回購券！</p>
+            <p style={{ fontSize: 14, color: S.muted, margin: '0 0 2px' }}>下次購買可用</p>
+            <p style={{ fontSize: 30, fontWeight: 800, color: C.primaryText, margin: '0 0 18px' }}>{zheLabel(repurchaseCoupon.discount)}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button
+                onClick={() => router.push(`${base}/coupons`)}
+                style={{ width: '100%', border: 'none', borderRadius: 100, padding: '14px', fontSize: 15, fontWeight: 800, cursor: 'pointer', background: C.primary, color: C.onPrimary }}
+              >
+                查看我的優惠券
+              </button>
+              <button onClick={() => setShowRpPopup(false)} style={{ border: 'none', background: 'transparent', color: S.faint, fontSize: 14, fontWeight: 600, padding: 8, cursor: 'pointer' }}>知道了</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 結帳完成回饋：本筆已發出回購券（趁剛買完最有感）*/}
       {repurchaseCoupon && (order.status === 'PAID' || order.status === 'COMPLETED') && (

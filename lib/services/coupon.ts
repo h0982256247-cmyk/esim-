@@ -21,16 +21,18 @@ export async function issueRepurchaseCouponForOrder(orderId: string): Promise<vo
               group: { select: { id: true, status: true, rebateRate: true } },
             },
           },
+          // 社群主購買也享回購券：用自己擁有的社群（會員用所屬社群、社群主用自己的社群）
+          ownedGroup: { select: { id: true, status: true, rebateRate: true } },
         },
       },
     },
   })
 
   if (!order) return
-  const member = order.user?.groupMembership
-  if (!member || member.group.status !== 'APPROVED') return
+  const group = order.user?.groupMembership?.group ?? order.user?.ownedGroup ?? null
+  if (!group || group.status !== 'APPROVED') return
 
-  const rebateRate = Number(member.group.rebateRate)
+  const rebateRate = Number(group.rebateRate)
   if (rebateRate <= 0) return  // 無讓利 → 無券可發
 
   const discount = Math.round((1 - rebateRate) * 100) / 100
@@ -50,7 +52,7 @@ export async function issueRepurchaseCouponForOrder(orderId: string): Promise<vo
       level: getCouponLevel(discount),
       discount,
       isOfficial: false,
-      sourceGroupId: member.group.id,
+      sourceGroupId: group.id,
       sourceOrderId: orderId,
       expiresAt: null, // 回購券無使用期限
     },
