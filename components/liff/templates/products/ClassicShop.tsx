@@ -16,12 +16,12 @@ const S = {
 
 // 旅遊風統一色系：與主頁 ClassicHome 共用配色邏輯
 const DEST_PALETTE = [
-  { accent: '#7C3AED', soft: '#F3EEFF' },
-  { accent: '#0EA5E9', soft: '#E6F4FB' },
-  { accent: '#F59E0B', soft: '#FFF5E0' },
-  { accent: '#10B981', soft: '#E4F6EE' },
-  { accent: '#EF4444', soft: '#FCE9E9' },
-  { accent: '#EC4899', soft: '#FCE7F0' },
+  { accent: '#5B6CF0', soft: '#EEF0FE' },
+  { accent: '#0EA5B5', soft: '#E6F5F7' },
+  { accent: '#E0930E', soft: '#FBF2DE' },
+  { accent: '#14A06B', soft: '#E7F5EE' },
+  { accent: '#EC6A5E', soft: '#FCEDEB' },
+  { accent: '#B66BC4', soft: '#F6ECF8' },
 ]
 function getAccent(code: string) {
   let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) & 0xffffffff

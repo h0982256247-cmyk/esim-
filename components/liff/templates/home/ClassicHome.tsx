@@ -20,12 +20,12 @@ const DATA_OPTIONS = ['總量','每日型','吃到飽']
 // 旅遊風統一色卡：每個國家擁有自己的「目的地色」作為頂部色條，但卡片本體
 // 維持米白底以避免畫面太雜。色相控制在低飽和、柔和的旅遊感色系。
 const DEST_PALETTE = [
-  { accent: '#7C3AED', soft: '#F3EEFF' }, // 紫（品牌色）
-  { accent: '#0EA5E9', soft: '#E6F4FB' }, // 海洋藍
-  { accent: '#F59E0B', soft: '#FFF5E0' }, // 旅遊黃
-  { accent: '#10B981', soft: '#E4F6EE' }, // 自然綠
-  { accent: '#EF4444', soft: '#FCE9E9' }, // 經典紅
-  { accent: '#EC4899', soft: '#FCE7F0' }, // 玫瑰粉
+  { accent: '#5B6CF0', soft: '#EEF0FE' }, // 靛藍
+  { accent: '#0EA5B5', soft: '#E6F5F7' }, // 湖水青
+  { accent: '#E0930E', soft: '#FBF2DE' }, // 旅遊金
+  { accent: '#14A06B', soft: '#E7F5EE' }, // 森林綠
+  { accent: '#EC6A5E', soft: '#FCEDEB' }, // 珊瑚（柔和紅）
+  { accent: '#B66BC4', soft: '#F6ECF8' }, // 蘭紫（柔和粉）
 ]
 function getAccent(code: string) {
   let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) & 0xffffffff
