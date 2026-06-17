@@ -124,26 +124,31 @@ export default function AdminDetailPage() {
   if (!admin) return null
 
   return (
-    <div>
+    <div className="max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.push('/platform/admins')} className="text-gray-400 hover:text-gray-600 text-sm">
-          ← 帳號管理
-        </button>
-        <span className="text-gray-300">/</span>
-        <h1 className="text-2xl font-bold">{admin.name}</h1>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${admin.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-          {admin.isActive ? '啟用' : '停用'}
-        </span>
+      <button onClick={() => router.push('/platform/admins')} className="text-gray-400 hover:text-gray-600 text-sm">← 帳號管理</button>
+      <div className="flex items-center gap-3 mt-2.5 mb-5">
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-base font-bold flex-shrink-0">
+          {admin.name.slice(0, 2).toUpperCase()}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-gray-800 truncate">{admin.name}</h1>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${admin.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+              {admin.isActive ? '啟用' : '停用'}
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 mt-0.5 truncate">{admin.email}{admin.tenantSlug ? ` · /liff/${admin.tenantSlug}` : ''}</p>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b mb-6">
+      {/* Tabs — 分段式膠囊 */}
+      <div className="inline-flex gap-1 bg-gray-100 rounded-2xl p-1 mb-6 max-w-full overflow-x-auto">
         {TABS.map(t => (
           <button
             key={t}
             onClick={() => setActiveTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition ${activeTab === t ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            className={`px-4 py-2 text-sm font-medium rounded-xl whitespace-nowrap transition ${activeTab === t ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
           >
             {t}
           </button>
@@ -281,8 +286,8 @@ function EsimConfigTab({
 
   return (
     <div className="max-w-xl">
-      <div className="bg-white rounded-2xl border shadow-sm p-5">
-        <h2 className="font-semibold mb-1">世界移動 eSIM API 設定</h2>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h2 className="text-base font-semibold text-gray-800 mb-1">世界移動 eSIM API 設定</h2>
         <p className="text-xs text-gray-400 mb-4">此設定將覆蓋系統預設環境變數，僅適用於此 Platform Admin。</p>
 
         {config && (
@@ -302,7 +307,7 @@ function EsimConfigTab({
                 setEnv(v)
                 setForm(p => ({ ...p, apiUrl: v === 'prod' ? WM_API_HOSTS.prod : WM_API_HOSTS.test }))
               }}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
             >
               <option value="test">測試（tfmshippingsys）</option>
               <option value="prod">正式（fmshippingsys）</option>
@@ -322,7 +327,7 @@ function EsimConfigTab({
                 onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
                 placeholder={f.placeholder}
                 required
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
               />
             </div>
           ))}
@@ -333,7 +338,7 @@ function EsimConfigTab({
               value={form.token}
               onChange={e => setForm(p => ({ ...p, token: e.target.value }))}
               placeholder={config ? '留空保留現有 Token' : '輸入 API Token'}
-              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
             />
             {config && (
               <p className="text-xs text-gray-400 mt-1">現有 Token：{config.token}</p>
@@ -345,7 +350,7 @@ function EsimConfigTab({
           <button
             type="submit"
             disabled={saving}
-            className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
           >
             {saving ? '儲存中…' : '儲存設定'}
           </button>
@@ -485,7 +490,7 @@ function SharedTapPayCard({
               onChange={e => setForm(p => ({ ...p, partnerKey: e.target.value }))}
               placeholder={anyConfig ? '留空保留現有 Key' : '輸入 Partner Key'}
               required={!anyConfig}
-              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
             />
             {anyConfig?.partnerKey && <p className="text-xs text-gray-400 mt-1">現有：{anyConfig.partnerKey}</p>}
           </div>
@@ -497,7 +502,7 @@ function SharedTapPayCard({
                 value={form.appId}
                 onChange={e => setForm(p => ({ ...p, appId: e.target.value }))}
                 placeholder="例：12345"
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
               />
             </div>
             <div>
@@ -507,7 +512,7 @@ function SharedTapPayCard({
                 value={form.appKey}
                 onChange={e => setForm(p => ({ ...p, appKey: e.target.value }))}
                 placeholder={anyConfig?.appKey ? '留空保留現有 Key' : '輸入 App Key'}
-                className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
               />
             </div>
           </div>
@@ -516,7 +521,7 @@ function SharedTapPayCard({
             <select
               value={form.env}
               onChange={e => setForm(p => ({ ...p, env: e.target.value }))}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
             >
               <option value="sandbox">沙箱（測試）</option>
               <option value="production">正式環境</option>
@@ -526,10 +531,10 @@ function SharedTapPayCard({
           {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
 
           <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+            <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
               {saving ? '儲存中…' : '儲存並同步所有金流'}
             </button>
-            <button type="button" onClick={() => setExpanded(false)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm">取消</button>
+            <button type="button" onClick={() => setExpanded(false)} className="bg-gray-100 text-gray-600 px-4 py-2.5 rounded-xl text-sm">取消</button>
           </div>
         </form>
       )}
@@ -648,15 +653,15 @@ function MerchantIdCard({
               required
               disabled={!anyConfig}
               placeholder={`輸入 ${GATEWAY_LABEL[gateway]} 的 Merchant ID`}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+              className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 disabled:bg-gray-50 disabled:text-gray-400"
             />
           </div>
           {msg && <p className={`text-sm ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
           <div className="flex gap-2">
-            <button type="submit" disabled={saving || !anyConfig} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+            <button type="submit" disabled={saving || !anyConfig} className="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
               {saving ? '儲存中…' : '儲存'}
             </button>
-            <button type="button" onClick={() => setExpanded(false)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm">取消</button>
+            <button type="button" onClick={() => setExpanded(false)} className="bg-gray-100 text-gray-600 px-4 py-2.5 rounded-xl text-sm">取消</button>
           </div>
         </form>
       )}
@@ -738,8 +743,8 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
 
   return (
     <div className="max-w-xl">
-      <div className="bg-white rounded-2xl border shadow-sm p-5">
-        <h2 className="font-semibold mb-1">白牌品牌設定</h2>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h2 className="text-base font-semibold text-gray-800 mb-1">白牌品牌設定</h2>
         <p className="text-xs text-gray-400 mb-4">設定此 Platform Admin 的品牌識別資訊。</p>
 
         <form onSubmit={handleSave} className="space-y-3">
@@ -750,7 +755,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
               value={form.brandName}
               onChange={e => setForm(p => ({ ...p, brandName: e.target.value }))}
               placeholder="例：Bii旅"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
             />
           </div>
           <div>
@@ -766,7 +771,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
               disabled={slugLocked}
               onChange={e => setForm(p => ({ ...p, tenantSlug: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
               placeholder="例：bii-travel"
-              className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              className={`w-full border rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 ${
                 slugLocked ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''
               }`}
             />
@@ -815,7 +820,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
               value={form.logoUrl}
               onChange={e => setForm(p => ({ ...p, logoUrl: e.target.value }))}
               placeholder="https://... （或直接上傳）"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
             />
 
             {/* 預覽 */}
@@ -848,7 +853,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
                 value={form.primaryColor}
                 onChange={e => setForm(p => ({ ...p, primaryColor: e.target.value }))}
                 placeholder="#3B82F6"
-                className="border rounded-lg px-3 py-2 text-sm font-mono w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border rounded-xl px-3.5 py-2.5 text-sm font-mono w-32 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
               />
             </div>
           </div>
@@ -868,7 +873,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
                   value={form.liffId}
                   onChange={e => setForm(p => ({ ...p, liffId: e.target.value }))}
                   placeholder="例：1234567890-abcdefgh"
-                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
                 />
                 {form.tenantSlug ? (
                   <EndpointUrlRow slug={form.tenantSlug} />
@@ -890,7 +895,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
                     value={form.lineAccessToken}
                     onChange={e => { setForm(p => ({ ...p, lineAccessToken: e.target.value })); setTestResult(null) }}
                     placeholder="輸入 Messaging API Channel Access Token"
-                    className="flex-1 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 border rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
                   />
                   <button
                     type="button"
@@ -912,7 +917,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
           <button
             type="submit"
             disabled={saving || uploading}
-            className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
           >
             {saving ? '儲存中…' : '儲存品牌設定'}
           </button>
@@ -993,8 +998,8 @@ function DomainConfigTab({ adminId, slug }: { adminId: string; slug: string | nu
   return (
     <div className="max-w-xl space-y-4">
       {/* 預設網址（一律存在） */}
-      <div className="bg-white rounded-2xl border shadow-sm p-5">
-        <h2 className="font-semibold mb-1">預設網址</h2>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h2 className="text-base font-semibold text-gray-800 mb-1">預設網址</h2>
         <p className="text-xs text-gray-400 mb-3">系統內建網址，永遠可用，不需任何設定。</p>
         {slug
           ? <EndpointUrlRow slug={slug} label="商城網址" />
@@ -1002,8 +1007,8 @@ function DomainConfigTab({ adminId, slug }: { adminId: string; slug: string | nu
       </div>
 
       {/* 自訂網域（選填） */}
-      <div className="bg-white rounded-2xl border shadow-sm p-5">
-        <h2 className="font-semibold mb-1">自訂網域<span className="text-xs font-normal text-gray-400 ml-1">（選填）</span></h2>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h2 className="text-base font-semibold text-gray-800 mb-1">自訂網域<span className="text-xs font-normal text-gray-400 ml-1">（選填）</span></h2>
         <p className="text-xs text-gray-400 mb-4">想用自己的網域（如 esim.yourbrand.com）開店時才需設定；設定後該網域會自動導向你的商城。</p>
 
         <form onSubmit={handleAdd} className="flex gap-2 mb-3">
@@ -1012,12 +1017,12 @@ function DomainConfigTab({ adminId, slug }: { adminId: string; slug: string | nu
             value={input}
             onChange={e => { setInput(e.target.value); setMsg(null) }}
             placeholder="esim.yourbrand.com"
-            className="flex-1 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 border rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
           />
           <button
             type="submit"
             disabled={saving || !input.trim()}
-            className="shrink-0 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+            className="shrink-0 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
           >
             {saving ? '新增中…' : '新增'}
           </button>
@@ -1047,7 +1052,7 @@ function DomainConfigTab({ adminId, slug }: { adminId: string; slug: string | nu
 
         {/* DNS / Vercel 設定指引（此版本不自動掛載，需手動完成兩步） */}
         <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 leading-relaxed">
-          <p className="font-semibold mb-1">完成綁定還需兩步（一次性）：</p>
+          <p className="text-base font-semibold text-gray-800 mb-1">完成綁定還需兩步（一次性）：</p>
           <ol className="list-decimal list-inside space-y-0.5">
             <li>在 Vercel 專案 → Settings → Domains 把此網域 <code className="bg-amber-100 px-1 rounded">Add Domain</code></li>
             <li>到你的 DNS 服務商把該網域指向 Vercel（CNAME → <code className="bg-amber-100 px-1 rounded">cname.vercel-dns.com</code>，根網域用 A → Vercel 指定 IP）</li>
