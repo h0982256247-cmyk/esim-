@@ -18,6 +18,8 @@ type Order = {
   totalPaid: number
   createdAt: string
   paidAt: string | null
+  esimCount: number
+  bundleTotal: number
   orderItems: { productName: string }[]
 }
 
@@ -319,8 +321,11 @@ export default function UserDetailPage() {
                   return (
                     <tr key={o.id} onClick={() => router.push(`/platform/orders/${o.id}`)} className="hover:bg-gray-50 transition-colors cursor-pointer">
                       <td className="px-5 py-3.5 font-mono text-xs text-blue-600">#{o.id.slice(-8).toUpperCase()}</td>
-                      <td className="px-5 py-3.5 text-gray-700 max-w-[180px] truncate">
-                        {o.orderItems[0]?.productName ?? '—'}
+                      <td className="px-5 py-3.5 text-gray-700">
+                        <div className="flex items-center gap-2">
+                          <span className="max-w-[180px] truncate">{o.orderItems[0]?.productName ?? '—'}</span>
+                          {o.esimCount>1&&<span className="text-[10px] font-semibold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">合購 {o.esimCount} 張</span>}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5">
                         <span className="text-xs font-medium px-2 py-1 rounded-full"
@@ -328,8 +333,9 @@ export default function UserDetailPage() {
                           {sm.text}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 font-semibold text-gray-800">
-                        NT${o.totalPaid.toLocaleString()}
+                      <td className="px-5 py-3.5 font-semibold text-gray-800 whitespace-nowrap">
+                        NT${(o.esimCount>1?o.bundleTotal:o.totalPaid).toLocaleString()}
+                        {o.esimCount>1&&<span className="block text-[10px] font-normal text-gray-400">{o.esimCount} 張合計</span>}
                       </td>
                       <td className="px-5 py-3.5 text-gray-400 text-xs">
                         {new Date(o.createdAt).toLocaleDateString('zh-TW')}

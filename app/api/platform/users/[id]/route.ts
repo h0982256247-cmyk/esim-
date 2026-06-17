@@ -56,10 +56,12 @@ export async function GET(req: NextRequest, { params }: Params) {
           totalPaid: true,
           createdAt: true,
           paidAt: true,
+          bundleId: true,
+          bundleSeq: true,
           orderItems: { select: { productName: true }, take: 1 },
         },
         orderBy: { createdAt: 'desc' },
-        take: 20,
+        take: 40,
       },
     },
   })
@@ -75,9 +77,22 @@ export async function GET(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: '無權限' }, { status: 403 })
   }
 
+  // 同捆訂單（多張 eSIM 一次結帳）在訂單紀錄合併為一列：以最小 bundleSeq 為代表，
+  // 附 esimCount 與整捆金額合計，與「訂單管理」列表一致，避免拆成多筆造成混淆。
+  const seenBundles = new Set<string>()
+  const orders = user.orders.flatMap(o => {
+    if (!o.bundleId) return [{ ...o, esimCount: 1, bundleTotal: o.totalPaid }]
+    if (seenBundles.has(o.bundleId)) return []
+    seenBundles.add(o.bundleId)
+    const group = user.orders.filter(x => x.bundleId === o.bundleId)
+    const rep = group.reduce((a, b) => ((a.bundleSeq ?? 0) <= (b.bundleSeq ?? 0) ? a : b))
+    return [{ ...rep, esimCount: group.length, bundleTotal: group.reduce((s, x) => s + x.totalPaid, 0) }]
+  })
+
   return NextResponse.json({
     user: {
       ...user,
+      orders,
       phone: user.phone ? safeDecrypt(user.phone) : user.phone,
       email: user.email ? safeDecrypt(user.email) : user.email,
     },
