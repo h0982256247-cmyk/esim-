@@ -170,12 +170,12 @@ export default function PlatformAdminsPage() {
 
       {/* Table */}
       {loading ? <div className="flex justify-center py-16"><div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div> : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 {['帳號','角色','讓利上限','上層帳號','狀態','建立時間','操作'].map(h=>(
-                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -194,7 +194,7 @@ export default function PlatformAdminsPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3.5">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${ROLE_CLS[a.role]??'bg-gray-100 text-gray-500'}`}>
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${ROLE_CLS[a.role]??'bg-gray-100 text-gray-500'}`}>
                       <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"/>{ROLE_LABEL[a.role]??a.role}
                     </span>
                   </td>
@@ -224,22 +224,22 @@ export default function PlatformAdminsPage() {
                       )
                     ):<span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-5 py-3.5 text-xs text-gray-400">{a.parent?.name??'—'}</td>
+                  <td className="px-5 py-3.5 text-xs text-gray-400 whitespace-nowrap">{a.parent?.name??'—'}</td>
                   <td className="px-5 py-3.5">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${a.isActive?'bg-green-50 text-green-600':'bg-gray-100 text-gray-400'}`}>
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${a.isActive?'bg-green-50 text-green-600':'bg-gray-100 text-gray-400'}`}>
                       <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"/>{a.isActive?'啟用中':'已停用'}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-xs text-gray-400">{new Date(a.createdAt).toLocaleDateString('zh-TW')}</td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-1.5">
+                  <td className="px-5 py-3.5 text-xs text-gray-400 whitespace-nowrap">{new Date(a.createdAt).toLocaleDateString('zh-TW')}</td>
+                  <td className="px-5 py-3.5 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
                       {a.role==='PLATFORM_ADMIN'&&currentRole==='SUPER_ADMIN'&&(
                         <>
-                          <Link href={`/platform/admins/${a.id}`} className="text-xs px-2.5 py-1.5 rounded-lg font-medium bg-purple-50 text-purple-600 hover:bg-purple-100 transition">設定</Link>
+                          <Link href={`/platform/admins/${a.id}`} className="text-xs px-3 py-1.5 rounded-lg font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition whitespace-nowrap">設定</Link>
                           <button
                             onClick={() => handleImpersonate(a.id)}
                             disabled={impersonating === a.id || !a.isActive}
-                            className="text-xs px-2.5 py-1.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1"
+                            className="text-xs px-3 py-1.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition inline-flex items-center gap-1 whitespace-nowrap"
                           >
                             {impersonating === a.id ? (
                               <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeLinecap="round"/></svg>
@@ -252,12 +252,12 @@ export default function PlatformAdminsPage() {
                       )}
                       {a.role!=='SUPER_ADMIN'&&(
                         <button onClick={()=>handleToggle(a.id,a.isActive)}
-                          className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition ${a.isActive?'bg-orange-50 text-orange-600 hover:bg-orange-100':'bg-green-50 text-green-600 hover:bg-green-100'}`}>
+                          className={`text-xs px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap ${a.isActive?'bg-amber-50 text-amber-600 hover:bg-amber-100':'bg-green-50 text-green-600 hover:bg-green-100'}`}>
                           {a.isActive?'停用':'啟用'}
                         </button>
                       )}
                       {a.role!=='SUPER_ADMIN'&&currentRole==='SUPER_ADMIN'&&(
-                        <button onClick={()=>{setDeleteTarget(a);setDeleteError(null)}} className="text-xs px-2.5 py-1.5 rounded-lg font-medium bg-red-50 text-red-500 hover:bg-red-100 transition">移除</button>
+                        <button onClick={()=>{setDeleteTarget(a);setDeleteError(null)}} className="text-xs px-3 py-1.5 rounded-lg font-medium bg-red-50 text-red-500 hover:bg-red-100 transition whitespace-nowrap">移除</button>
                       )}
                     </div>
                   </td>
