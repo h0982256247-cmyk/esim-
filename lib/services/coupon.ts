@@ -15,25 +15,37 @@ export async function issueRepurchaseCouponForOrder(orderId: string): Promise<vo
       user: {
         select: {
           id: true, lineUid: true,
+          // 社群主回購券折扣依「後台讓利上限」(maxRebateRate)，故一併取租戶設定
+          tenantAdmin: { select: { maxRebateRate: true } },
           groupMembership: {
             where: { leftAt: null },
             select: {
               group: { select: { id: true, status: true, rebateRate: true } },
             },
           },
-          // 社群主購買也享回購券：用自己擁有的社群（會員用所屬社群、社群主用自己的社群）
           ownedGroup: { select: { id: true, status: true, rebateRate: true } },
         },
       },
     },
   })
 
-  if (!order) return
-  const group = order.user?.groupMembership?.group ?? order.user?.ownedGroup ?? null
-  if (!group || group.status !== 'APPROVED') return
+  if (!order?.user) return
+  const memberGroup = order.user.groupMembership?.group
+  const ownedGroup = order.user.ownedGroup
 
-  const rebateRate = Number(group.rebateRate)
-  if (rebateRate <= 0) return  // 無讓利 → 無券可發
+  // 折扣來源：
+  //   會員  → 1 − 所屬社群讓利率（rebateRate）
+  //   社群主 → 1 − 後台讓利上限（maxRebateRate）：社群主享平台最高讓利（用券時 ownerRate=0、不再產生分潤）
+  let group: { id: string; status: string } | null = null
+  let rebateRate = 0
+  if (memberGroup && memberGroup.status === 'APPROVED') {
+    group = memberGroup
+    rebateRate = Number(memberGroup.rebateRate)
+  } else if (ownedGroup && ownedGroup.status === 'APPROVED') {
+    group = ownedGroup
+    rebateRate = Number(order.user.tenantAdmin?.maxRebateRate ?? ownedGroup.rebateRate)
+  }
+  if (!group || rebateRate <= 0) return  // 非社群成員/社群主、或無讓利 → 無券可發
 
   const discount = Math.round((1 - rebateRate) * 100) / 100
 
