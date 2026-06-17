@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
 import { fetchSupplierProductMap } from '@/lib/services/esim'
-import { ProductStatus, SupplierProductStatus } from '@prisma/client'
+import { Prisma, ProductStatus, SupplierProductStatus } from '@prisma/client'
 
 // POST /api/admin/products/validate/apply
 // 重新跑一次驗證，並一次套用：
@@ -53,43 +53,54 @@ export async function POST(req: NextRequest) {
     ...toReprice.map(x => x.supplierProductId),
   ])
 
-  await prisma.$transaction(async tx => {
-    // 1. 下架失效方案
-    if (toDisable.length > 0) {
-      await tx.product.updateMany({
-        where: { id: { in: toDisable.map(x => x.productId) } },
-        data:  { status: ProductStatus.AUTO_INACTIVE },
-      })
-      await tx.supplierProduct.updateMany({
-        where: { id: { in: toDisable.map(x => x.supplierProductId) } },
-        data:  { status: SupplierProductStatus.AUTO_INACTIVE, lastSyncAt: now },
-      })
-    }
+  // 規模背景：商品逾 1 萬筆，成本價異動動輒數千筆。若把「逐筆 update」包進單一
+  // interactive transaction，在 PgBouncer connection_limit=1 序列化下會做上萬次往返、
+  // 遠超 Prisma 預設 5s 交易逾時 → 交易過期、route 拋錯回 500 空 body（前端 JSON 解析失敗、
+  // 「套用中…」卡死）。改用與匯入相同的批次 `UPDATE ... FROM (VALUES ...)`（每批 1000 列），
+  // 不包大交易；本流程冪等（重跑會重新比對），中途失敗可安全重試。
+  const CHUNK = 1000
 
-    // 2. 同步成本價
-    for (const item of toReprice) {
-      await tx.product.update({
-        where: { id: item.productId },
-        data:  { costPrice: item.newCost },
-      })
-      await tx.supplierProduct.update({
-        where: { id: item.supplierProductId },
-        data:  { costPrice: item.newCost, lastSyncAt: now },
-      })
-    }
+  // 1. 下架失效方案（updateMany 本身就是單句 SQL；分批避免 IN 清單過長）
+  for (let i = 0; i < toDisable.length; i += CHUNK) {
+    const chunk = toDisable.slice(i, i + CHUNK)
+    await prisma.product.updateMany({
+      where: { id: { in: chunk.map(x => x.productId) } },
+      data:  { status: ProductStatus.AUTO_INACTIVE },
+    })
+    await prisma.supplierProduct.updateMany({
+      where: { id: { in: chunk.map(x => x.supplierProductId) } },
+      data:  { status: SupplierProductStatus.AUTO_INACTIVE, lastSyncAt: now },
+    })
+  }
 
-    // 3. 其餘已比對通過的方案也戳上 lastSyncAt，避免重複查詢
-    const untouchedSupplierIds = products
-      .map(p => p.supplierProduct?.id)
-      .filter((id): id is string => !!id && !touchedSupplierIds.has(id))
+  // 2. 同步成本價（Product + SupplierProduct 兩表，批次 bulk SQL）
+  for (let i = 0; i < toReprice.length; i += CHUNK) {
+    const chunk = toReprice.slice(i, i + CHUNK)
+    const pv = chunk.map(x => Prisma.sql`(${x.productId}::text, ${x.newCost}::int)`)
+    await prisma.$executeRaw`
+      UPDATE products AS p SET cost_price = v.cost, updated_at = NOW()
+      FROM (VALUES ${Prisma.join(pv)}) AS v(id, cost)
+      WHERE p.id = v.id
+    `
+    const sv = chunk.map(x => Prisma.sql`(${x.supplierProductId}::text, ${x.newCost}::int)`)
+    await prisma.$executeRaw`
+      UPDATE supplier_products AS s SET cost_price = v.cost, last_sync_at = NOW(), updated_at = NOW()
+      FROM (VALUES ${Prisma.join(sv)}) AS v(id, cost)
+      WHERE s.id = v.id
+    `
+  }
 
-    if (untouchedSupplierIds.length > 0) {
-      await tx.supplierProduct.updateMany({
-        where: { id: { in: untouchedSupplierIds } },
-        data:  { lastSyncAt: now },
-      })
-    }
-  })
+  // 3. 其餘已比對通過的方案也戳上 lastSyncAt，避免重複查詢
+  const untouchedSupplierIds = products
+    .map(p => p.supplierProduct?.id)
+    .filter((id): id is string => !!id && !touchedSupplierIds.has(id))
+
+  for (let i = 0; i < untouchedSupplierIds.length; i += CHUNK) {
+    await prisma.supplierProduct.updateMany({
+      where: { id: { in: untouchedSupplierIds.slice(i, i + CHUNK) } },
+      data:  { lastSyncAt: now },
+    })
+  }
 
   return NextResponse.json({
     disabled: toDisable.length,
