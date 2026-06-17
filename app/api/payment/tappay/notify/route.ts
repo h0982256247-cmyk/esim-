@@ -153,8 +153,13 @@ export async function POST(req: NextRequest) {
       console.error('[pay-notify] triggerEsimActivation failed', oid, e)
       await recordAlert('esim_activation_failed', { orderId: oid, tenantAdminId, error: e instanceof Error ? e.message : String(e) })
     }
-    fireAndLog('calculateAndSaveCommission', oid, calculateAndSaveCommission(oid))
-    fireAndLog('issueRepurchaseCouponForOrder', oid, issueRepurchaseCouponForOrder(oid))
+    // 分潤/回購券改為 await：原本 fire-and-forget 在 Vercel 回 200 後函式被凍結/終止，
+    // 背景 promise 常沒跑完 → 偶發「付款成功卻沒發回購券/沒記分潤」（社群主韓國單即如此）。
+    // 兩者皆為快速且具冪等的 DB 操作，await 成本極低、失敗會記 alert 而非靜默。
+    try { await calculateAndSaveCommission(oid) }
+    catch (e) { console.error('[pay-notify] commission failed', oid, e); await recordAlert('commission_failed', { orderId: oid, tenantAdminId, error: e instanceof Error ? e.message : String(e) }) }
+    try { await issueRepurchaseCouponForOrder(oid) }
+    catch (e) { console.error('[pay-notify] repurchase coupon failed', oid, e); await recordAlert('repurchase_coupon_failed', { orderId: oid, tenantAdminId, error: e instanceof Error ? e.message : String(e) }) }
   }
 
   if (bundleId && paidOrderIds.length > 1) {

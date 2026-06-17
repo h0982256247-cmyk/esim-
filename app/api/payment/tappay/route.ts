@@ -257,8 +257,9 @@ export async function POST(req: NextRequest) {
     const orders = await markBundlePaid(bundleId!, charge.recTradeId)
     for (const o of orders) {
       fireAndLog('triggerEsimActivation', o.id, triggerEsimActivation(o.id))
-      fireAndLog('calculateAndSaveCommission', o.id, calculateAndSaveCommission(o.id))
-      fireAndLog('issueRepurchaseCouponForOrder', o.id, issueRepurchaseCouponForOrder(o.id))
+      // 分潤/回購券要 await：fire-and-forget 在回應後會被 Vercel 中斷而漏跑（偶發沒發回購券）。兩者皆冪等。
+      try { await calculateAndSaveCommission(o.id) } catch (e) { console.error('[tappay] commission failed', o.id, e) }
+      try { await issueRepurchaseCouponForOrder(o.id) } catch (e) { console.error('[tappay] repurchase coupon failed', o.id, e) }
     }
     fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, detailsLabel, amount, user.tenantAdminId))
     return NextResponse.json({ ok: true, bundleId, orderIds: orders.map(o => o.id) })
@@ -266,8 +267,9 @@ export async function POST(req: NextRequest) {
 
   await markOrderPaid(anchor.id, charge.recTradeId)
   fireAndLog('triggerEsimActivation', anchor.id, triggerEsimActivation(anchor.id))
-  fireAndLog('calculateAndSaveCommission', anchor.id, calculateAndSaveCommission(anchor.id))
-  fireAndLog('issueRepurchaseCouponForOrder', anchor.id, issueRepurchaseCouponForOrder(anchor.id))
+  // 分潤/回購券要 await：fire-and-forget 在回應後會被 Vercel 中斷而漏跑（偶發沒發回購券）。兩者皆冪等。
+  try { await calculateAndSaveCommission(anchor.id) } catch (e) { console.error('[tappay] commission failed', anchor.id, e) }
+  try { await issueRepurchaseCouponForOrder(anchor.id) } catch (e) { console.error('[tappay] repurchase coupon failed', anchor.id, e) }
   fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, detailsLabel, amount, user.tenantAdminId))
 
   return NextResponse.json({ ok: true, orderId: anchor.id })
