@@ -8,8 +8,9 @@ import { Prisma, ProductStatus, SupplierProductStatus } from '@prisma/client'
 // 重新跑一次驗證，並一次套用：
 //   1. 供應商查無 → Product.status=AUTO_INACTIVE，SupplierProduct.status=AUTO_INACTIVE
 //   2. 成本價不符 → Product.costPrice、SupplierProduct.costPrice 同步為供應商目前價
-//   3. 觸及的 SupplierProduct 一律寫入 lastSyncAt
-// 售價不動：成本變動後讓 admin 自行決定是否調整售價。
+//   3. 成本「上升」時售價跟著調（業主定案）：維持固定利潤（售價+=成本漲幅）、只漲不降，
+//      且若調整後毛利 <40% 則補到剛好 40%（售價 = ⌈新成本 ÷ 0.6⌉）。成本下降不動售價。
+//   4. 觸及的 SupplierProduct 一律寫入 lastSyncAt
 export async function POST(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
     select: {
       id: true,
       costPrice: true,
+      sellPrice: true,
       supplierSkuId: true,
       supplierProduct: { select: { id: true, wmProductId: true } },
     },
@@ -34,7 +36,8 @@ export async function POST(req: NextRequest) {
   }
 
   const toDisable: { productId: string; supplierProductId: string }[] = []
-  const toReprice: { productId: string; supplierProductId: string; newCost: number }[] = []
+  const toReprice: { productId: string; supplierProductId: string; newCost: number; newSell: number }[] = []
+  let priceRaised = 0   // 售價有跟漲的筆數（回報用）
 
   for (const p of products) {
     const sp = p.supplierProduct
@@ -42,9 +45,21 @@ export async function POST(req: NextRequest) {
     const info = supplierMap.get(sp.wmProductId)
     if (!info) {
       toDisable.push({ productId: p.id, supplierProductId: sp.id })
-    } else if (info.productPrice !== p.costPrice) {
-      toReprice.push({ productId: p.id, supplierProductId: sp.id, newCost: info.productPrice })
+      continue
     }
+    if (info.productPrice === p.costPrice) continue
+
+    const newCost = info.productPrice
+    // 售價跟漲規則：只在成本「上升」時調，且維持固定利潤；若毛利掉到 40% 以下，補到剛好 40%。
+    // 成本下降 → 售價不動（毛利自然變好）。
+    let newSell = p.sellPrice
+    if (newCost > p.costPrice) {
+      const keepProfit = p.sellPrice + (newCost - p.costPrice)  // 維持原本的絕對利潤
+      const min40Margin = Math.ceil(newCost / 0.6)              // 毛利 ≥40% 的最低售價（(sell−cost)/sell≥0.4）
+      newSell = Math.max(keepProfit, min40Margin)
+      if (newSell !== p.sellPrice) priceRaised++
+    }
+    toReprice.push({ productId: p.id, supplierProductId: sp.id, newCost, newSell })
   }
 
   const now = new Date()
@@ -73,13 +88,13 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // 2. 同步成本價（Product + SupplierProduct 兩表，批次 bulk SQL）
+  // 2. 同步成本價 + 售價跟漲（Product 兩欄一起寫；SupplierProduct 只有成本），批次 bulk SQL
   for (let i = 0; i < toReprice.length; i += CHUNK) {
     const chunk = toReprice.slice(i, i + CHUNK)
-    const pv = chunk.map(x => Prisma.sql`(${x.productId}::text, ${x.newCost}::int)`)
+    const pv = chunk.map(x => Prisma.sql`(${x.productId}::text, ${x.newCost}::int, ${x.newSell}::int)`)
     await prisma.$executeRaw`
-      UPDATE products AS p SET cost_price = v.cost, updated_at = NOW()
-      FROM (VALUES ${Prisma.join(pv)}) AS v(id, cost)
+      UPDATE products AS p SET cost_price = v.cost, sell_price = v.sell, updated_at = NOW()
+      FROM (VALUES ${Prisma.join(pv)}) AS v(id, cost, sell)
       WHERE p.id = v.id
     `
     const sv = chunk.map(x => Prisma.sql`(${x.supplierProductId}::text, ${x.newCost}::int)`)
@@ -105,6 +120,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     disabled: toDisable.length,
     repriced: toReprice.length,
+    priceRaised,
     syncedAt: now.toISOString(),
   })
 }
