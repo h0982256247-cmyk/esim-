@@ -290,17 +290,33 @@ export async function batchCreateProducts(
   })
   const supplierIdMap = new Map(allSuppliers.map(s => [s.wmProductId, s.id]))
 
-  // ─── Step 5: 抓 (tenantAdminId, supplierSkuId) 已存在的 Product ───
-  // 同 tenant + 同 SKU = 視為「同一個方案」，重新匯入更新而非新建
+  // ─── Step 5: 抓既有 Product 以便「更新而非新建」───────────────────
+  // 商品的真正身分是 **plan_code（B 欄）**，每個上架方案唯一。
+  // ⚠ A 欄供應商 WM SKU 會「重複」：同一個 WM 批發方案常被拆成多個國家上架
+  //   （中港澳／中國／香港／澳門；南美整區 → 阿根廷／巴西／南美A），它們共用同一個
+  //   SupplierProduct，只有 plan_code 不同。故比對既有商品一律以 plan_code 為鍵；
+  //   沒填 plan_code 的舊資料才退回用 supplier SKU。
+  // （早期用 SKU 當鍵 → 重匯時多國上架只更新得到一筆、其餘變孤兒不再被維護，已修。）
   const supplierIdsForRows = Array.from(new Set(rows.map(r => supplierIdMap.get(r.supplierSkuId)!).filter(Boolean)))
+  const planCodesForRows = Array.from(new Set(
+    rows.map(r => r.planCode).filter((c): c is string => !!c)
+  ))
   const existingProducts = await prisma.product.findMany({
     where: {
       tenantAdminId: tenantAdminId ?? null,
-      supplierSkuId: { in: supplierIdsForRows },
+      OR: [
+        { planCode: { in: planCodesForRows } },
+        { supplierSkuId: { in: supplierIdsForRows } },
+      ],
     },
-    select: { id: true, supplierSkuId: true },
+    select: { id: true, planCode: true, supplierSkuId: true },
   })
-  const existingProductMap = new Map(existingProducts.map(p => [p.supplierSkuId, p.id]))
+  const existingByPlan = new Map<string, string>()        // plan_code → productId（主鍵）
+  const existingBySkuNoPlan = new Map<string, string>()   // supplierSkuId → productId（僅無 plan_code 的舊資料 fallback）
+  for (const ep of existingProducts) {
+    if (ep.planCode) existingByPlan.set(ep.planCode, ep.id)
+    else             existingBySkuNoPlan.set(ep.supplierSkuId, ep.id)
+  }
 
   // ─── Step 6: 分流：既有 → bulk SQL update；新的 → createMany ─────
   type ProductUpdate = { id: string; data: ReturnType<typeof buildProductData> }
@@ -310,7 +326,9 @@ export async function batchCreateProducts(
     const supplierId = supplierIdMap.get(row.supplierSkuId)
     if (!supplierId) throw new Error(`找不到 SupplierProduct.id for wmProductId=${row.supplierSkuId}`)
     const data = buildProductData(row, supplierId, tenantAdminId ?? null)
-    const existingId = existingProductMap.get(supplierId)
+    const existingId = row.planCode
+      ? existingByPlan.get(row.planCode)
+      : existingBySkuNoPlan.get(supplierId)
     if (existingId) productUpdates.push({ id: existingId, data })
     else            newProductData.push(data)
   }
