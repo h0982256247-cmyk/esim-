@@ -368,20 +368,26 @@ export default function PlatformProductsPage() {
           </button>
           <label className={`bg-white border px-4 py-2 rounded-lg text-sm cursor-pointer hover:bg-gray-50 transition flex items-center gap-1.5 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <span>📂</span>
-            {uploading ? '匯入中…' : '匯入 CSV / Excel'}
-            <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleUpload} disabled={uploading} />
+            {uploading ? '匯入中…' : '匯入 Excel'}
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleUpload} disabled={uploading} />
           </label>
           <button
-            onClick={() => {
-              const headers = '供應商方案ID,plan_code,商品名稱,適用地區,是否為原生卡,網絡類型,成本價NT,售價NT'
-              const example = 'WM-JP-001,JP-SB-1GB-3D,日本Softbank 3天 1GB/天,日本,否,4G/5G,150,299'
-              const blob = new Blob(['﻿' + headers + '\n' + example], { type: 'text/csv;charset=utf-8' })
-              const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
-              a.download = 'products_template.csv'; a.click()
+            onClick={async () => {
+              // 動態載入 xlsx，產生 Excel 範本（與匯入解析的欄位一致）
+              const XLSX = await import('xlsx')
+              const rows: (string | number)[][] = [
+                ['供應商方案ID', 'plan_code', '商品名稱', '適用地區', '是否為原生卡', '網絡類型', '成本價NT', '售價NT'],
+                ['WM-JP-001', 'JP-SB-1GB-3D', '日本Softbank 3天 1GB/天', '日本', '否', '4G/5G', 150, 299],
+              ]
+              const ws = XLSX.utils.aoa_to_sheet(rows)
+              ws['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 28 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 9 }, { wch: 9 }]
+              const wb = XLSX.utils.book_new()
+              XLSX.utils.book_append_sheet(wb, ws, '商品範本')
+              XLSX.writeFile(wb, 'products_template.xlsx')
             }}
             className="bg-white border px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition flex items-center gap-1.5"
           >
-            <span>⬇️</span> CSV 範本
+            <span>⬇️</span> Excel 範本
           </button>
         </div>
       </div>
@@ -481,7 +487,7 @@ export default function PlatformProductsPage() {
           </table>
           {products.length === 0 && (
             <p className="text-center text-gray-400 py-8 text-sm">
-              {q ? `找不到符合「${q}」的商品` : '尚無商品，請透過 CSV 匯入'}
+              {q ? `找不到符合「${q}」的商品` : '尚無商品，請透過 Excel 匯入'}
             </p>
           )}
         </div>
