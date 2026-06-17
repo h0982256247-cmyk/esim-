@@ -108,9 +108,6 @@ export default function PlatformProductsPage() {
   const [applying, setApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<ApplyResult | null>(null)
 
-  // 一鍵重算國家
-  const [recomputing, setRecomputing] = useState(false)
-
   // 驗證後標記受影響的 product id，給表格 row 顯示需處理徽章
   const [affectedIds, setAffectedIds] = useState<Map<string, 'notfound' | 'mismatch'>>(new Map())
 
@@ -149,30 +146,6 @@ export default function PlatformProductsPage() {
       body: JSON.stringify({ status: next }),
     })
     load()
-  }
-
-  const handleRecomputeMeta = async () => {
-    if (recomputing) return
-    if (!confirm('將用供應商商品名稱／plan code 重新解析所有商品的「國家」與「流量」欄位，確定要繼續嗎？')) return
-    setRecomputing(true)
-    setUploadMsg(null)
-    try {
-      const res = await fetch('/api/admin/products/recompute-country', { method: 'POST' })
-      const raw = await res.text()
-      let r: { message?: string; error?: string }
-      try { r = JSON.parse(raw) } catch { r = { error: raw || `HTTP ${res.status}` } }
-      if (res.ok && r.message) {
-        setUploadMsg({ ok: true, text: r.message })
-        load()
-      } else {
-        setUploadMsg({ ok: false, text: r.error ?? '重算失敗' })
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : '網路錯誤'
-      setUploadMsg({ ok: false, text: `重算失敗：${msg}` })
-    } finally {
-      setRecomputing(false)
-    }
   }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -357,14 +330,6 @@ export default function PlatformProductsPage() {
             className={`bg-white border px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition flex items-center gap-1.5 ${validating ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <span>🔍</span> {validating ? '驗證中…' : '驗證方案'}
-          </button>
-          <button
-            onClick={handleRecomputeMeta}
-            disabled={recomputing}
-            className={`bg-white border px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition flex items-center gap-1.5 ${recomputing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title="用供應商商品名稱／plan code 重新解析所有商品的國家與流量欄位"
-          >
-            <span>🌏</span> {recomputing ? '重算中…' : '重算國家／流量'}
           </button>
           <label className={`bg-white border px-4 py-2 rounded-lg text-sm cursor-pointer hover:bg-gray-50 transition flex items-center gap-1.5 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <span>📂</span>
