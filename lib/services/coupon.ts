@@ -11,7 +11,7 @@ export async function issueRepurchaseCouponForOrder(orderId: string): Promise<vo
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: {
-      id: true, userId: true,
+      id: true, userId: true, bundleId: true, bundleSeq: true,
       user: {
         select: {
           id: true, lineUid: true,
@@ -30,6 +30,9 @@ export async function issueRepurchaseCouponForOrder(orderId: string): Promise<vo
   })
 
   if (!order?.user) return
+  // 同捆（多張 eSIM 一次結帳 = 共用 bundleId 的多筆訂單）只發「一張」回購券——
+  // 以整筆購買為單位，只在第一張(bundleSeq=1)發，其餘略過，避免一次合購收到多張。
+  if (order.bundleId && order.bundleSeq != null && order.bundleSeq > 1) return
   const memberGroup = order.user.groupMembership?.group
   const ownedGroup = order.user.ownedGroup
 
