@@ -90,7 +90,7 @@ export default function LiffHomePage() {
       profile: `/liff/${slug}/profile`,
       guide:   `/liff/${slug}/guide`,
       data:    `/liff/${slug}/support`,
-      devices: `/liff/${slug}/support`,
+      devices: `/liff/${slug}/devices`,
     }
     router.push(routes[path] ?? `/liff/${slug}/${path}`)
   }
