@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { requirePlatformAuth } from '@/lib/auth/platform'
-import { batchCreateProducts, getMarginGuard, type CsvProductRow } from '@/lib/services/product'
-import { fetchSupplierProductMap } from '@/lib/services/esim'
+import { batchCreateProducts, type CsvProductRow } from '@/lib/services/product'
 import { resolveCountry, parseProductNameSegments } from '@/lib/utils/country'
 import { parseCapacityFromName, normalizeCapacity } from '@/lib/utils/capacity'
 
@@ -311,51 +310,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `找不到有效商品資料列${hint}` }, { status: 400 })
   }
 
-  // ── 供應商 API 驗證（非阻斷）：一次取回全部清單，批次比對 ──
-  let notFound = 0
-  let priceMismatch = 0
-  let supplierMap: Awaited<ReturnType<typeof fetchSupplierProductMap>> | undefined
-
+  // 匯入只寫入 Excel 原始資料：成本／售價一律照試算表，不在此向世界移動查價或同步，
+  // 國家解析也只靠 Excel（C 欄商品名稱／國家欄）。WM 成本驗證與「成本跟隨 WM：成本↑
+  // 售價跟漲、成本↓降回 WM、售價不變」一律改由後台「驗證方案」按鈕觸發（GET
+  // /api/admin/products/validate 比對、POST .../apply 套用），讓匯入快速單純、
+  // 不受 WM API 連線狀況影響。
   try {
-    supplierMap = await fetchSupplierProductMap(auth.tenantAdminId)
-    for (const row of rows) {
-      const info = supplierMap.get(row.supplierSkuId)
-      if (!info) {
-        notFound++
-      } else if (info.productPrice !== row.costPrice) {
-        priceMismatch++
-      }
-    }
-  } catch {
-    // API 不可用時略過驗證，繼續匯入；SupplierProduct 將以 CSV 資料 stub
-  }
-
-  // ── 用供應商方案名稱補強國家解析 ──────────────────────────────────
-  // CSV 第 3 欄商品名稱可能為空（或 header 名稱沒對到），但世界移動 API 提供
-  // 的 wmInfo.productName 通常有正確國名（例如「新馬」「日本Softbank」）。
-  // 當 CSV name 沒匹配出國家、且 supplier name 能匹配，覆寫該 row 的 country。
-  if (supplierMap) {
-    for (const row of rows as Array<CsvProductRow & { _rawProductName?: string; _matchedByName?: boolean }>) {
-      if (row._matchedByName) continue  // CSV name 已解析出國家，不動
-      const supplierName = supplierMap.get(row.supplierSkuId)?.productName
-      if (!supplierName) continue
-      const refined = resolveCountry(supplierName, '', '', '', row.countryFlag ?? '')
-      if (refined.matchedByName) {
-        row.countryCode   = refined.countryCode
-        row.countryNameZh = refined.countryNameZh
-        row.countryFlag   = refined.countryFlag
-      }
-    }
-  }
-
-  try {
-    // 比照「驗證套用」：成本同步 WM、售價跟漲、毛利保護開啟則補到門檻
-    const marginGuard = await getMarginGuard(auth.tenantAdminId)
-    const result = await batchCreateProducts(rows, auth.tenantAdminId, supplierMap, marginGuard)
+    const result = await batchCreateProducts(rows, auth.tenantAdminId)
 
     const warns: string[] = []
-    if (notFound      > 0) warns.push(`供應商查無 ${notFound} 筆`)
-    if (priceMismatch > 0) warns.push(`成本價不符 ${priceMismatch} 筆`)
     if (skippedSheets.length > 0) warns.push(`略過非商品分頁：${skippedSheets.join('、')}`)
 
     const parts: string[] = []
