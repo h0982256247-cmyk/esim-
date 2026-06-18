@@ -254,18 +254,6 @@ export default function ClassicShop({
               </p>
             </div>
           </div>
-          {filter.dayFilter > 0 && (
-            <button
-              type="button"
-              onClick={filter.onClear}
-              style={{
-                background: '#fff', border: `1px solid ${countryAccent.accent}33`, color: countryAccent.accent,
-                fontSize: 12, fontWeight: 700, padding: '6px 12px',
-                borderRadius: 100, cursor: 'pointer',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-            >全部</button>
-          )}
         </div>
       </div>
 
@@ -286,6 +274,22 @@ export default function ClassicShop({
                 ))}
               </g>
             </svg>
+            {coverageList.length > 0 && (
+              <button
+                onClick={() => setShowCoverage(true)}
+                style={{
+                  position: 'absolute', top: 14, right: 14, zIndex: 2,
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  background: 'rgba(255,255,255,0.95)', color: countryAccent.accent,
+                  border: 'none', borderRadius: 100, padding: '7px 13px',
+                  fontSize: 12, fontWeight: 800, cursor: 'pointer',
+                  boxShadow: '0 3px 10px rgba(0,0,0,0.18)', WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg>
+                適用國家
+              </button>
+            )}
             <div style={{
               width: 60, height: 60, borderRadius: '50%', flexShrink: 0,
               background: 'rgba(255,255,255,0.92)',
@@ -307,21 +311,6 @@ export default function ClassicShop({
               <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.92)', margin: '5px 0 0', fontWeight: 600, letterSpacing: '0.02em' }}>
                 {filter.totalCount > 0 ? `${filter.totalCount} 個 eSIM 方案 · 即買即用` : '即插即用 eSIM'}
               </p>
-              {coverageList.length > 0 && (
-                <button
-                  onClick={() => setShowCoverage(true)}
-                  style={{
-                    marginTop: 11, display: 'inline-flex', alignItems: 'center', gap: 6,
-                    background: 'rgba(255,255,255,0.95)', color: countryAccent.accent,
-                    border: 'none', borderRadius: 100, padding: '7px 14px',
-                    fontSize: 12, fontWeight: 800, cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.14)', WebkitTapHighlightColor: 'transparent',
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg>
-                  適用國家（{coverageList.length}）
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -524,19 +513,29 @@ export default function ClassicShop({
       {showCoverage && (
         <div
           onClick={() => setShowCoverage(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 90 }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 90 }}
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 360, maxHeight: '70vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 12px 40px rgba(0,0,0,0.2)' }}
+            style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 360, maxHeight: '74vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.3)' }}
           >
-            <div style={{ padding: '16px 18px', borderBottom: `1px solid ${S.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 16, fontWeight: 900, color: S.ink }}>適用國家 / 地區</span>
-              <button onClick={() => setShowCoverage(false)} aria-label="關閉" style={{ border: 'none', background: 'transparent', fontSize: 20, color: S.faint, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            {/* 彩色標題列（吃目的地主色）*/}
+            <div style={{ padding: '18px 20px', background: `linear-gradient(135deg, ${countryAccent.accent}, ${countryAccent.accent}cc)`, display: 'flex', alignItems: 'center', gap: 11 }}>
+              <span style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg>
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 17, fontWeight: 900, color: '#fff', margin: 0, letterSpacing: '-0.01em' }}>適用國家</p>
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', margin: '2px 0 0', fontWeight: 600 }}>共 {coverageList.length} 個國家／地區可用</p>
+              </div>
+              <button onClick={() => setShowCoverage(false)} aria-label="關閉" style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.22)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, WebkitTapHighlightColor: 'transparent' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
             </div>
-            <div style={{ padding: '14px 18px', overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {/* 國家 chips */}
+            <div style={{ padding: '16px 18px 20px', overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {coverageList.map((name, i) => (
-                <span key={`${name}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', background: S.bg, borderRadius: 100, padding: '7px 14px', fontSize: 13, color: S.ink, fontWeight: 600 }}>
+                <span key={`${name}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', background: countryAccent.soft, color: countryAccent.accent, borderRadius: 100, padding: '7px 14px', fontSize: 13, fontWeight: 700 }}>
                   {name}
                 </span>
               ))}
