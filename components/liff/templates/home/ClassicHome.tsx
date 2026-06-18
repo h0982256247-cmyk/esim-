@@ -8,10 +8,11 @@ import { CountryFlag } from '@/components/common/CountryFlag'
 import type { HomePageProps } from './types'
 
 const QUICK_ACTIONS = [
-  { key: 'orders',  label: '我的 eSIM', Icon: IconMyEsim,   bg: '#C4B5FD', color: '#5B21B6' },
-  { key: 'guide',   label: '安裝教學',  Icon: IconGuide,    bg: '#86EFAC', color: '#166534' },
-  { key: 'data',    label: '流量指南',  Icon: IconDataPlan, bg: '#FDE68A', color: '#92400E' },
-  { key: 'devices', label: '支援裝置',  Icon: IconDevices,  bg: '#93C5FD', color: '#1E40AF' },
+  // 收斂為一致色階（柔和 -200 底 + -700 圖示/字），四色協調、乾淨不雜亂
+  { key: 'orders',  label: '我的 eSIM', Icon: IconMyEsim,   bg: '#DDD6FE', color: '#6D28D9' },
+  { key: 'guide',   label: '安裝教學',  Icon: IconGuide,    bg: '#A7F3D0', color: '#047857' },
+  { key: 'data',    label: '流量指南',  Icon: IconDataPlan, bg: '#FDE68A', color: '#B45309' },
+  { key: 'devices', label: '支援裝置',  Icon: IconDevices,  bg: '#BFDBFE', color: '#1D4ED8' },
 ]
 
 const DAY_OPTIONS  = ['3天','5天','7天','10天','15天']
