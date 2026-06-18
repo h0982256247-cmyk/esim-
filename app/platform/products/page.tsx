@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { CountryFlag } from '@/components/common/CountryFlag'
 
@@ -112,6 +112,26 @@ export default function PlatformProductsPage() {
 
   // 驗證後標記受影響的 product id，給表格 row 顯示需處理徽章
   const [affectedIds, setAffectedIds] = useState<Map<string, 'notfound' | 'mismatch'>>(new Map())
+
+  // 成本價異動「依價差排序 + 按 SKU 去重」：同一 WM SKU 常橫跨多國上架（中港澳／南美整區），
+  // 逐列顯示會洗版（光歐洲一顆 SKU 就 100+ 列）。改成一個 SKU 一列、聚合影響列數，
+  // 依 |WM−我的成本| 由大到小排序，方便先處理價差最大的。currentCost/supplierCost 在同
+  // 一 SKU 內一致（匯入時整批同步同一 WM 價），取首筆即可。gap>0=我的成本低於WM（成本↑售價跟漲）、
+  // gap<0=我的成本高於WM（成本↓降回 WM、售價不變）。
+  const mismatchGroups = useMemo(() => {
+    const list = validateResult?.issues.priceMismatch ?? []
+    const m = new Map<string, { skuId: string; currentCost: number; supplierCost: number; rows: number; countries: Set<string> }>()
+    for (const it of list) {
+      const g = m.get(it.skuId) ?? { skuId: it.skuId, currentCost: it.currentCost, supplierCost: it.supplierCost, rows: 0, countries: new Set<string>() }
+      g.rows++
+      const country = it.name.replace(/\s*\d+\s*天.*$/, '').trim() || it.name
+      g.countries.add(country)
+      m.set(it.skuId, g)
+    }
+    return Array.from(m.values())
+      .map(g => ({ ...g, gap: g.supplierCost - g.currentCost, countryList: Array.from(g.countries) }))
+      .sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))
+  }, [validateResult])
 
   // 毛利保護（per-tenant）
   const [guard, setGuard] = useState<GuardState | null>(null)
@@ -683,26 +703,41 @@ export default function PlatformProductsPage() {
               )}
 
               {/* Price mismatch */}
-              {validateResult.issues.priceMismatch.length > 0 && (
+              {mismatchGroups.length > 0 && (
                 <section>
                   <h3 className="text-sm font-semibold text-amber-600 mb-2 flex items-center gap-1.5">
                     <span className="bg-amber-100 text-amber-600 rounded-full px-2 py-0.5 text-xs">{validateResult.issues.priceMismatch.length}</span>
                     成本價異動
+                    <span className="text-xs font-normal text-gray-400">· {mismatchGroups.length} 個方案 · 依價差排序</span>
                   </h3>
                   <div className="space-y-1">
-                    {validateResult.issues.priceMismatch.map(item => (
-                      <div key={item.id} className="flex items-center justify-between bg-amber-50 rounded-lg px-3 py-2 text-sm">
-                        <span className="flex items-center gap-2">
-                          <CountryFlag code={item.countryCode} fallbackEmoji={item.countryFlag} size={20} />
-                          <span>{item.name}</span>
-                        </span>
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-gray-400 line-through">NT${item.currentCost}</span>
-                          <span className="text-amber-700 font-semibold">NT${item.supplierCost}</span>
-                          <span className="font-mono text-gray-400">{item.skuId}</span>
+                    {mismatchGroups.map(g => {
+                      const costUp = g.gap > 0   // 我的成本低於 WM → 成本↑ → 售價跟漲（+gap）；反之降回 WM、售價不變
+                      return (
+                        <div key={g.skuId} className="flex items-center justify-between gap-2 bg-amber-50 rounded-lg px-3 py-2 text-sm">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate text-gray-700">
+                                {g.countryList.slice(0, 3).join('、')}
+                                {g.countryList.length > 3 && <span className="text-gray-400">{` +${g.countryList.length - 3}`}</span>}
+                              </span>
+                              {g.rows > 1 && <span className="shrink-0 text-xs text-gray-400">×{g.rows} 列</span>}
+                            </div>
+                            <div className="truncate font-mono text-xs text-gray-400">{g.skuId}</div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2 text-xs">
+                            <span className="text-gray-400 line-through">NT${g.currentCost}</span>
+                            <span className="font-semibold text-gray-700">NT${g.supplierCost}</span>
+                            <span className={`tabular-nums font-semibold ${costUp ? 'text-red-600' : 'text-green-600'}`}>
+                              {costUp ? '+' : ''}{g.gap}
+                            </span>
+                            <span className={`rounded-full px-1.5 py-0.5 ${costUp ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                              {costUp ? `售價 +${g.gap}` : '售價不變'}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </section>
               )}
@@ -714,7 +749,7 @@ export default function PlatformProductsPage() {
                   onClick={handleApply}
                   disabled={applying}
                   className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50"
-                  title="自動下架查無方案、同步成本價（售價不動）"
+                  title="自動下架查無方案、成本同步 WM：成本上升時售價跟漲（維持固定利潤）、成本下降時售價不變"
                 >
                   {applying ? '套用中…' : `套用變更（${validateResult.issues.notFound.length} 下架 / ${validateResult.issues.priceMismatch.length} 改價）`}
                 </button>
