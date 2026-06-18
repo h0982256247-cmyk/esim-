@@ -88,7 +88,7 @@ export default function LiffHomePage() {
       orders:  `/liff/${slug}/orders`,
       products:`/liff/${slug}/products`,
       profile: `/liff/${slug}/profile`,
-      guide:   `/liff/${slug}/support`,
+      guide:   `/liff/${slug}/guide`,
       data:    `/liff/${slug}/support`,
       devices: `/liff/${slug}/support`,
     }
