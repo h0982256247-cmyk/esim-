@@ -15,6 +15,7 @@ import {
 import { IconSim, IconQr, IconInstall, IconShare, IconClock, IconGift } from '@/components/liff/EsimIcons'
 import ConfirmDialog from '@/components/liff/ConfirmDialog'
 import Toast from '@/components/liff/Toast'
+import { GiftIcon } from '@/components/liff/GiftIcon'
 import type { ReactNode } from 'react'
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -110,6 +111,12 @@ function formatData(mb: number, unit: string): string {
   return `${mb.toLocaleString()} MB`
 }
 
+// 折扣（0.85）→ 折數標籤（9 折 / 85 折）
+function zheLabel(d: number): string {
+  const n = Math.round(d * 100)
+  return n % 10 === 0 ? `${n / 10} 折` : `${n} 折`
+}
+
 // ─── Page ──────────────────────────────────────────────────────
 
 export default function OrdersPage() {
@@ -133,6 +140,8 @@ export default function OrdersPage() {
   // 輕量提示（取代 alert）
   const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'error' | 'info' } | null>(null)
   const dismissToast = useCallback(() => setToast(null), [])
+  // 購買完成回購券慶祝彈窗（單張/多張統一在列表頁跳）
+  const [rpPopup, setRpPopup] = useState<{ discount: number } | null>(null)
 
   const { data, loading, refresh } = useCachedData('orders', async () => {
     const [o, c] = await Promise.all([
@@ -143,6 +152,34 @@ export default function OrdersPage() {
   })
   const orders = useMemo(() => data?.orders ?? [], [data])
   const coupons = data?.coupons ?? []
+
+  // 付款成功落地（?paid=1）→ 找「剛發出的」回購券跳一次慶祝彈窗。
+  // 單張/多張都統一回到此列表頁，由這裡跳窗（詳情頁不再跳）。只認近 30 分鐘內、未使用的
+  // 回購券（避免把舊券誤當本次），同一張券每 session 只跳一次。
+  useEffect(() => {
+    if (typeof window === 'undefined' || searchParams.get('paid') !== '1') return
+    const cs = data?.coupons ?? []
+    const rp = cs
+      .filter(c => c.type === 'GROUP_REPURCHASE' && !c.usedAt && Date.now() - new Date(c.createdAt).getTime() < 30 * 60 * 1000)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+    if (!rp) return
+    const key = `esim_rp_seen_${rp.id}`
+    if (window.sessionStorage.getItem(key)) return
+    window.sessionStorage.setItem(key, '1')
+    setRpPopup({ discount: rp.discount })
+  }, [data, searchParams])
+
+  // 付款失敗/取消的 redirect（?status≠0 + oid）→ 主動取消該待付款單。
+  // 沿用原訂單詳情頁邏輯：LINE Pay 取消的 webhook 有時延遲，避免單子卡在「處理中」。
+  const autoCancelDoneRef = useRef(false)
+  useEffect(() => {
+    if (autoCancelDoneRef.current) return
+    const status = searchParams.get('status')
+    const oid = searchParams.get('oid')
+    if (status == null || status === '0' || !oid) return
+    autoCancelDoneRef.current = true
+    fetch(`/api/orders/${oid}/cancel`, { method: 'POST' }).then(() => refresh()).catch(() => {})
+  }, [searchParams, refresh])
 
   // 分桶：依「使用者視角 phase」歸到三個分頁 + 一個處理中橫幅
   const buckets = useMemo(() => {
@@ -518,6 +555,30 @@ export default function OrdersPage() {
         onCancel={() => setDialog(null)}
       />
       <Toast message={toast?.message ?? null} tone={toast?.tone} onDone={dismissToast} />
+
+      {/* 購買完成回購券慶祝彈窗（單張/多張統一在此跳） */}
+      {rpPopup && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 80 }}
+          onClick={() => setRpPopup(null)}
+        >
+          <div style={{ background: '#fff', borderRadius: 20, padding: '28px 24px', maxWidth: 340, width: '100%', textAlign: 'center', boxShadow: '0 12px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><GiftIcon size={56} color={C.primary} /></div>
+            <p style={{ fontSize: 18, fontWeight: 800, color: '#1a1a1a', margin: '0 0 6px' }}>購買完成，獲得回購券！</p>
+            <p style={{ fontSize: 14, color: '#4b5563', margin: '0 0 2px' }}>下次購買可用</p>
+            <p style={{ fontSize: 30, fontWeight: 800, color: C.primaryText, margin: '0 0 18px' }}>{zheLabel(rpPopup.discount)}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button
+                onClick={() => router.push(`${base}/coupons`)}
+                style={{ width: '100%', border: 'none', borderRadius: 100, padding: '14px', fontSize: 15, fontWeight: 800, cursor: 'pointer', background: C.primary, color: C.onPrimary }}
+              >
+                查看我的優惠券
+              </button>
+              <button onClick={() => setRpPopup(null)} style={{ border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 14, fontWeight: 600, padding: 8, cursor: 'pointer' }}>知道了</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
