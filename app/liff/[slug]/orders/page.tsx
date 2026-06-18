@@ -156,18 +156,34 @@ export default function OrdersPage() {
   // 付款成功落地（?paid=1）→ 找「剛發出的」回購券跳一次慶祝彈窗。
   // 單張/多張都統一回到此列表頁，由這裡跳窗（詳情頁不再跳）。只認近 30 分鐘內、未使用的
   // 回購券（避免把舊券誤當本次），同一張券每 session 只跳一次。
+  const rpShownRef = useRef(false)
   useEffect(() => {
-    if (typeof window === 'undefined' || searchParams.get('paid') !== '1') return
+    if (typeof window === 'undefined' || searchParams.get('paid') !== '1' || rpShownRef.current) return
     const cs = data?.coupons ?? []
     const rp = cs
       .filter(c => c.type === 'GROUP_REPURCHASE' && !c.usedAt && Date.now() - new Date(c.createdAt).getTime() < 30 * 60 * 1000)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
     if (!rp) return
     const key = `esim_rp_seen_${rp.id}`
-    if (window.sessionStorage.getItem(key)) return
+    if (window.sessionStorage.getItem(key)) { rpShownRef.current = true; return }
     window.sessionStorage.setItem(key, '1')
+    rpShownRef.current = true
     setRpPopup({ discount: rp.discount })
   }, [data, searchParams])
+
+  // 回購券可能由 webhook 稍晚才發（信用卡 3DS / LINE Pay 是付款完成後才在背景發券），
+  // landing 當下這張券可能還沒進 DB → 首次抓不到。付款落地後短暫重抓幾次，抓到就由上面
+  // 的 effect 跳窗；彈窗顯示後即停。（同步刷卡路徑券已先發，通常第一次就抓到。）
+  useEffect(() => {
+    if (typeof window === 'undefined' || searchParams.get('paid') !== '1') return
+    let tries = 0
+    const id = setInterval(() => {
+      tries += 1
+      if (rpShownRef.current || tries > 5) { clearInterval(id); return }
+      refresh()
+    }, 1800)
+    return () => clearInterval(id)
+  }, [searchParams, refresh])
 
   // 付款失敗/取消的 redirect（?status≠0 + oid）→ 主動取消該待付款單。
   // 沿用原訂單詳情頁邏輯：LINE Pay 取消的 webhook 有時延遲，避免單子卡在「處理中」。
