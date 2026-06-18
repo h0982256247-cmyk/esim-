@@ -247,9 +247,6 @@ export default function ClassicShop({
               <h1 style={{ fontSize: 16, fontWeight: 900, color: S.ink, margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                 {country?.countryNameZh ?? '方案'}
               </h1>
-              <p style={{ fontSize: 11, color: S.faint, margin: '2px 0 0', letterSpacing: '0.04em', fontWeight: 600 }}>
-                {filter.dayFilter ? `已篩選 ${filter.filteredCount} / ${filter.totalCount}` : `${filter.totalCount} 個方案 · eSIM`}
-              </p>
             </div>
           </div>
         </div>
