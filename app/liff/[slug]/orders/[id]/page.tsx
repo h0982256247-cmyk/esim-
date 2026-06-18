@@ -101,6 +101,20 @@ function zheLabel(d: number): string {
   return n % 10 === 0 ? `${n / 10} 折` : `${n} 折`
 }
 
+// 禮物 SVG（取代 🎁 emoji）：盒身/盒蓋淡色填底、緞帶與蝴蝶結用主題色，隨 color 帶入
+function GiftIcon({ size = 44, color }: { size?: number; color: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true" style={{ display: 'block' }}>
+      <rect x="9" y="22" width="30" height="19" rx="3" fill={color} fillOpacity="0.12" stroke={color} strokeWidth="2.5" strokeLinejoin="round" />
+      <rect x="7" y="15" width="34" height="9" rx="2.5" fill={color} fillOpacity="0.2" stroke={color} strokeWidth="2.5" strokeLinejoin="round" />
+      <rect x="21" y="16" width="6" height="25" fill={color} />
+      <path d="M24 15C19.5 8 12.5 9.5 13.5 14C14.2 17 20.5 16 24 15Z" fill={color} stroke={color} strokeWidth="1" strokeLinejoin="round" />
+      <path d="M24 15C28.5 8 35.5 9.5 34.5 14C33.8 17 27.5 16 24 15Z" fill={color} stroke={color} strokeWidth="1" strokeLinejoin="round" />
+      <circle cx="24" cy="14.5" r="2.6" fill={color} />
+    </svg>
+  )
+}
+
 export default function OrderDetailPage() {
   const router = useRouter()
   const base = useLiffBase()
@@ -133,14 +147,17 @@ export default function OrderDetailPage() {
 
   useEffect(() => { setCanOneClick(supportsOneClickEsim()) }, [])
 
-  // 購買完成回購券慶祝彈窗：每筆訂單只跳一次（sessionStorage 記住，之後回看不再彈）
+  // 購買完成回購券慶祝彈窗：只在「付款成功跳轉回來（?status=0）」這次顯示——
+  // 也就是付款後落地的「準備 eSIM 中」頁，之後手動點進訂單詳情不再彈。
+  // 同筆只跳一次（sessionStorage 記住）。
   useEffect(() => {
     if (!repurchaseCoupon || typeof window === 'undefined') return
+    if (searchParams.get('status') !== '0') return
     const key = `esim_rp_seen_${id}`
     if (window.sessionStorage.getItem(key)) return
     window.sessionStorage.setItem(key, '1')
     setShowRpPopup(true)
-  }, [repurchaseCoupon, id])
+  }, [repurchaseCoupon, id, searchParams])
 
   // 從 TapPay (LINE Pay / 3DS) 跳轉回來時，網址會帶 ?status=<n>。
   // status=0 是付款成功（等 webhook fan-out），非零代表失敗或使用者取消。
@@ -471,7 +488,7 @@ export default function OrderDetailPage() {
           onClick={() => setShowRpPopup(false)}
         >
           <div style={{ background: '#fff', borderRadius: 20, padding: '28px 24px', maxWidth: 340, width: '100%', textAlign: 'center', boxShadow: '0 12px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 44, marginBottom: 6 }}>🎁</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><GiftIcon size={56} color={C.primary} /></div>
             <p style={{ fontSize: 18, fontWeight: 800, color: S.ink, margin: '0 0 6px' }}>購買完成，獲得回購券！</p>
             <p style={{ fontSize: 14, color: S.muted, margin: '0 0 2px' }}>下次購買可用</p>
             <p style={{ fontSize: 30, fontWeight: 800, color: C.primaryText, margin: '0 0 18px' }}>{zheLabel(repurchaseCoupon.discount)}</p>
@@ -491,7 +508,7 @@ export default function OrderDetailPage() {
       {/* 結帳完成回饋：本筆已發出回購券（趁剛買完最有感）*/}
       {repurchaseCoupon && (order.status === 'PAID' || order.status === 'COMPLETED') && (
         <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 26, lineHeight: 1 }}>🎁</span>
+          <span style={{ flexShrink: 0 }}><GiftIcon size={28} color={C.primaryText} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: 14, fontWeight: 800, color: C.primaryText, margin: 0 }}>本筆已回饋 {zheLabel(repurchaseCoupon.discount)} 回購券</p>
             <p style={{ fontSize: 12, color: S.muted, margin: '2px 0 0' }}>下次購買即可使用，於「優惠券」查看</p>
