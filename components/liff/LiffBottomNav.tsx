@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTenantColors } from '@/components/liff/TenantContext'
 
 function IconHome({ size = 20 }: { size?: number }) {
@@ -82,6 +82,7 @@ export default function LiffBottomNav() {
   const base = useBasePath()
   const C = useTenantColors()
   const [isGroupOwner, setIsGroupOwner] = useState(false)
+  const navRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -90,13 +91,34 @@ export default function LiffBottomNav() {
       .catch(() => {})
   }, [])
 
+  // iOS LINE webview：螢幕鎖定/切到背景再回來後，position:fixed 的底部列「畫面還在但
+  // 觸控區失準」→ 點不到。回到前景時強制 reflow（同步 toggle display）重建觸控區。
+  useEffect(() => {
+    const repaint = () => {
+      const el = navRef.current
+      if (!el) return
+      el.style.display = 'none'
+      void el.offsetHeight   // 觸發同步 reflow（不會閃，因同一個 tick 內還原）
+      el.style.display = ''
+    }
+    const onVisible = () => { if (document.visibilityState === 'visible') repaint() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pageshow', repaint)
+    window.addEventListener('focus', repaint)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pageshow', repaint)
+      window.removeEventListener('focus', repaint)
+    }
+  }, [])
+
   const tabs = isGroupOwner ? [...TABS, ADMIN_TAB] : TABS
 
   // 結帳／付款等流程隱藏底部分頁導覽，避免蓋住頁面自己的操作按鈕
   if (HIDE_ON.some(p => pathname.includes(p))) return null
 
   return (
-    <div style={{
+    <div ref={navRef} style={{
       position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
       background: '#ffffff',
       borderTop: '1px solid rgba(0,0,0,0.08)',
