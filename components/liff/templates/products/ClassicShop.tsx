@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react'
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
-import { countryNameToCode } from '@/lib/utils/country'
 import DayPicker from '@/components/liff/DayPicker'
 import { annotatePlans, sortByValue, TIER_COLOR } from '@/lib/utils/product-display'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
@@ -537,8 +536,7 @@ export default function ClassicShop({
             </div>
             <div style={{ padding: '14px 18px', overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {coverageList.map((name, i) => (
-                <span key={`${name}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: S.bg, borderRadius: 100, padding: '6px 12px 6px 8px', fontSize: 13, color: S.ink, fontWeight: 600 }}>
-                  <CountryFlag code={countryNameToCode(name)} size={18} />
+                <span key={`${name}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', background: S.bg, borderRadius: 100, padding: '7px 14px', fontSize: 13, color: S.ink, fontWeight: 600 }}>
                   {name}
                 </span>
               ))}
