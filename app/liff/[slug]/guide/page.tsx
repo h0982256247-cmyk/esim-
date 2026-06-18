@@ -116,25 +116,15 @@ export default function GuidePage() {
         ))}
       </div>
 
-      {/* 重點提醒 */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: C.light, border: `1px solid ${C.border}`, borderRadius: 14, padding: '13px 15px', margin: '22px 0 0' }}>
-        <span style={{ flexShrink: 0, color: C.primaryText, marginTop: 1 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="13" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-        </span>
-        <p style={{ fontSize: 13, color: S.muted, margin: 0, lineHeight: 1.6 }}>
-          安裝與啟用是兩件事：<strong style={{ color: C.primaryText }}>出國前先「安裝」，抵達當地再「啟用漫遊」</strong>，可避免提前消耗天數。
-        </p>
-      </div>
-
       {/* 前往我的 eSIM */}
       <button
         onClick={() => router.push(`${base}/orders`)}
         style={{
-          width: '100%', marginTop: 14, border: 'none', cursor: 'pointer', borderRadius: 100,
+          width: '100%', marginTop: 22, border: 'none', cursor: 'pointer', borderRadius: 100,
           padding: '14px', fontSize: 15, fontWeight: 800, background: C.primary, color: C.onPrimary,
         }}
       >
-        前往我的 eSIM 取得 QR Code
+        前往我的 eSIM
       </button>
     </div>
   )
