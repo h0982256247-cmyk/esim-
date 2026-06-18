@@ -19,6 +19,7 @@ const HEADER_ALIAS: Record<string, string> = {
   'plan_code':      'planCode',
   '商品名稱':       'productName',
   '適用地區':       'countryNameZh',
+  '適用國家':       'coverageCountries',   // L 欄：前台彈窗列出的適用國家清單
   '是否為原生卡':   'isNativeSim',
   '網絡類型':       'networkType',
   '成本價nt':       'costPrice',
@@ -116,6 +117,7 @@ function parseMatrix(matrix: unknown[][]): { rows: CsvProductRow[]; errors: stri
 
     const productName   = get('productName')
     const planCode      = get('planCode')
+    const coverageCountries = get('coverageCountries') || undefined   // L 欄：適用國家清單原字串
     const networkType   = get('networkType') || undefined
     const isNativeRaw   = get('isNativeSim').toLowerCase()
     const isNativeSim   = isNativeRaw === '是' || isNativeRaw === 'true' || isNativeRaw === '1'
@@ -178,6 +180,7 @@ function parseMatrix(matrix: unknown[][]): { rows: CsvProductRow[]; errors: stri
         countryFlag,
         displayDays,
         dataCapacity,
+        coverageCountries,
         description,
         networkType,
         isNativeSim,

@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
+import { countryNameToCode } from '@/lib/utils/country'
 import DayPicker from '@/components/liff/DayPicker'
 import { annotatePlans, sortByValue, TIER_COLOR } from '@/lib/utils/product-display'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
@@ -71,6 +72,12 @@ export default function ClassicShop({
 }: ProductsTemplateProps) {
   // Hooks 一律在任何 early return 之前呼叫（react-hooks/rules-of-hooks）
   const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
+  // 適用國家（匯入 L 欄）：同目的地各方案一致，取第一個有值者，依常見分隔符拆成清單
+  const [showCoverage, setShowCoverage] = useState(false)
+  const coverageList = useMemo(() => {
+    const raw = products.find(p => p.coverageCountries)?.coverageCountries
+    return raw ? raw.split(/[、,，;；/\n\s]+/).map(s => s.trim()).filter(Boolean) : []
+  }, [products])
 
   // Country selection screen — 機票/登機證主視覺
   if (!selectedCountry) {
@@ -301,6 +308,21 @@ export default function ClassicShop({
               <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.92)', margin: '5px 0 0', fontWeight: 600, letterSpacing: '0.02em' }}>
                 {filter.totalCount > 0 ? `${filter.totalCount} 個 eSIM 方案 · 即買即用` : '即插即用 eSIM'}
               </p>
+              {coverageList.length > 0 && (
+                <button
+                  onClick={() => setShowCoverage(true)}
+                  style={{
+                    marginTop: 11, display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: 'rgba(255,255,255,0.95)', color: countryAccent.accent,
+                    border: 'none', borderRadius: 100, padding: '7px 14px',
+                    fontSize: 12, fontWeight: 800, cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.14)', WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg>
+                  適用國家（{coverageList.length}）
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -498,6 +520,32 @@ export default function ClassicShop({
         .cs-plan-tap:active { background: rgba(15,23,42,0.04); }
         .cs-cart-tap:active { filter: brightness(0.92); }
       `}</style>
+
+      {/* 適用國家彈窗 */}
+      {showCoverage && (
+        <div
+          onClick={() => setShowCoverage(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 90 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 360, maxHeight: '70vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 12px 40px rgba(0,0,0,0.2)' }}
+          >
+            <div style={{ padding: '16px 18px', borderBottom: `1px solid ${S.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 16, fontWeight: 900, color: S.ink }}>適用國家 / 地區</span>
+              <button onClick={() => setShowCoverage(false)} aria-label="關閉" style={{ border: 'none', background: 'transparent', fontSize: 20, color: S.faint, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ padding: '14px 18px', overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {coverageList.map((name, i) => (
+                <span key={`${name}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: S.bg, borderRadius: 100, padding: '6px 12px 6px 8px', fontSize: 13, color: S.ink, fontWeight: 600 }}>
+                  <CountryFlag code={countryNameToCode(name)} size={18} />
+                  {name}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

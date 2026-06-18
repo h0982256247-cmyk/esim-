@@ -23,6 +23,7 @@ export async function getActiveProducts(countryCode?: string, tenantAdminId?: st
       countryFlag: true,
       displayDays: true,
       dataCapacity: true,
+      coverageCountries: true,
       networkType: true,
       isNativeSim: true,
       description: true,
@@ -196,6 +197,7 @@ export type CsvProductRow = {
   countryFlag?: string
   displayDays: number
   dataCapacity?: string
+  coverageCountries?: string
   description?: string
   networkType?: string
   isNativeSim?: boolean
@@ -407,6 +409,7 @@ async function bulkUpdateProducts(
       ${d.countryFlag ?? null}::text,
       ${d.displayDays}::int,
       ${d.dataCapacity ?? null}::text,
+      ${d.coverageCountries ?? null}::text,
       ${d.planCode ?? null}::text,
       ${d.networkType ?? null}::text,
       ${d.isNativeSim ?? false}::boolean,
@@ -424,6 +427,7 @@ async function bulkUpdateProducts(
         country_flag     = v.country_flag,
         display_days     = v.display_days,
         data_capacity    = v.data_capacity,
+        coverage_countries = v.coverage_countries,
         plan_code        = v.plan_code,
         network_type     = v.network_type,
         is_native_sim    = v.is_native_sim,
@@ -434,7 +438,7 @@ async function bulkUpdateProducts(
         updated_at       = NOW()
       FROM (VALUES ${Prisma.join(values)}) AS v(
         id, supplier_sku_id, country_code, country_name_zh, country_name_en, country_flag,
-        display_days, data_capacity, plan_code, network_type, is_native_sim, description,
+        display_days, data_capacity, coverage_countries, plan_code, network_type, is_native_sim, description,
         sell_price, cost_price, sort_order
       )
       WHERE p.id = v.id
@@ -462,6 +466,7 @@ function buildProductData(
     countryFlag:   row.countryFlag ?? null,
     displayDays:   row.displayDays,
     dataCapacity:  row.dataCapacity ?? null,
+    coverageCountries: row.coverageCountries ?? null,
     description:   row.description ?? null,
     networkType:   row.networkType ?? null,
     isNativeSim:   row.isNativeSim ?? false,
