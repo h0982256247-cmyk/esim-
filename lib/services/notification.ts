@@ -15,9 +15,27 @@ async function getLineToken(tenantAdminId?: string | null): Promise<string> {
   return process.env.LINE_CHANNEL_ACCESS_TOKEN ?? ''
 }
 
-async function sendLineMessage(lineUid: string, text: string, tenantAdminId?: string | null): Promise<void> {
+async function sendLineMessage(
+  lineUid: string,
+  text: string,
+  tenantAdminId?: string | null,
+  button?: { label: string; uri: string },
+): Promise<void> {
   const token = await getLineToken(tenantAdminId)
   if (!token) return // 金鑰未設定時靜默跳過
+
+  // 有 button → 用 buttons template（文字下方帶可點按鈕，如「前往我的 eSIM」）；否則純文字。
+  const message = button
+    ? {
+        type: 'template',
+        altText: text.split('\n')[0] || 'eSIM 通知',
+        template: {
+          type: 'buttons',
+          text: text.slice(0, 160),   // buttons template 文字上限 160
+          actions: [{ type: 'uri', label: button.label.slice(0, 20), uri: button.uri }],
+        },
+      }
+    : { type: 'text', text }
 
   await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
@@ -25,10 +43,7 @@ async function sendLineMessage(lineUid: string, text: string, tenantAdminId?: st
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      to: lineUid,
-      messages: [{ type: 'text', text }],
-    }),
+    body: JSON.stringify({ to: lineUid, messages: [message] }),
   })
 }
 
@@ -96,6 +111,7 @@ export interface SendNotificationInput {
   data: Record<string, string>
   title?: string
   tenantAdminId?: string | null
+  button?: { label: string; uri: string }   // LINE 訊息下方可選按鈕（如「前往我的 eSIM」）
 }
 
 export async function sendNotification(input: SendNotificationInput): Promise<void> {
@@ -120,7 +136,7 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
   })
 
   // 推送 LINE 訊息（非同步，失敗不影響主流程）
-  sendLineMessage(user.lineUid, content, input.tenantAdminId).catch(() => {})
+  sendLineMessage(user.lineUid, content, input.tenantAdminId, input.button).catch(() => {})
 }
 
 // ─── 常用通知捷徑 ─────────────────────────────────────────────────
@@ -140,11 +156,22 @@ export async function notifyOrderPaid(
 }
 
 export async function notifyEsimReady(userId: string, productName: string, tenantAdminId?: string | null) {
+  // 加「前往我的 eSIM」按鈕：深連結到租戶 LIFF 的訂單列表。
+  // LIFF endpoint 為 /liff/<slug>，故 https://liff.line.me/<liffId>/orders 會開到列表頁。
+  let button: { label: string; uri: string } | undefined
+  if (tenantAdminId) {
+    const admin = await prisma.platformAdmin.findUnique({
+      where: { id: tenantAdminId },
+      select: { liffId: true },
+    })
+    if (admin?.liffId) button = { label: '前往我的 eSIM', uri: `https://liff.line.me/${admin.liffId}/orders` }
+  }
   await sendNotification({
     userId,
     type: NotificationType.ORDER_ESIM_READY,
     data: { productName },
     tenantAdminId,
+    button,
   })
 }
 
