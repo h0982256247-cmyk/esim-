@@ -66,15 +66,15 @@ function CrownIcon({ size = 12 }: { size?: number }) {
 }
 
 export default function ClassicShop({
-  countries, products, coupons, selectedCountry,
+  countries, products, coverageCountries, coupons, selectedCountry,
   colors: C, onSelectCountry, onSelectProduct, onBack,
   filter, cart,
 }: ProductsTemplateProps) {
   // Hooks 一律在任何 early return 之前呼叫（react-hooks/rules-of-hooks）
   const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
-  // 適用國家（匯入 L 欄）：共用解析 + 彈窗
+  // 適用國家（匯入 L 欄）：用整組（未經日篩）的字串，共用解析 + 彈窗
   const [showCoverage, setShowCoverage] = useState(false)
-  const coverageList = useMemo(() => getCoverageList(products), [products])
+  const coverageList = useMemo(() => getCoverageList(coverageCountries), [coverageCountries])
 
   // Country selection screen — 機票/登機證主視覺
   if (!selectedCountry) {

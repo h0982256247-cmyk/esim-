@@ -135,6 +135,12 @@ function ProductsContent() {
     [allProducts, selectedCountry],
   )
 
+  // 適用國家取「整組（未經天數篩選）」的第一個有值者，避免被日篩濾掉而抓不到
+  const coverageCountries = useMemo(
+    () => products.find(p => p.coverageCountries)?.coverageCountries ?? null,
+    [products],
+  )
+
   const availableDays = useMemo(() => {
     const set = new Set<number>()
     products.forEach(p => set.add(p.displayDays))
@@ -221,6 +227,7 @@ function ProductsContent() {
         slug={slug}
         countries={countries}
         products={filteredProducts}
+        coverageCountries={coverageCountries}
         coupons={coupons}
         selectedCountry={selectedCountry}
         showSetup={showSetup}

@@ -69,14 +69,14 @@ function CrownIcon({ size = 14 }: { size?: number }) {
 }
 
 export default function MagazineShop({
-  countries, products, coupons, selectedCountry,
+  countries, products, coverageCountries, coupons, selectedCountry,
   colors: C, onSelectCountry, onSelectProduct, onBack,
   filter, cart,
 }: ProductsTemplateProps) {
   // Hooks 一律在任何 early return 之前呼叫（react-hooks/rules-of-hooks）
   const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
   const [showCoverage, setShowCoverage] = useState(false)
-  const coverageList = useMemo(() => getCoverageList(products), [products])
+  const coverageList = useMemo(() => getCoverageList(coverageCountries), [coverageCountries])
 
   if (!selectedCountry) {
     return (

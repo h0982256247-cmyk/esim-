@@ -59,6 +59,8 @@ export interface ProductsTemplateProps {
   countries: Country[]
   /** Products to render — already filtered by `filter.dayFilter` when active. */
   products: Product[]
+  /** 該目的地「適用國家」原字串（取自未經天數篩選的整組方案，避免被日篩濾掉）。 */
+  coverageCountries: string | null
   coupons: CouponItem[]
   selectedCountry: string | null
   showSetup: boolean

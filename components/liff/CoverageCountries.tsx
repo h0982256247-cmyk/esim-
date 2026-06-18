@@ -3,9 +3,8 @@
 // 「適用國家」共用元件：解析匯入 L 欄字串 + 質感彈窗。ClassicShop / MagazineShop 共用，
 // 各自渲染自己風格的觸發按鈕，彈窗一致（改樣式只改這裡）。
 
-// 同一目的地各方案的適用國家一致，取第一個有值者，依常見分隔符拆成清單。
-export function getCoverageList(products: { coverageCountries?: string | null }[]): string[] {
-  const raw = products.find(p => p.coverageCountries)?.coverageCountries
+// 把「適用國家」原字串依常見分隔符拆成清單。
+export function getCoverageList(raw: string | null | undefined): string[] {
   return raw ? raw.split(/[、,，;；/\n\s]+/).map(s => s.trim()).filter(Boolean) : []
 }
 
