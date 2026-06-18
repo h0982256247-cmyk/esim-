@@ -473,7 +473,7 @@ export default function PlatformProductsPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                {['國家', '天數', '流量', '售價', '成本', '供應商 SKU', '狀態', '操作'].map(h => (
+                {['國家', '天數', '流量', '售價', '成本', '毛利率', '供應商 SKU', '狀態', '操作'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500">{h}</th>
                 ))}
               </tr>
@@ -482,6 +482,7 @@ export default function PlatformProductsPage() {
               {products.map(p => {
                 const flag = affectedIds.get(p.id)
                 const lossy = p.sellPrice <= p.costPrice
+                const marginPct = p.sellPrice > 0 ? Math.round((p.sellPrice - p.costPrice) / p.sellPrice * 100) : 0
                 return (
                 <tr key={p.id} className={`hover:bg-gray-50 ${flag ? 'bg-amber-50/30' : ''}`}>
                   <td className="px-4 py-3">
@@ -508,6 +509,16 @@ export default function PlatformProductsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-400">NT${p.costPrice}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      title={lossy ? '虧損（售價未高於成本）' : marginPct < (guard?.rate ?? 40) ? `低於門檻 ${guard?.rate ?? 40}%` : undefined}
+                      className={`text-xs font-medium ${
+                        lossy ? 'text-red-600' : marginPct < (guard?.rate ?? 40) ? 'text-amber-600' : 'text-gray-600'
+                      }`}
+                    >
+                      {marginPct}%
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-xs text-gray-400 font-mono">{p.supplierProduct?.wmProductId ?? '—'}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[p.status] ?? ''}`}>
