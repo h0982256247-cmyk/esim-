@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
+import { getCoverageList, CoveragePopup } from '@/components/liff/CoverageCountries'
 import DayPicker from '@/components/liff/DayPicker'
 import { annotatePlans, sortByValue, TIER_LABEL, TIER_COLOR } from '@/lib/utils/product-display'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
@@ -20,11 +21,18 @@ const COUNTRY_GRADIENTS = [
   ['#3E7BD6', '#6FA0E4'], ['#D9737E', '#E59AA2'],
 ]
 
-function getGradient(code: string) {
+function gradientPair(code: string) {
   let hash = 0
   for (const ch of code) hash = (hash * 31 + ch.charCodeAt(0)) & 0xffffffff
-  const [a, b] = COUNTRY_GRADIENTS[Math.abs(hash) % COUNTRY_GRADIENTS.length]
+  return COUNTRY_GRADIENTS[Math.abs(hash) % COUNTRY_GRADIENTS.length]
+}
+function getGradient(code: string) {
+  const [a, b] = gradientPair(code)
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`
+}
+// 取目的地漸層的主色，給適用國家彈窗標題列用（與 hero 同色系）
+function getAccentColor(code: string) {
+  return gradientPair(code)[0]
 }
 
 function BackArrow() {
@@ -67,6 +75,8 @@ export default function MagazineShop({
 }: ProductsTemplateProps) {
   // Hooks 一律在任何 early return 之前呼叫（react-hooks/rules-of-hooks）
   const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
+  const [showCoverage, setShowCoverage] = useState(false)
+  const coverageList = useMemo(() => getCoverageList(products), [products])
 
   if (!selectedCountry) {
     return (
@@ -169,20 +179,38 @@ export default function MagazineShop({
         paddingBottom: 40,
         position: 'relative', overflow: 'hidden',
       }}>
-        <button
-          onClick={onBack}
-          style={{
-            background: 'rgba(255,255,255,0.2)', border: 'none',
-            borderRadius: 10, padding: '8px 12px', cursor: 'pointer',
-            color: '#fff', display: 'flex', alignItems: 'center', gap: 4,
-            marginBottom: 24, fontSize: 13, fontWeight: 600,
-            WebkitTapHighlightColor: 'transparent',
-            backdropFilter: 'blur(8px)',
-          }}
-        >
-          <BackArrow />
-          <span>返回</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: 'rgba(255,255,255,0.2)', border: 'none',
+              borderRadius: 10, padding: '8px 12px', cursor: 'pointer',
+              color: '#fff', display: 'flex', alignItems: 'center', gap: 4,
+              fontSize: 13, fontWeight: 600,
+              WebkitTapHighlightColor: 'transparent',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <BackArrow />
+            <span>返回</span>
+          </button>
+          {coverageList.length > 0 && (
+            <button
+              onClick={() => setShowCoverage(true)}
+              style={{
+                background: 'rgba(255,255,255,0.2)', border: 'none',
+                borderRadius: 10, padding: '8px 12px', cursor: 'pointer',
+                color: '#fff', display: 'flex', alignItems: 'center', gap: 5,
+                fontSize: 13, fontWeight: 600,
+                WebkitTapHighlightColor: 'transparent',
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg>
+              <span>適用國家</span>
+            </button>
+          )}
+        </div>
 
         {country && (
           <div style={{ marginBottom: 14, filter: 'drop-shadow(0 4px 14px rgba(0,0,0,0.32))' }}>
@@ -452,6 +480,9 @@ export default function MagazineShop({
           )
         })}
       </div>
+
+      {/* 適用國家彈窗（共用元件）*/}
+      <CoveragePopup open={showCoverage} onClose={() => setShowCoverage(false)} list={coverageList} accentColor={getAccentColor(selectedCountry)} />
     </div>
   )
 }

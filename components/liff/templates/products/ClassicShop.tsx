@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
+import { getCoverageList, CoveragePopup } from '@/components/liff/CoverageCountries'
 import DayPicker from '@/components/liff/DayPicker'
 import { annotatePlans, sortByValue, TIER_COLOR } from '@/lib/utils/product-display'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
@@ -71,12 +72,9 @@ export default function ClassicShop({
 }: ProductsTemplateProps) {
   // Hooks 一律在任何 early return 之前呼叫（react-hooks/rules-of-hooks）
   const displays = useMemo(() => sortByValue(annotatePlans(products)), [products])
-  // 適用國家（匯入 L 欄）：同目的地各方案一致，取第一個有值者，依常見分隔符拆成清單
+  // 適用國家（匯入 L 欄）：共用解析 + 彈窗
   const [showCoverage, setShowCoverage] = useState(false)
-  const coverageList = useMemo(() => {
-    const raw = products.find(p => p.coverageCountries)?.coverageCountries
-    return raw ? raw.split(/[、,，;；/\n\s]+/).map(s => s.trim()).filter(Boolean) : []
-  }, [products])
+  const coverageList = useMemo(() => getCoverageList(products), [products])
 
   // Country selection screen — 機票/登機證主視覺
   if (!selectedCountry) {
@@ -509,40 +507,8 @@ export default function ClassicShop({
         .cs-cart-tap:active { filter: brightness(0.92); }
       `}</style>
 
-      {/* 適用國家彈窗 */}
-      {showCoverage && (
-        <div
-          onClick={() => setShowCoverage(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 90 }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 360, maxHeight: '74vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.3)' }}
-          >
-            {/* 彩色標題列（吃目的地主色）*/}
-            <div style={{ padding: '18px 20px', background: `linear-gradient(135deg, ${countryAccent.accent}, ${countryAccent.accent}cc)`, display: 'flex', alignItems: 'center', gap: 11 }}>
-              <span style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg>
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 17, fontWeight: 900, color: '#fff', margin: 0, letterSpacing: '-0.01em' }}>適用國家</p>
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', margin: '2px 0 0', fontWeight: 600 }}>共 {coverageList.length} 個國家／地區可用</p>
-              </div>
-              <button onClick={() => setShowCoverage(false)} aria-label="關閉" style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.22)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, WebkitTapHighlightColor: 'transparent' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-              </button>
-            </div>
-            {/* 國家 chips */}
-            <div style={{ padding: '16px 18px 20px', overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {coverageList.map((name, i) => (
-                <span key={`${name}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', background: countryAccent.soft, color: countryAccent.accent, borderRadius: 100, padding: '7px 14px', fontSize: 13, fontWeight: 700 }}>
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 適用國家彈窗（共用元件）*/}
+      <CoveragePopup open={showCoverage} onClose={() => setShowCoverage(false)} list={coverageList} accentColor={countryAccent.accent} />
     </div>
   )
 }
