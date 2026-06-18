@@ -6,7 +6,7 @@ export type { TenantConfig }
 export async function getTenantBySlug(slug: string): Promise<TenantConfig | null> {
   const admin = await prisma.platformAdmin.findUnique({
     where: { tenantSlug: slug, isActive: true },
-    select: { id: true, tenantSlug: true, brandName: true, liffId: true, logoUrl: true, primaryColor: true, homeTemplate: true, productsTemplate: true },
+    select: { id: true, tenantSlug: true, brandName: true, liffId: true, logoUrl: true, primaryColor: true, homeTemplate: true, productsTemplate: true, lineOaUrl: true },
   })
 
   if (!admin || !admin.tenantSlug || !admin.brandName || !admin.liffId) return null
@@ -20,6 +20,7 @@ export async function getTenantBySlug(slug: string): Promise<TenantConfig | null
     primaryColor: admin.primaryColor,
     homeTemplate: (admin.homeTemplate as TenantConfig['homeTemplate']) ?? null,
     productsTemplate: (admin.productsTemplate as TenantConfig['productsTemplate']) ?? null,
+    lineOaUrl: admin.lineOaUrl,
   }
 }
 
@@ -29,7 +30,7 @@ export async function getTenantByLiffId(liffId: string): Promise<TenantConfig | 
   if (!liffId) return null
   const admin = await prisma.platformAdmin.findFirst({
     where: { liffId, isActive: true },
-    select: { id: true, tenantSlug: true, brandName: true, liffId: true, logoUrl: true, primaryColor: true, homeTemplate: true, productsTemplate: true },
+    select: { id: true, tenantSlug: true, brandName: true, liffId: true, logoUrl: true, primaryColor: true, homeTemplate: true, productsTemplate: true, lineOaUrl: true },
   })
 
   if (!admin || !admin.tenantSlug || !admin.brandName || !admin.liffId) return null
@@ -43,6 +44,7 @@ export async function getTenantByLiffId(liffId: string): Promise<TenantConfig | 
     primaryColor: admin.primaryColor,
     homeTemplate: (admin.homeTemplate as TenantConfig['homeTemplate']) ?? null,
     productsTemplate: (admin.productsTemplate as TenantConfig['productsTemplate']) ?? null,
+    lineOaUrl: admin.lineOaUrl,
   }
 }
 
@@ -55,7 +57,7 @@ export async function getTenantByDomain(host: string): Promise<TenantConfig | nu
     where: { domain },
     select: {
       admin: {
-        select: { id: true, isActive: true, tenantSlug: true, brandName: true, liffId: true, logoUrl: true, primaryColor: true, homeTemplate: true, productsTemplate: true },
+        select: { id: true, isActive: true, tenantSlug: true, brandName: true, liffId: true, logoUrl: true, primaryColor: true, homeTemplate: true, productsTemplate: true, lineOaUrl: true },
       },
     },
   })
@@ -71,13 +73,14 @@ export async function getTenantByDomain(host: string): Promise<TenantConfig | nu
     primaryColor: admin.primaryColor,
     homeTemplate: (admin.homeTemplate as TenantConfig['homeTemplate']) ?? null,
     productsTemplate: (admin.productsTemplate as TenantConfig['productsTemplate']) ?? null,
+    lineOaUrl: admin.lineOaUrl,
   }
 }
 
 export async function getTenantById(tenantAdminId: string): Promise<TenantConfig | null> {
   const admin = await prisma.platformAdmin.findUnique({
     where: { id: tenantAdminId, isActive: true },
-    select: { id: true, tenantSlug: true, brandName: true, liffId: true, logoUrl: true, primaryColor: true, homeTemplate: true, productsTemplate: true },
+    select: { id: true, tenantSlug: true, brandName: true, liffId: true, logoUrl: true, primaryColor: true, homeTemplate: true, productsTemplate: true, lineOaUrl: true },
   })
 
   if (!admin || !admin.tenantSlug || !admin.brandName || !admin.liffId) return null
@@ -91,5 +94,6 @@ export async function getTenantById(tenantAdminId: string): Promise<TenantConfig
     primaryColor: admin.primaryColor,
     homeTemplate: (admin.homeTemplate as TenantConfig['homeTemplate']) ?? null,
     productsTemplate: (admin.productsTemplate as TenantConfig['productsTemplate']) ?? null,
+    lineOaUrl: admin.lineOaUrl,
   }
 }

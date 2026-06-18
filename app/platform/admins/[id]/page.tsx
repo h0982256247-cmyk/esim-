@@ -19,6 +19,7 @@ type AdminDetail = {
   logoUrl: string | null
   primaryColor: string | null
   lineAccessToken: string | null
+  lineOaUrl: string | null
   _count: { ownedGroups: number }
 }
 
@@ -679,6 +680,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
     logoUrl: admin.logoUrl ?? '',
     primaryColor: admin.primaryColor ?? '#FFC107',
     lineAccessToken: admin.lineAccessToken ?? '',
+    lineOaUrl: admin.lineOaUrl ?? '',
   })
   // Slug 一經設定即鎖死：避免後續變更 URL 後 LINE LIFF endpoint、TapPay
   // result_url、群組分享連結、使用者書籤全部失效。後端也有同條 guard。
@@ -908,6 +910,17 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
                 </div>
                 {testResult && <p className={`text-xs mt-1 ${testResult.ok ? 'text-green-600' : 'text-red-500'}`}>{testResult.text}</p>}
                 <p className="text-xs text-gray-400 mt-1">付款成功 / eSIM 就緒 / 轉贈等通知會用此 token 從你的官方帳號推播。留空則用系統預設（多白牌時請務必填）。Messaging Channel ID / Secret 目前不需填（未接收 webhook）。</p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">客服連結（官方帳號）</label>
+                <input
+                  type="text"
+                  value={form.lineOaUrl}
+                  onChange={e => setForm(p => ({ ...p, lineOaUrl: e.target.value }))}
+                  placeholder="例：https://lin.ee/xxxxxxx"
+                  className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                />
+                <p className="text-xs text-gray-400 mt-1">前台「客服中心」的 LINE 客服按鈕會導向此連結。於 LINE 官方帳號後台「加入好友／分享」取得 lin.ee 連結；留空則前台不顯示客服按鈕。</p>
               </div>
             </div>
           </div>

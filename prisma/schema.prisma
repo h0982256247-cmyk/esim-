@@ -484,6 +484,7 @@ model PlatformAdmin {
   productsTemplate String?           @map("products_template")       // classic | magazine | compact
   lineAccessToken String?        @map("line_access_token")
   liffId       String?           @map("liff_id")              // 該 Platform 的 LINE LIFF App ID
+  lineOaUrl    String?           @map("line_oa_url")          // LINE 官方帳號／客服連結（lin.ee 或 line.me/R/ti/p/@xxx），前台客服按鈕導向用
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
 

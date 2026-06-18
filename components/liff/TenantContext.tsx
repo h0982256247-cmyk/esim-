@@ -14,6 +14,7 @@ export interface TenantConfig {
   primaryColor: string | null
   homeTemplate: HomeTemplate | null
   productsTemplate: ProductsTemplate | null
+  lineOaUrl: string | null   // LINE 官方帳號／客服連結（後台設定；前台客服按鈕導向）
 }
 
 const TenantContext = createContext<TenantConfig | null>(null)

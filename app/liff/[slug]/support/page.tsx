@@ -1,6 +1,6 @@
 'use client'
 
-import { useTenantColors } from '@/components/liff/TenantContext'
+import { useTenantColors, useTenant } from '@/components/liff/TenantContext'
 
 const S = {
   white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
@@ -44,14 +44,16 @@ function ChevronDown() {
 
 export default function SupportPage() {
   const C = useTenantColors()
+  const tenant = useTenant()
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 16px 96px' }}>
       <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: '0 0 20px', letterSpacing: '-0.02em' }}>客服中心</h1>
 
-      {/* LINE 客服 */}
+      {/* LINE 客服（導向後台設定的官方帳號連結；未設定則不顯示此卡）*/}
+      {tenant?.lineOaUrl && (
       <a
-        href="https://lin.ee/placeholder"
+        href={tenant.lineOaUrl}
         target="_blank"
         rel="noopener noreferrer"
         style={{
@@ -79,6 +81,7 @@ export default function SupportPage() {
           <polyline points="9 18 15 12 9 6" />
         </svg>
       </a>
+      )}
 
       {/* FAQ */}
       <div style={{ background: S.white, borderRadius: 16, border: `1px solid ${S.line}`, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
