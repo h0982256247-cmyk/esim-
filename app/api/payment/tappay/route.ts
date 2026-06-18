@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
   let amount: number
   let isBundle = false
   let bundleOrderIds: string[] = []
+  let paidItems: { productName: string; qty: number }[] = []   // 付款成功通知用：列出實際方案
 
   if (bundleId) {
     const orders = await getBundleOrders(bundleId, session.userId)
@@ -108,6 +109,7 @@ export async function POST(req: NextRequest) {
     amount = orders.reduce((s, o) => s + o.totalPaid, 0)
     isBundle = true
     bundleOrderIds = orders.map(o => o.id)
+    paidItems = orders.flatMap(o => o.orderItems.map(it => ({ productName: it.productName, qty: it.qty })))
   } else {
     const order = await getOrderByIdForUser(orderId!, session.userId)
     if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
       productName: order.orderItems[0]?.productName ?? 'eSIM',
     }
     amount = order.totalPaid
+    paidItems = order.orderItems.map(it => ({ productName: it.productName, qty: it.qty }))
   }
 
   const user = await getUserById(session.userId)
@@ -261,7 +264,7 @@ export async function POST(req: NextRequest) {
       try { await calculateAndSaveCommission(o.id) } catch (e) { console.error('[tappay] commission failed', o.id, e) }
       try { await issueRepurchaseCouponForOrder(o.id) } catch (e) { console.error('[tappay] repurchase coupon failed', o.id, e) }
     }
-    fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, detailsLabel, amount, user.tenantAdminId))
+    fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, paidItems, amount, user.tenantAdminId))
     return NextResponse.json({ ok: true, bundleId, orderIds: orders.map(o => o.id) })
   }
 
@@ -270,7 +273,7 @@ export async function POST(req: NextRequest) {
   // 分潤/回購券要 await：fire-and-forget 在回應後會被 Vercel 中斷而漏跑（偶發沒發回購券）。兩者皆冪等。
   try { await calculateAndSaveCommission(anchor.id) } catch (e) { console.error('[tappay] commission failed', anchor.id, e) }
   try { await issueRepurchaseCouponForOrder(anchor.id) } catch (e) { console.error('[tappay] repurchase coupon failed', anchor.id, e) }
-  fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, detailsLabel, amount, user.tenantAdminId))
+  fireAndLog('notifyOrderPaid', session.userId, notifyOrderPaid(session.userId, paidItems, amount, user.tenantAdminId))
 
   return NextResponse.json({ ok: true, orderId: anchor.id })
 }

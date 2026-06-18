@@ -32,6 +32,29 @@ async function sendLineMessage(lineUid: string, text: string, tenantAdminId?: st
   })
 }
 
+// 付款成功訊息的「訂單內容」區塊：同方案合併計量。
+//   單一方案 → 內嵌一行「訂單：日本 5天 總量3GB（2 張）」
+//   多方案   → 條列，header 帶總張數，避免擠成一團：
+//     訂單內容（共 2 張）
+//     ・日本 5天 總量3GB ×1
+//     ・日本 5天 總量5GB ×1
+export function formatPaidItemsBlock(items: { productName: string; qty: number }[]): string {
+  const map = new Map<string, number>()
+  for (const it of items) {
+    const name = (it.productName || 'eSIM').trim()
+    map.set(name, (map.get(name) ?? 0) + (it.qty || 1))
+  }
+  const entries = [...map.entries()]
+  if (entries.length === 0) return '訂單：eSIM'
+  if (entries.length === 1) {
+    const [name, qty] = entries[0]
+    return `訂單：${name}（${qty} 張）`
+  }
+  const totalQty = entries.reduce((s, [, q]) => s + q, 0)
+  const lines = entries.map(([name, qty]) => `・${name} ×${qty}`).join('\n')
+  return `訂單內容（共 ${totalQty} 張）\n${lines}`
+}
+
 // ─── 通知訊息模板 ─────────────────────────────────────────────────
 
 function buildMessage(type: NotificationType, data: Record<string, string>): string {
@@ -40,7 +63,7 @@ function buildMessage(type: NotificationType, data: Record<string, string>): str
       return `🎫 你收到一張新優惠券！\n折扣：${data.discount}\n類型：${data.typeName}\n立即開啟 App 查看`
 
     case NotificationType.ORDER_PAID:
-      return `✅ 付款成功！\n訂單：${data.productName}\n金額：NT$${data.amount}\n正在為你準備 eSIM 啟動碼…`
+      return `✅ 付款成功！\n${data.itemsBlock}\n金額：NT$${data.amount}\n正在為你準備 eSIM 啟動碼…`
 
     case NotificationType.ORDER_ESIM_READY:
       return `📱 eSIM 啟動碼已就緒！\n${data.productName}\n請開啟 App 查看啟動碼並安裝 eSIM。`
@@ -102,11 +125,16 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
 
 // ─── 常用通知捷徑 ─────────────────────────────────────────────────
 
-export async function notifyOrderPaid(userId: string, productName: string, amount: number, tenantAdminId?: string | null) {
+export async function notifyOrderPaid(
+  userId: string,
+  items: { productName: string; qty: number }[],
+  amount: number,
+  tenantAdminId?: string | null,
+) {
   await sendNotification({
     userId,
     type: NotificationType.ORDER_PAID,
-    data: { productName, amount: String(amount) },
+    data: { itemsBlock: formatPaidItemsBlock(items), amount: String(amount) },
     tenantAdminId,
   })
 }

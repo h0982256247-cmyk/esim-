@@ -13,7 +13,6 @@ import { triggerEsimActivation } from '@/lib/services/esim'
 import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
 import { notifyOrderPaid } from '@/lib/services/notification'
-import { fireAndLog } from '@/lib/utils/fire-and-log'
 import { recordAlert } from '@/lib/services/alert'
 import { tapPayRefund, tapPayQueryTrade } from '@/lib/services/tappay'
 import { mapTapPayFailureReason } from '@/lib/services/tappay-failure-reason'
@@ -142,7 +141,6 @@ export async function POST(req: NextRequest) {
   // 記憶卡號：card_secret 只在 pay-by-prime「第一段回應」出現、backend_notify 不帶，
   // 故存卡已移到扣款路由 /api/payment/tappay（拿到 charge 回應時）。此處不再處理。
 
-  const productName = order.orderItems[0]?.productName ?? 'eSIM'
   for (const oid of paidOrderIds) {
     // 開卡必須在 webhook 回 200「之前」await 完成：Vercel serverless 在回應後會凍結/
     // 終止函式，未 await 的背景工作（fire-and-forget）可能根本沒跑完。X6S4GW 即如此
@@ -163,18 +161,20 @@ export async function POST(req: NextRequest) {
   }
 
   if (bundleId && paidOrderIds.length > 1) {
-    const totalAggregate = await prisma.order.aggregate({
-      where: { bundleId },
-      _sum: { totalPaid: true },
-    })
+    // 整捆：列出整組所有方案 + 加總金額
+    const [totalAggregate, bundleItems] = await Promise.all([
+      prisma.order.aggregate({ where: { bundleId }, _sum: { totalPaid: true } }),
+      prisma.orderItem.findMany({ where: { order: { bundleId } }, select: { productName: true, qty: true } }),
+    ])
     notifyOrderPaid(
       order.userId,
-      `eSIM 組合 (${paidOrderIds.length} 張)`,
+      bundleItems,
       totalAggregate._sum.totalPaid ?? order.totalPaid,
       tenantAdminId,
     ).catch(() => {})
   } else {
-    notifyOrderPaid(order.userId, productName, order.totalPaid, tenantAdminId).catch(() => {})
+    const items = order.orderItems.map(it => ({ productName: it.productName, qty: it.qty }))
+    notifyOrderPaid(order.userId, items, order.totalPaid, tenantAdminId).catch(() => {})
   }
 
   return NextResponse.json({ message: 'ok' })
