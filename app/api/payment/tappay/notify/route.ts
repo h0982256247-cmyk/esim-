@@ -14,6 +14,7 @@ import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
 import { notifyOrderPaid } from '@/lib/services/notification'
 import { recordAlert } from '@/lib/services/alert'
+import { fireAndLog } from '@/lib/utils/fire-and-log'
 import { tapPayRefund, tapPayQueryTrade } from '@/lib/services/tappay'
 import { mapTapPayFailureReason } from '@/lib/services/tappay-failure-reason'
 import { OrderStatus } from '@prisma/client'
@@ -166,15 +167,15 @@ export async function POST(req: NextRequest) {
       prisma.order.aggregate({ where: { bundleId }, _sum: { totalPaid: true } }),
       prisma.orderItem.findMany({ where: { order: { bundleId } }, select: { productName: true, qty: true } }),
     ])
-    notifyOrderPaid(
+    fireAndLog('notify_order_paid_failed', order.id, notifyOrderPaid(
       order.userId,
       bundleItems,
       totalAggregate._sum.totalPaid ?? order.totalPaid,
       tenantAdminId,
-    ).catch(() => {})
+    ))
   } else {
     const items = order.orderItems.map(it => ({ productName: it.productName, qty: it.qty }))
-    notifyOrderPaid(order.userId, items, order.totalPaid, tenantAdminId).catch(() => {})
+    fireAndLog('notify_order_paid_failed', order.id, notifyOrderPaid(order.userId, items, order.totalPaid, tenantAdminId))
   }
 
   return NextResponse.json({ message: 'ok' })
