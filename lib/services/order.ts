@@ -585,6 +585,13 @@ export function getOrderForOwner<S extends Prisma.OrderSelect>(
   }) as Promise<Prisma.OrderGetPayload<{ select: S }> | null>
 }
 
+// platform 後台對 Order 的租戶過濾片段（fail-closed）：白牌 admin（tenantAdminId 有值）
+// 只能看自己租戶的訂單（透過 user relation）；SUPER_ADMIN（tenantAdminId=null）回空條件、看全部。
+// 對應 LIFF 端 getOrderForOwner；platform 查詢多樣（findFirst/findMany/count），故只抽 where 片段。
+export function orderTenantWhere(tenantAdminId: string | null): Prisma.OrderWhereInput {
+  return tenantAdminId ? { user: { tenantAdminId } } : {}
+}
+
 export async function getOrderByIdForUser(orderId: string, userId: string) {
   // 用 currentOwnerId 查詢：原買家轉贈出去後就不再能存取此訂單細節（QR/兌換碼）
   return prisma.order.findFirst({

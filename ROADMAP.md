@@ -53,7 +53,7 @@
 
 ---
 
-## P2 — 租戶隔離：漸進式強化（不要一次重寫）
+## P2 — 租戶隔離：漸進式強化（不要一次重寫） 🟡 Order 已收斂
 
 **現況**：無 DB RLS，靠每個 query 手動帶 `tenantAdminId`。memory 記載 `getProductById` 曾漏致跨白牌下單（已修）——
 代表「靠工程師記得加 where」確實出過事。
@@ -65,6 +65,12 @@
 
 **風險**：中（動到資料存取層）。每遷一處都要 `tsc` + 對應流程驗證。
 **驗收**：高風險表的單筆查詢都經過 helper；P1 的跨租戶測試持續綠燈。
+
+**進度（2026-06）**：
+- ✅ **Order**：LIFF 端 `getOrderForOwner`（fail-closed，owner 進 where；redeem/usage 已遷移）＋ platform 端
+  `orderTenantWhere`（收斂 4 處後台查詢）。補 `getProductById` / `getOrderForOwner` / `orderTenantWhere` 回歸測試。
+  順帶修掉 usage 用 `userId` 致「接收者查不到轉贈訂單流量」的既有 bug。
+- ⏳ **Coupon / Commission**：尚未收斂，沿用各自既有 tenant 過濾，待後續切片。
 
 ---
 

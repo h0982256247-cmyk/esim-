@@ -6,6 +6,7 @@ import { retryEsimActivation } from '@/lib/services/esim'
 import { cancelCommission } from '@/lib/services/commission'
 import { restoreCouponsForRefundedOrders } from '@/lib/services/coupon'
 import { tapPayRefund } from '@/lib/services/tappay'
+import { orderTenantWhere } from '@/lib/services/order'
 import { OrderStatus } from '@prisma/client'
 
 // 退款可生效的狀態（已實際扣款者）
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params
   // 租戶隔離：非 SUPER_ADMIN（tenantAdminId 為 null 才是平台級）只能存取自己租戶的訂單，
   // 否則可用訂單 id 直接讀其他租戶客戶的 PII。
-  const tenantWhere = auth.tenantAdminId ? { user: { tenantAdminId: auth.tenantAdminId } } : {}
+  const tenantWhere = orderTenantWhere(auth.tenantAdminId)
   const order = await prisma.order.findFirst({
     where: { id, ...tenantWhere },
     include: {
@@ -103,7 +104,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { action } = await req.json()
 
   // 租戶隔離：非 SUPER_ADMIN 只能操作自己租戶的訂單（補發 / 退款都會動到金流與供應商）。
-  const tenantWhere = auth.tenantAdminId ? { user: { tenantAdminId: auth.tenantAdminId } } : {}
+  const tenantWhere = orderTenantWhere(auth.tenantAdminId)
 
   if (action === 'retry_esim') {
     const order = await prisma.order.findFirst({ where: { id, ...tenantWhere }, select: { status: true } })

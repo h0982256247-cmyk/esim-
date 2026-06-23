@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
 import { Prisma, OrderStatus } from '@prisma/client'
+import { orderTenantWhere } from '@/lib/services/order'
 
 // GET /api/platform/orders?page=1&status=PENDING（待付款涵蓋 PENDING+PROCESSING）
 export async function GET(req: NextRequest) {
@@ -15,9 +16,7 @@ export async function GET(req: NextRequest) {
   const tenantAdminId = auth.role === 'SUPER_ADMIN'
     ? (req.nextUrl.searchParams.get('tenantAdminId') || null)
     : auth.tenantAdminId
-  const tenantWhere: Prisma.OrderWhereInput = tenantAdminId ? {
-    user: { tenantAdminId },
-  } : {}
+  const tenantWhere = orderTenantWhere(tenantAdminId)
 
   // 待付款 filter（status=PENDING）需同時涵蓋 PENDING（建立中）與 PROCESSING
   // （金流進行中／已送出尚未收到 backend notify）——兩者前台皆顯示「待付款」。

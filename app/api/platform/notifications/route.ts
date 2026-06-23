@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
 import { prisma } from '@/lib/db/prisma'
 import { GroupStatus, OrderStatus, WithdrawalStatus } from '@prisma/client'
+import { orderTenantWhere } from '@/lib/services/order'
 
 // GET /api/platform/notifications — 頂欄通知鈴：待辦/待處理佇列的計數（唯讀、tenant-scoped）
 // SUPER_ADMIN 看全平台；其餘角色一律鎖自己租戶。皆為輕量 count，不動既有計算邏輯。
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const [pendingGroups, paidOrders, pendingWithdrawals] = await Promise.all([
     prisma.group.count({ where: { status: GroupStatus.PENDING, ...(tid ? { tenantAdminId: tid } : {}) } }),
-    prisma.order.count({ where: { status: OrderStatus.PAID, ...(tid ? { user: { tenantAdminId: tid } } : {}) } }),
+    prisma.order.count({ where: { status: OrderStatus.PAID, ...orderTenantWhere(tid) } }),
     prisma.withdrawal.count({ where: { status: WithdrawalStatus.PENDING, ...(tid ? { group: { tenantAdminId: tid } } : {}) } }),
   ])
 

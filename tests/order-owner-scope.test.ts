@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // 轉贈後以現任擁有者（currentOwnerId）為準，而非原買家 userId。
 vi.mock('@/lib/db/prisma', () => ({ prisma: { order: { findFirst: vi.fn() } } }))
 
-import { getOrderForOwner } from '@/lib/services/order'
+import { getOrderForOwner, orderTenantWhere } from '@/lib/services/order'
 import { prisma } from '@/lib/db/prisma'
 
 const whereOf = () =>
@@ -32,5 +32,15 @@ describe('getOrderForOwner — fail-closed owner scope', () => {
     vi.mocked(prisma.order.findFirst).mockResolvedValue(null as never)
     const r = await getOrderForOwner('ord_x', 'not_owner', { id: true })
     expect(r).toBeNull()
+  })
+})
+
+describe('orderTenantWhere — platform 後台租戶過濾片段', () => {
+  it('白牌 admin（tenantAdminId 有值）→ 限自己租戶（透過 user relation）', () => {
+    expect(orderTenantWhere('tenant-A')).toEqual({ user: { tenantAdminId: 'tenant-A' } })
+  })
+
+  it('SUPER_ADMIN（tenantAdminId=null）→ 空條件（看全部）', () => {
+    expect(orderTenantWhere(null)).toEqual({})
   })
 })
