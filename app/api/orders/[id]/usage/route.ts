@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireLiffAuth } from '@/lib/auth/liff'
-import { prisma } from '@/lib/db/prisma'
 import { queryEsimUsage } from '@/lib/services/esim'
+import { getOrderForOwner } from '@/lib/services/order'
 
 // GET /api/orders/:id/usage — 查詢 eSIM 剩餘流量（即時向世界移動查詢）
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -10,13 +10,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params
 
-  const order = await prisma.order.findFirst({
-    where: { id, userId: auth.userId },
-    select: {
-      esimIccid: true,
-      status: true,
-      user: { select: { tenantAdminId: true } },
-    },
+  // fail-closed + 統一 currentOwnerId（與 redeem 一致）：轉贈後由現任擁有者查流量。
+  const order = await getOrderForOwner(id, auth.userId, {
+    esimIccid: true,
+    status: true,
+    user: { select: { tenantAdminId: true } },
   })
 
   if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })

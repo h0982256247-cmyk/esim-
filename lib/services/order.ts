@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db/prisma'
-import { OrderStatus, PaymentMethod } from '@prisma/client'
+import { OrderStatus, PaymentMethod, Prisma } from '@prisma/client'
 import { validateCouponOwnership, validateCouponCombination, calculateFinalPrice } from './coupon'
 import { getProductById } from './product'
 
@@ -571,14 +571,18 @@ export async function getUserOrders(userId: string) {
   return orders.map(o => ({ ...o, transferredAway: o.currentOwnerId !== userId }))
 }
 
-export async function getOrderById(orderId: string) {
-  return prisma.order.findUnique({
-    where: { id: orderId },
-    include: {
-      orderItems: true,
-      orderCoupons: { include: { coupon: { select: { type: true, discount: true } } } },
-    },
-  })
+// LIFF 使用者存取「自己的」訂單的單一入口（fail-closed）：owner 條件進 where，
+// 漏帶或非擁有者一律查不到（回 null → route 統一 404，不洩漏訂單存在性）。
+// 轉贈後以 currentOwnerId 為準（原買家轉出後即不可再存取）；select 由呼叫端決定。
+export function getOrderForOwner<S extends Prisma.OrderSelect>(
+  orderId: string,
+  userId: string,
+  select: S,
+): Promise<Prisma.OrderGetPayload<{ select: S }> | null> {
+  return prisma.order.findFirst({
+    where: { id: orderId, currentOwnerId: userId },
+    select,
+  }) as Promise<Prisma.OrderGetPayload<{ select: S }> | null>
 }
 
 export async function getOrderByIdForUser(orderId: string, userId: string) {
