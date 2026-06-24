@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   const order = await prisma.order.findFirst({
     where: { wmOrderId: body.orderId },
-    select: { id: true, esimRcode: true },
+    select: { id: true, esimRcode: true, status: true },
   })
   if (!order) {
     console.warn('[wm-esim-ordered/2.2] order not found for wmOrderId', body.orderId)
@@ -44,6 +44,12 @@ export async function POST(req: NextRequest) {
 
   // 冪等：已收到過 callback（esimRcode 非空）就不再覆寫
   if (order.esimRcode) {
+    return new NextResponse('1', { status: 200 })
+  }
+
+  // 退款/取消守門：已 REFUNDED/CANCELLED 的訂單不可被晚到的 callback 復活成 COMPLETED
+  // （否則造成「退款後發卡」）。回 "1" 讓 WM 不再 retry，但不覆蓋狀態、不寫兌換碼。
+  if (order.status === OrderStatus.REFUNDED || order.status === OrderStatus.CANCELLED) {
     return new NextResponse('1', { status: 200 })
   }
 

@@ -215,6 +215,8 @@ export async function triggerEsimRedemption(orderId: string): Promise<{ ok: bool
     },
   })
   if (!order)                  return { ok: false, reason: '訂單不存在' }
+  if (order.status === OrderStatus.REFUNDED || order.status === OrderStatus.CANCELLED)
+                               return { ok: false, reason: '訂單已退款或取消，無法兌換' }
   if (!order.esimRcode)        return { ok: false, reason: '兌換碼尚未產生，請稍後再試' }
   if (order.activatedAt)       return { ok: false, reason: '此 eSIM 已激活' }
   if (order.esimQrcode)        return { ok: true }   // QR 已存在 → 幂等

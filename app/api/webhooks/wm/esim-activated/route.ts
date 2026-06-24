@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
+import { OrderStatus } from '@prisma/client'
 
 // POST /api/webhooks/wm/esim-activated
 // 世界移動「2.7 eSIM 激活通知」callback。設定方式：到 WM 後台 → 設定 → callback URL。
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
   const order = await prisma.order.findFirst({
     where: { wmOrderId: body.orderId, esimRcode: body.rcode },
     select: {
-      id: true, userId: true, currentOwnerId: true, activatedAt: true,
+      id: true, userId: true, currentOwnerId: true, activatedAt: true, status: true,
       gift: { select: { id: true, claimedAt: true, cancelledAt: true } },
     },
   })
@@ -44,6 +45,11 @@ export async function POST(req: NextRequest) {
 
   // 冪等：已激活過就不再更新（保留首次時間戳）
   if (order.activatedAt) {
+    return new NextResponse('1', { status: 200 })
+  }
+
+  // 退款/取消守門：已 REFUNDED/CANCELLED 不在訂單上寫激活時間/動 gift（退款後仍處理）。
+  if (order.status === OrderStatus.REFUNDED || order.status === OrderStatus.CANCELLED) {
     return new NextResponse('1', { status: 200 })
   }
 

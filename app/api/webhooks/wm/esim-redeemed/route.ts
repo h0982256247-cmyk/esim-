@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { notifyEsimReady } from '@/lib/services/notification'
+import { OrderStatus } from '@prisma/client'
 
 // POST /api/webhooks/wm/esim-redeemed
 // 世界移動「3.2 兌換兌換碼 callback」
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
   const order = await prisma.order.findFirst({
     where: { esimRcode: body.rcode as string },
     select: {
-      id: true, userId: true, esimQrcode: true,
+      id: true, userId: true, esimQrcode: true, status: true,
       orderItems: { select: { productName: true } },
       user: {
         select: {
@@ -51,6 +52,11 @@ export async function POST(req: NextRequest) {
 
   // 冪等：已寫過 QR 就不再覆寫
   if (order.esimQrcode) {
+    return new NextResponse('1', { status: 200 })
+  }
+
+  // 退款/取消守門：已 REFUNDED/CANCELLED 不可再寫 QR、推「可安裝」通知（退款後發卡）。
+  if (order.status === OrderStatus.REFUNDED || order.status === OrderStatus.CANCELLED) {
     return new NextResponse('1', { status: 200 })
   }
 
