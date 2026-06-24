@@ -57,6 +57,32 @@ export async function promoteUserToOwner(input: PromoteUserToOwnerInput) {
   })
   if (!owner) throw new Error('會員不存在')
 
+  // 升級前先離開原社群（若仍是別人社群的有效成員）：標記離開 + 作廢該社群發出、尚未
+  // 使用的券（比照 leaveGroup）。否則新社群主會同時持有別社群入群券，身份與分潤歸屬
+  // （券的 sourceGroupId 決定）皆錯亂。
+  const membership = await prisma.groupMember.findUnique({
+    where: { userId: input.userId },
+    select: { groupId: true, leftAt: true },
+  })
+  if (membership && !membership.leftAt) {
+    const now = new Date()
+    await prisma.$transaction(async tx => {
+      await tx.groupMember.update({
+        where: { userId: input.userId },
+        data: { leftAt: now },
+      })
+      await tx.coupon.updateMany({
+        where: {
+          ownerId: input.userId,
+          sourceGroupId: membership.groupId,
+          usedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        data: { expiresAt: now },
+      })
+    })
+  }
+
   const group = await prisma.group.create({
     data: {
       ownerId: input.userId,
