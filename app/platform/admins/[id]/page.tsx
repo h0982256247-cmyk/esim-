@@ -541,7 +541,7 @@ function SharedTapPayCard({
 
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
-              {saving ? '儲存中…' : '儲存並同步所有金流'}
+              {saving ? '儲存中…' : '儲存（套用此白牌信用卡＋LINE Pay）'}
             </button>
             <button type="button" onClick={() => setExpanded(false)} className="bg-gray-100 text-gray-600 px-4 py-2.5 rounded-xl text-sm">取消</button>
           </div>
