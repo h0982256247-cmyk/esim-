@@ -90,17 +90,27 @@ export async function upsertPaymentConfig(
     where: { adminId_gateway: { adminId, gateway: input.gateway } },
   })
   if (existing) {
-    return prisma.tenantPaymentConfig.update({
-      where: { adminId_gateway: { adminId, gateway: input.gateway } },
-      data: {
-        partnerKey: encryptedPartnerKey,
-        merchantId: input.merchantId,
-        env: input.env,
-        appId: input.appId,
-        appKey: encryptedAppKey,
-        // 不在此強制 isActive=true：前台顯示與否由獨立的啟用開關控制，
-        // 重存金鑰/Merchant ID 不應意外把被關閉的支付方式重新打開。
-      },
+    // 換信用卡商戶（merchant ID 變更）：舊 merchant 綁的記憶卡（card token）在新 merchant
+    // 無法代扣，一次清除該租戶所有綁卡，使用者下次付款會重新綁定。僅信用卡 gateway
+    // 觸發；LINE Pay 無記憶卡。清卡與更新設定包成同一 transaction，避免只成一半。
+    const merchantChanged =
+      input.gateway === 'tappay_credit' && existing.merchantId !== input.merchantId
+    return prisma.$transaction(async tx => {
+      if (merchantChanged) {
+        await tx.savedCard.deleteMany({ where: { user: { tenantAdminId: adminId } } })
+      }
+      return tx.tenantPaymentConfig.update({
+        where: { adminId_gateway: { adminId, gateway: input.gateway } },
+        data: {
+          partnerKey: encryptedPartnerKey,
+          merchantId: input.merchantId,
+          env: input.env,
+          appId: input.appId,
+          appKey: encryptedAppKey,
+          // 不在此強制 isActive=true：前台顯示與否由獨立的啟用開關控制，
+          // 重存金鑰/Merchant ID 不應意外把被關閉的支付方式重新打開。
+        },
+      })
     })
   }
   return prisma.tenantPaymentConfig.create({
