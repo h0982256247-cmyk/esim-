@@ -458,7 +458,7 @@ export async function getAllGroups(status?: GroupStatus, tenantAdminId?: string 
     include: {
       owner: { select: { displayName: true, lineUid: true } },
       tenantAdmin: { select: { name: true, brandName: true } },
-      _count: { select: { members: true } },
+      _count: { select: { members: { where: { leftAt: null } } } },
     },
   })
 }
