@@ -436,6 +436,14 @@ function SharedTapPayCard({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    // 換 Partner Key（輸入了非遮罩的新值）等同換 TapPay 帳號，後端會清空此平台所有會員
+    // 已綁定的信用卡 → 儲存前先確認，避免誤觸。沿用現有（遮罩 ****）或首次設定不提醒。
+    if (anyConfig && form.partnerKey && !form.partnerKey.startsWith('****')) {
+      const ok = window.confirm(
+        '更換 Partner Key 會清空此平台所有會員已綁定的信用卡，使用者下次付款需重新綁卡。\n\n確定要更換嗎？',
+      )
+      if (!ok) return
+    }
     setSaving(true)
     setMsg(null)
     // 同步更新所有 gateway（保留各自 merchantId）

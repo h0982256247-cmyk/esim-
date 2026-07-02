@@ -90,13 +90,14 @@ export async function upsertPaymentConfig(
     where: { adminId_gateway: { adminId, gateway: input.gateway } },
   })
   if (existing) {
-    // 換信用卡商戶（merchant ID 變更）：舊 merchant 綁的記憶卡（card token）在新 merchant
-    // 無法代扣，一次清除該租戶所有綁卡，使用者下次付款會重新綁定。僅信用卡 gateway
-    // 觸發；LINE Pay 無記憶卡。清卡與更新設定包成同一 transaction，避免只成一半。
-    const merchantChanged =
-      input.gateway === 'tappay_credit' && existing.merchantId !== input.merchantId
+    // 換 Partner Key（等同換 TapPay 帳號）：舊 partner 綁的記憶卡（card token）在新 partner
+    // 無法代扣，一次清除該租戶所有綁卡，使用者下次付款會重新綁定。僅信用卡 gateway 觸發
+    // （LINE Pay 無記憶卡）。partner key 以「遮罩沿用現有」傳入時，解密後相等 → 不誤清。
+    // 清卡與更新設定包成同一 transaction，避免只成一半。
+    const partnerKeyChanged =
+      input.gateway === 'tappay_credit' && safeDecrypt(existing.partnerKey) !== input.partnerKey
     return prisma.$transaction(async tx => {
-      if (merchantChanged) {
+      if (partnerKeyChanged) {
         await tx.savedCard.deleteMany({ where: { user: { tenantAdminId: adminId } } })
       }
       return tx.tenantPaymentConfig.update({
