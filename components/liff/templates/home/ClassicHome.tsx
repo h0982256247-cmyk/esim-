@@ -8,11 +8,12 @@ import { CountryFlag } from '@/components/common/CountryFlag'
 import type { HomePageProps } from './types'
 
 const QUICK_ACTIONS = [
-  // 收斂為一致色階（柔和 -200 底 + -700 圖示/字），四色協調、乾淨不雜亂
-  { key: 'orders',  label: '我的 eSIM', Icon: IconMyEsim,   bg: '#DDD6FE', color: '#6D28D9' },
-  { key: 'guide',   label: '安裝教學',  Icon: IconGuide,    bg: '#A7F3D0', color: '#047857' },
-  { key: 'data',    label: '流量指南',  Icon: IconDataPlan, bg: '#FDE68A', color: '#B45309' },
-  { key: 'devices', label: '支援裝置',  Icon: IconDevices,  bg: '#BFDBFE', color: '#1D4ED8' },
+  // 統一白底框格 + 灰色圖示底；圖示用品牌主色的不同深淺（iconShade = 疊在 C.primary 後的
+  // alpha 後綴，100%→70%）做出一點層次區分，整體仍乾淨一致。主色動態帶入、不寫死品牌色。
+  { key: 'orders',  label: '我的 eSIM', Icon: IconMyEsim,   iconShade: '' },
+  { key: 'guide',   label: '安裝教學',  Icon: IconGuide,    iconShade: 'E6' },
+  { key: 'data',    label: '流量指南',  Icon: IconDataPlan, iconShade: 'CC' },
+  { key: 'devices', label: '支援裝置',  Icon: IconDevices,  iconShade: 'B3' },
 ]
 
 const DAY_OPTIONS  = ['3天','5天','7天','10天','15天']
@@ -229,26 +230,24 @@ export default function ClassicHome({
       <div style={{ padding: '22px 20px 0' }}>
         <p style={{ fontSize: 19, fontWeight: 900, color: '#1a1a1a', margin: '0 0 14px', letterSpacing: '-0.025em' }}>快速功能</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-          {QUICK_ACTIONS.map(({ key, label, Icon, bg, color }, i) => (
+          {QUICK_ACTIONS.map(({ key, label, Icon, iconShade }, i) => (
             <button key={key} onClick={() => onNavigate(key)}
               style={{
-                background: bg, borderRadius: 22,
-                border: '2px solid rgba(0,0,0,0.07)',
-                padding: '16px 4px 14px', display: 'flex', flexDirection: 'column',
-                alignItems: 'center', gap: 9, cursor: 'pointer',
+                background: '#fff', borderRadius: 22,
+                border: '1px solid #ECEEF3',
+                padding: '17px 4px 14px', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 10, cursor: 'pointer',
                 animation: `fadeUp 0.4s ${i * 0.05}s ease both`,
-                boxShadow: '0 6px 16px rgba(0,0,0,0.07)',
+                boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 5px 14px rgba(16,24,40,0.05)',
               }}>
               <div style={{
-                width: 46, height: 46, borderRadius: 15,
-                background: 'rgba(255,255,255,0.65)',
-                border: '1.5px solid rgba(255,255,255,0.9)',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                width: 46, height: 46, borderRadius: 16,
+                background: '#F1F3F6',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <Icon color={color} size={23} />
+                <Icon color={`${C.primary}${iconShade}`} size={23} />
               </div>
-              <span style={{ fontSize: 11, color, fontWeight: 800, textAlign: 'center', lineHeight: 1.3 }}>{label}</span>
+              <span style={{ fontSize: 11.5, color: '#475467', fontWeight: 700, textAlign: 'center', lineHeight: 1.3 }}>{label}</span>
             </button>
           ))}
         </div>
