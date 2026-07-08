@@ -34,6 +34,19 @@ function getAccent(code: string) {
   return DEST_PALETTE[Math.abs(h) % DEST_PALETTE.length]
 }
 
+const pexels = (id: number) => `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=800`
+
+// 熱門目的地實景圖（Pexels，免費可商用）。key = 國家代碼；同時對應 2 碼/3 碼與自訂 region
+// （新馬 NMY/SGMA → 新加坡圖）。沒對到的國家退回目的地色漸層，不會破圖。
+const DEST_IMAGES: Record<string, string> = {
+  JP: pexels(4336279),  JPN: pexels(4336279),
+  KR: pexels(380707),   KOR: pexels(380707),
+  US: pexels(20847307), USA: pexels(20847307),
+  PH: pexels(13874296), PHL: pexels(13874296),
+  HK: pexels(5607794),  HKG: pexels(5607794),
+  SG: pexels(777059),   SGP: pexels(777059), MY: pexels(777059), MYS: pexels(777059), NMY: pexels(777059), SGMA: pexels(777059),
+}
+
 export default function ClassicHome({
   tenant, countries, colors: C, onSelectCountry, onNavigate, onSearch,
 }: HomePageProps) {
@@ -192,7 +205,7 @@ export default function ClassicHome({
         <div style={{
           borderRadius: 28, padding: '28px 22px',
           position: 'relative', overflow: 'hidden', minHeight: 180,
-          backgroundImage: 'url(https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=800&q=80)',
+          backgroundImage: 'url(https://images.pexels.com/photos/3042418/pexels-photo-3042418.jpeg?auto=compress&cs=tinysrgb&w=1000)',
           backgroundSize: 'cover', backgroundPosition: 'center 40%',
           boxShadow: `0 14px 30px ${C.primary}30`,
           border: `2px solid ${C.primary}2e`,
@@ -282,70 +295,73 @@ export default function ClassicHome({
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {hot.map((c, i) => {
-              const { accent, soft } = getAccent(c.countryCode)
+              const { accent } = getAccent(c.countryCode)
+              const img = DEST_IMAGES[c.countryCode]
               const isHot = i < 2
               return (
                 <button key={c.countryCode} onClick={() => onSelectCountry(c.countryCode)}
                   className="ch-dest-card"
                   style={{
-                    background: '#fff', borderRadius: 20,
-                    border: '1px solid rgba(15,23,42,0.06)',
-                    cursor: 'pointer',
-                    padding: 0, textAlign: 'left', minHeight: 168,
-                    display: 'flex', flexDirection: 'column',
-                    position: 'relative', overflow: 'hidden',
+                    position: 'relative', borderRadius: 20, overflow: 'hidden',
+                    border: 'none', cursor: 'pointer',
+                    padding: 0, textAlign: 'left', minHeight: 172, display: 'block',
                     animation: `fadeUp 0.4s ${0.1 + i * 0.04}s ease both`,
-                    boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 10px 24px rgba(15,23,42,0.05)',
+                    boxShadow: '0 1px 2px rgba(15,23,42,0.06), 0 12px 26px rgba(15,23,42,0.12)',
                     WebkitTapHighlightColor: 'transparent',
                     touchAction: 'manipulation',
                     transition: 'transform 0.12s ease, box-shadow 0.18s ease',
                   }}>
-                  {/* 頂部色條：類似機票/登機證的色帶，作為目的地識別 */}
+                  {/* 底圖：各國實景照片；缺圖時退回目的地色漸層，載入中先顯示 accent 底色，不破圖 */}
                   <div style={{
-                    height: 5, width: '100%',
-                    background: `linear-gradient(90deg, ${accent}, ${accent}80)`,
+                    position: 'absolute', inset: 0,
+                    backgroundColor: accent,
+                    backgroundImage: img ? `url(${img})` : `linear-gradient(155deg, ${accent}, ${accent}cc)`,
+                    backgroundSize: 'cover', backgroundPosition: 'center',
+                  }} />
+                  {/* 底部深色 scrim：讓白字在照片上可讀 */}
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 32%, rgba(0,0,0,0.62) 100%)',
                   }} />
 
-                  {/* HOT badge：精緻紫色細徽章，避免色塊太搶 */}
+                  {/* 國旗小圓章（左上） */}
+                  <div style={{
+                    position: 'absolute', top: 12, left: 12,
+                    width: 34, height: 34, borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.92)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+                  }}>
+                    <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={22} />
+                  </div>
+
+                  {/* HOT badge（右上） */}
                   {isHot && (
                     <div style={{
-                      position: 'absolute', top: 14, right: 12,
-                      background: '#fff', borderRadius: 100,
+                      position: 'absolute', top: 13, right: 12,
+                      background: 'rgba(255,255,255,0.92)', borderRadius: 100,
                       fontSize: 9, fontWeight: 800, letterSpacing: '0.12em',
-                      color: accent, padding: '3px 8px',
-                      border: `1px solid ${accent}33`,
-                      display: 'flex', alignItems: 'center', gap: 3,
+                      color: '#111827', padding: '3px 9px',
+                      display: 'flex', alignItems: 'center', gap: 4,
                     }}>
                       <span style={{ width: 5, height: 5, borderRadius: '50%', background: accent, display: 'inline-block' }} />
                       HOT
                     </div>
                   )}
 
-                  <div style={{ padding: '16px 16px 14px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    {/* 國旗：放入柔色圓圈，像護照戳章 */}
-                    <div style={{
-                      width: 56, height: 56, borderRadius: '50%',
-                      background: soft,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      boxShadow: `inset 0 0 0 1.5px ${accent}1a`,
-                    }}>
-                      <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={36} />
-                    </div>
-
-                    {/* 國名 + 價格 */}
-                    <div style={{ marginTop: 14 }}>
-                      <p style={{ fontSize: 16, fontWeight: 900, color: '#1a1a1a', margin: '0 0 1px', letterSpacing: '-0.02em' }}>{c.countryNameZh}</p>
-                      <p style={{ fontSize: 10.5, color: '#9ca3af', margin: '0 0 10px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{c.countryNameEn}</p>
+                  {/* 國名 + 價格（左下白字） */}
+                  <div style={{ position: 'absolute', left: 14, right: 14, bottom: 12 }}>
+                    <p style={{ fontSize: 16, fontWeight: 900, color: '#fff', margin: '0 0 1px', letterSpacing: '-0.02em', textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>{c.countryNameZh}</p>
+                    <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.82)', margin: '0 0 7px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{c.countryNameEn}</p>
                       {c.minPrice ? (
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                          <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>NT$</span>
-                          <span style={{ fontSize: 17, fontWeight: 900, color: accent, letterSpacing: '-0.02em' }}>{c.minPrice}</span>
-                          <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>起</span>
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>立即選購 →</span>
-                      )}
-                    </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>NT$</span>
+                        <span style={{ fontSize: 18, fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>{c.minPrice}</span>
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>起</span>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)', fontWeight: 700 }}>立即選購 →</span>
+                    )}
                   </div>
                 </button>
               )
