@@ -197,10 +197,10 @@ export default function ClassicHome({
           boxShadow: `0 14px 30px ${C.primary}30`,
           border: `2px solid ${C.primary}2e`,
         }}>
-          {/* 品牌色漸層遮罩（隨租戶主色換皮） */}
+          {/* 中性深色 scrim：文字側壓暗保可讀、右側讓照片原色透出（不再用品牌色染滿整張圖） */}
           <div style={{
             position: 'absolute', inset: 0,
-            background: `linear-gradient(120deg, ${C.primary}d1 0%, ${C.primary}ad 50%, ${C.primary}4d 100%)`,
+            background: 'linear-gradient(105deg, rgba(17,20,30,0.60) 0%, rgba(17,20,30,0.30) 48%, rgba(17,20,30,0) 100%)',
             borderRadius: 26,
           }}/>
 
