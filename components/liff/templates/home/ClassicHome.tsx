@@ -47,6 +47,19 @@ const DEST_IMAGES: Record<string, string> = {
   SG: pexels(777059),   SGP: pexels(777059), MY: pexels(777059), MYS: pexels(777059), NMY: pexels(777059), SGMA: pexels(777059),
 }
 
+// 有些商品用自訂 region 代碼（如新馬），countryCode 對不到 DEST_IMAGES 時改用中文名關鍵字補判。
+function resolveDestImage(code: string, nameZh = ''): string | undefined {
+  if (code && DEST_IMAGES[code]) return DEST_IMAGES[code]
+  if (nameZh.includes('新') && (nameZh.includes('馬') || nameZh.includes('加坡'))) return pexels(777059)
+  if (nameZh.includes('日本')) return pexels(4336279)
+  if (nameZh.includes('韓'))   return pexels(380707)
+  if (nameZh.includes('美國') || nameZh.includes('美国')) return pexels(20847307)
+  if (nameZh.includes('菲律')) return pexels(13874296)
+  if (nameZh.includes('香港')) return pexels(5607794)
+  if (nameZh.includes('馬來') || nameZh.includes('马来')) return pexels(777059)
+  return undefined
+}
+
 export default function ClassicHome({
   tenant, countries, colors: C, onSelectCountry, onNavigate, onSearch,
 }: HomePageProps) {
@@ -296,7 +309,7 @@ export default function ClassicHome({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {hot.map((c, i) => {
               const { accent } = getAccent(c.countryCode)
-              const img = DEST_IMAGES[c.countryCode]
+              const img = resolveDestImage(c.countryCode, c.countryNameZh)
               const isHot = i < 2
               return (
                 <button key={c.countryCode} onClick={() => onSelectCountry(c.countryCode)}
