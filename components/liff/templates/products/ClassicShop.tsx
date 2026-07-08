@@ -7,6 +7,7 @@ import { getCoverageList, CoveragePopup } from '@/components/liff/CoverageCountr
 import DayPicker from '@/components/liff/DayPicker'
 import { annotatePlans, sortByValue, TIER_COLOR } from '@/lib/utils/product-display'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
+import { resolveDestImage } from '@/lib/utils/dest-image'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
@@ -141,7 +142,8 @@ export default function ClassicShop({
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 16px' }}>
             {countries.map((c) => {
-              const { accent, soft } = getAccent(c.countryCode)
+              const { accent } = getAccent(c.countryCode)
+              const img = resolveDestImage(c.countryCode, c.countryNameZh)
               return (
                 <button
                   key={c.countryCode}
@@ -149,43 +151,49 @@ export default function ClassicShop({
                   className="cs-country-card"
                   style={{
                     position: 'relative', overflow: 'hidden',
-                    background: S.white, border: '1px solid rgba(15,23,42,0.06)',
-                    borderRadius: 20, padding: 0,
+                    border: 'none', borderRadius: 20, padding: 0,
                     textAlign: 'left', cursor: 'pointer',
-                    boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 10px 24px rgba(15,23,42,0.05)',
+                    boxShadow: '0 1px 2px rgba(15,23,42,0.06), 0 12px 26px rgba(15,23,42,0.12)',
                     WebkitTapHighlightColor: 'transparent',
                     touchAction: 'manipulation',
                     transition: 'transform 0.12s ease, box-shadow 0.18s ease',
-                    minHeight: 154,
-                    display: 'flex', flexDirection: 'column',
+                    minHeight: 168,
+                    display: 'block',
                   }}
                 >
-                  {/* 頂部色條：機票登機證感 */}
+                  {/* 底圖：各國實景照片；缺圖時退回目的地色漸層，載入中先顯示 accent 底色，不破圖 */}
                   <div style={{
-                    height: 5, width: '100%',
-                    background: `linear-gradient(90deg, ${accent}, ${accent}80)`,
+                    position: 'absolute', inset: 0,
+                    backgroundColor: accent,
+                    backgroundImage: img ? `url(${img})` : `linear-gradient(155deg, ${accent}, ${accent}cc)`,
+                    backgroundSize: 'cover', backgroundPosition: 'center',
+                  }} />
+                  {/* 底部深色 scrim：讓白字在照片上可讀 */}
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 34%, rgba(0,0,0,0.64) 100%)',
                   }} />
 
-                  <div style={{ padding: '16px 16px 14px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    {/* 國旗放在護照戳章圓圈內 */}
-                    <div style={{
-                      width: 54, height: 54, borderRadius: '50%',
-                      background: soft,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      boxShadow: `inset 0 0 0 1.5px ${accent}1f`,
-                    }}>
-                      <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={36} />
-                    </div>
+                  {/* 國旗小圓章（左上） */}
+                  <div style={{
+                    position: 'absolute', top: 12, left: 12,
+                    width: 34, height: 34, borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.92)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+                  }}>
+                    <CountryFlag code={c.countryCode} fallbackEmoji={c.countryFlag} size={22} />
+                  </div>
 
-                    <div style={{ marginTop: 12 }}>
-                      <p style={{ fontSize: 15.5, fontWeight: 900, color: S.ink, margin: 0, letterSpacing: '-0.02em' }}>{c.countryNameZh}</p>
-                      <p style={{ fontSize: 10.5, color: '#9ca3af', marginTop: 3, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{c.countryNameEn}</p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, color: accent }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.02em' }}>查看方案</span>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                      </div>
+                  {/* 國名 + 查看方案（左下白字） */}
+                  <div style={{ position: 'absolute', left: 14, right: 14, bottom: 12 }}>
+                    <p style={{ fontSize: 16, fontWeight: 900, color: '#fff', margin: '0 0 1px', letterSpacing: '-0.02em', textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>{c.countryNameZh}</p>
+                    <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.82)', margin: '0 0 7px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{c.countryNameEn}</p>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#fff', background: 'rgba(255,255,255,0.18)', padding: '3px 10px', borderRadius: 100, backdropFilter: 'blur(2px)' }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.02em' }}>查看方案</span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
                     </div>
                   </div>
                 </button>

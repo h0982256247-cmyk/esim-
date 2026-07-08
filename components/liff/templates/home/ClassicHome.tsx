@@ -5,6 +5,7 @@ import { BeeLogoSVG } from '@/components/liff/LiffIllustrations'
 import { IconMyEsim, IconGuide, IconDataPlan, IconDevices } from './HomeIcons'
 import FilterDropdown from './FilterDropdown'
 import { CountryFlag } from '@/components/common/CountryFlag'
+import { resolveDestImage } from '@/lib/utils/dest-image'
 import type { HomePageProps } from './types'
 
 const QUICK_ACTIONS = [
@@ -32,32 +33,6 @@ const DEST_PALETTE = [
 function getAccent(code: string) {
   let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) & 0xffffffff
   return DEST_PALETTE[Math.abs(h) % DEST_PALETTE.length]
-}
-
-const pexels = (id: number) => `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=800`
-
-// 熱門目的地實景圖（Pexels，免費可商用）。key = 國家代碼；同時對應 2 碼/3 碼與自訂 region
-// （新馬 NMY/SGMA → 新加坡圖）。沒對到的國家退回目的地色漸層，不會破圖。
-const DEST_IMAGES: Record<string, string> = {
-  JP: pexels(4336279),  JPN: pexels(4336279),
-  KR: pexels(380707),   KOR: pexels(380707),
-  US: pexels(20847307), USA: pexels(20847307),
-  PH: pexels(13874296), PHL: pexels(13874296),
-  HK: pexels(5607794),  HKG: pexels(5607794),
-  SG: pexels(777059),   SGP: pexels(777059), MY: pexels(777059), MYS: pexels(777059), NMY: pexels(777059), SGMA: pexels(777059),
-}
-
-// 有些商品用自訂 region 代碼（如新馬），countryCode 對不到 DEST_IMAGES 時改用中文名關鍵字補判。
-function resolveDestImage(code: string, nameZh = ''): string | undefined {
-  if (code && DEST_IMAGES[code]) return DEST_IMAGES[code]
-  if (nameZh.includes('新') && (nameZh.includes('馬') || nameZh.includes('加坡'))) return pexels(777059)
-  if (nameZh.includes('日本')) return pexels(4336279)
-  if (nameZh.includes('韓'))   return pexels(380707)
-  if (nameZh.includes('美國') || nameZh.includes('美国')) return pexels(20847307)
-  if (nameZh.includes('菲律')) return pexels(13874296)
-  if (nameZh.includes('香港')) return pexels(5607794)
-  if (nameZh.includes('馬來') || nameZh.includes('马来')) return pexels(777059)
-  return undefined
 }
 
 export default function ClassicHome({
