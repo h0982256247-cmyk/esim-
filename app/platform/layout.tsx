@@ -18,6 +18,7 @@ const NAV_ALL = [
   {
     href: '/platform',
     label: '儀表板',
+    group: '總覽',
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'SUB_ADMIN'],
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -29,6 +30,7 @@ const NAV_ALL = [
   {
     href: '/platform/users',
     label: '會員管理',
+    group: '營運',
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -40,6 +42,7 @@ const NAV_ALL = [
   {
     href: '/platform/groups',
     label: '社群管理',
+    group: '營運',
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'SUB_ADMIN'],
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -50,6 +53,7 @@ const NAV_ALL = [
   {
     href: '/platform/products',
     label: '商品管理',
+    group: '商品與前台',
     roles: ['PLATFORM_ADMIN', 'SUB_ADMIN'],
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -60,6 +64,7 @@ const NAV_ALL = [
   {
     href: '/platform/liff',
     label: 'LIFF 前台',
+    group: '商品與前台',
     roles: ['PLATFORM_ADMIN', 'SUB_ADMIN'],
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -70,6 +75,7 @@ const NAV_ALL = [
   {
     href: '/platform/orders',
     label: '訂單管理',
+    group: '營運',
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'SUB_ADMIN'],
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -80,6 +86,7 @@ const NAV_ALL = [
   {
     href: '/platform/commissions',
     label: '分潤管理',
+    group: '財務',
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'SUB_ADMIN'],
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -90,6 +97,7 @@ const NAV_ALL = [
   {
     href: '/platform/withdrawals',
     label: '提領審核',
+    group: '財務',
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'SUB_ADMIN'],
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -100,6 +108,7 @@ const NAV_ALL = [
   {
     href: '/platform/finance',
     label: '財務總覽',
+    group: '財務',
     roles: ['SUPER_ADMIN'],
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -110,6 +119,7 @@ const NAV_ALL = [
   {
     href: '/platform/admins',
     label: '帳號管理',
+    group: '系統',
     roles: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -118,6 +128,9 @@ const NAV_ALL = [
     ),
   },
 ]
+
+// 側邊選單分組順序：依使用頻率由上而下（系統設定殿後、以分隔線隔開）。
+const GROUP_ORDER = ['總覽', '營運', '商品與前台', '財務', '系統']
 
 const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
@@ -211,23 +224,32 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           </div>
         </div>
 
-        {/* Nav */}
+        {/* Nav：依 GROUP_ORDER 分群，群前加小標；「系統」以分隔線隔開 */}
         <nav className="flex-1 py-3 overflow-y-auto">
-          {nav.map(n => {
-            const active = pathname === n.href || (n.href !== '/platform' && pathname.startsWith(n.href))
+          {GROUP_ORDER.map(group => {
+            const items = nav.filter(n => n.group === group)
+            if (items.length === 0) return null
             return (
-              <Link
-                key={n.href}
-                href={n.href}
-                className={`flex items-center gap-3 mx-2.5 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                  active
-                    ? 'bg-blue-600 text-white font-semibold shadow-sm shadow-blue-200'
-                    : 'text-gray-500 hover:bg-blue-50/60 hover:text-blue-600'
-                }`}
-              >
-                <span className={active ? 'text-white' : 'text-gray-400'}>{n.icon}</span>
-                {n.label}
-              </Link>
+              <div key={group} className={group === '系統' ? 'mt-2 pt-2 border-t border-gray-100' : ''}>
+                <p className="px-4 pt-3 pb-1 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">{group}</p>
+                {items.map(n => {
+                  const active = pathname === n.href || (n.href !== '/platform' && pathname.startsWith(n.href))
+                  return (
+                    <Link
+                      key={n.href}
+                      href={n.href}
+                      className={`flex items-center gap-3 mx-2.5 px-3 py-2.5 rounded-xl text-sm transition-all ${
+                        active
+                          ? 'bg-blue-600 text-white font-semibold shadow-sm shadow-blue-200'
+                          : 'text-gray-500 hover:bg-blue-50/60 hover:text-blue-600'
+                      }`}
+                    >
+                      <span className={active ? 'text-white' : 'text-gray-400'}>{n.icon}</span>
+                      {n.label}
+                    </Link>
+                  )
+                })}
+              </div>
             )
           })}
         </nav>
