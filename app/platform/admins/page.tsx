@@ -109,6 +109,7 @@ export default function PlatformAdminsPage() {
                 <label className="text-xs text-gray-500 block mb-1">角色</label>
                 <select value={form.role} onChange={e=>setForm(p=>({...p,role:e.target.value,parentId:''}))}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 bg-white">
+                  {currentRole==='SUPER_ADMIN'&&<option value="SUPER_ADMIN">Super Admin</option>}
                   <option value="PLATFORM_ADMIN">Platform Admin</option>
                   <option value="SUB_ADMIN">Sub Admin</option>
                 </select>

@@ -32,9 +32,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '必填欄位缺漏' }, { status: 400 })
   }
 
-  // 權限控管：只有 SUPER_ADMIN 可建 PLATFORM_ADMIN；PLATFORM_ADMIN 只能建 SUB_ADMIN
-  if (role === PlatformAdminRole.SUPER_ADMIN) {
-    return NextResponse.json({ error: '不可建立 Super Admin' }, { status: 403 })
+  // 權限控管：只有 SUPER_ADMIN 可建 SUPER_ADMIN / PLATFORM_ADMIN；PLATFORM_ADMIN 只能建 SUB_ADMIN
+  if (role === PlatformAdminRole.SUPER_ADMIN && auth.role !== PlatformAdminRole.SUPER_ADMIN) {
+    return NextResponse.json({ error: '只有 Super Admin 可建立 Super Admin' }, { status: 403 })
   }
   if (role === PlatformAdminRole.PLATFORM_ADMIN && auth.role !== PlatformAdminRole.SUPER_ADMIN) {
     return NextResponse.json({ error: '只有 Super Admin 可建立 Platform Admin' }, { status: 403 })
@@ -47,10 +47,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Super Admin 建立 Sub Admin 需指定所屬 Platform' }, { status: 400 })
   }
 
-  // parentId 決定：Super Admin 建 Sub Admin 時用前端傳來的，否則用自己
-  const parentId = (role === PlatformAdminRole.SUB_ADMIN && auth.role === PlatformAdminRole.SUPER_ADMIN)
-    ? bodyParentId
-    : auth.adminId
+  // parentId 決定：新建的 Super Admin 為頂層、無上層（不綁租戶）；Super Admin 建 Sub Admin
+  // 時用前端指定的所屬 Platform；其餘（Platform Admin、Platform Admin 建 Sub Admin）掛在建立者底下。
+  const parentId: string | undefined =
+    role === PlatformAdminRole.SUPER_ADMIN
+      ? undefined
+      : (role === PlatformAdminRole.SUB_ADMIN && auth.role === PlatformAdminRole.SUPER_ADMIN)
+        ? bodyParentId
+        : auth.adminId
 
   try {
     const admin = await createAdmin({
