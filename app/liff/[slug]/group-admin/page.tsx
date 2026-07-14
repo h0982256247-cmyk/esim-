@@ -78,10 +78,11 @@ export default function GroupAdminDashboard() {
           <p className="text-xs text-gray-400 mb-1">社群成員</p>
           <p className="text-2xl font-bold text-gray-800">{group.members?.length ?? 0} 人</p>
         </div>
-        <div className="bg-white rounded-xl border p-4 shadow-sm">
+        <button onClick={() => router.push(`${base}/group-admin/settings`)} className="bg-white rounded-xl border p-4 shadow-sm text-left">
           <p className="text-xs text-gray-400 mb-1">讓利比例</p>
           <p className="text-2xl font-bold text-gray-800">{Math.round(Number(group.rebateRate) * 100)}%</p>
-        </div>
+          <p className="text-xs font-semibold mt-1" style={{ color: C.primaryText }}>調整 ›</p>
+        </button>
         <button onClick={() => router.push(`${base}/group-admin/coupons`)} className="bg-white rounded-xl border p-4 shadow-sm text-left">
           <p className="text-xs text-gray-400 mb-1">本月發券剩餘</p>
           <p className="text-2xl font-bold text-gray-800">{group.activityCouponQuota} 次</p>
