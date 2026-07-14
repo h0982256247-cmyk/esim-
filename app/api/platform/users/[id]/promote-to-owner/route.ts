@@ -21,16 +21,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const name = body?.name?.trim()
   if (!name) return NextResponse.json({ error: '社群名稱必填' }, { status: 400 })
 
+  // 先取被升級會員：社群 tenant 一律跟著「該會員所屬租戶」走（不論誰升級）。
+  // 超管沒有自己的 tenantAdminId，若沿用 auth.tenantAdminId 會是 null → 社群不掛
+  // 任何 tenant、不出現在該白牌社群管理（曾多次需人工補），故改由 user 推導。
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { tenantAdminId: true },
+  })
+  if (!target) return NextResponse.json({ error: '會員不存在' }, { status: 404 })
+
   // 跨租戶 guard：非 SUPER_ADMIN 只能升級自己 tenant 的會員
-  if (auth.role !== 'SUPER_ADMIN') {
-    const target = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { tenantAdminId: true },
-    })
-    if (!target) return NextResponse.json({ error: '會員不存在' }, { status: 404 })
-    if (target.tenantAdminId !== auth.tenantAdminId) {
-      return NextResponse.json({ error: '無權升級其他平台的會員' }, { status: 403 })
-    }
+  if (auth.role !== 'SUPER_ADMIN' && target.tenantAdminId !== auth.tenantAdminId) {
+    return NextResponse.json({ error: '無權升級其他平台的會員' }, { status: 403 })
   }
 
   try {
@@ -38,9 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       userId,
       name,
       description: body?.description?.trim() || undefined,
-      // SUPER_ADMIN 沒有自己的 tenantAdminId → null（社群不掛任何 tenant）
-      // PLATFORM_ADMIN / SUB_ADMIN 走 auth.tenantAdminId
-      tenantAdminId: auth.tenantAdminId,
+      // 社群掛在該會員所屬租戶；fallback auth.tenantAdminId 以防會員無租戶的極端情形。
+      tenantAdminId: target.tenantAdminId ?? auth.tenantAdminId,
     })
     return NextResponse.json({ ok: true, group })
   } catch (e: unknown) {
