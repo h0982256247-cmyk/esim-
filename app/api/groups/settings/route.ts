@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySession, SESSION_COOKIE } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/prisma'
 import { encrypt } from '@/lib/utils/crypto'
+import { getRebateCeiling } from '@/lib/services/group'
 
 // PATCH /api/groups/settings — 社群主更新讓利比例 / 基本設定
 export async function PATCH(req: NextRequest) {
@@ -15,7 +16,7 @@ export async function PATCH(req: NextRequest) {
 
   const group = await prisma.group.findUnique({
     where: { ownerId: session.userId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, tenantAdminId: true },
   })
 
   if (!group || group.status !== 'APPROVED') {
@@ -26,8 +27,11 @@ export async function PATCH(req: NextRequest) {
   const updates: Record<string, unknown> = {}
 
   if (typeof body.rebateRate === 'number') {
-    if (body.rebateRate < 0 || body.rebateRate > 0.3) {
-      return NextResponse.json({ error: '讓利比例須介於 0 ~ 0.30' }, { status: 400 })
+    // 上限跟租戶 maxRebateRate 走（與平台後台 adminSetRebateRate 同一來源），
+    // 不再寫死 30%，避免社群主自調超過租戶設定的上限。
+    const ceiling = await getRebateCeiling(group.tenantAdminId)
+    if (body.rebateRate < 0 || body.rebateRate > ceiling) {
+      return NextResponse.json({ error: `讓利比例須介於 0 ~ ${(ceiling * 100).toFixed(0)}%` }, { status: 400 })
     }
     updates.rebateRate = body.rebateRate
   }

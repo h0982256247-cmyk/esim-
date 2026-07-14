@@ -210,7 +210,18 @@ export async function leaveGroup(userId: string): Promise<LeaveGroupResult> {
   return { ok: true, groupName: membership.group.name, expiredCoupons }
 }
 
-// ─── 平台後台管理員設定讓利（受 maxRebateRate 限制）─────────────────
+// ─── 讓利比例上限（受 maxRebateRate 限制）─────────────────────────
+
+// 讓利比例上限 = 該租戶的 maxRebateRate（未綁租戶時 fallback 30%）。
+// 平台後台設定與社群主自助調整共用同一上限來源。
+export async function getRebateCeiling(tenantAdminId: string | null): Promise<number> {
+  if (!tenantAdminId) return 0.30
+  const admin = await prisma.platformAdmin.findUnique({
+    where: { id: tenantAdminId },
+    select: { maxRebateRate: true },
+  })
+  return admin ? Number(admin.maxRebateRate) : 0.30
+}
 
 export async function adminSetRebateRate(
   groupId: string,
@@ -224,15 +235,7 @@ export async function adminSetRebateRate(
     if (!existing || existing.tenantAdminId !== tenantAdminId) throw new Error('無權操作此社群')
   }
 
-  // 取得該 Platform Admin 的讓利上限
-  let ceiling = 0.30
-  if (tenantAdminId) {
-    const admin = await prisma.platformAdmin.findUnique({
-      where: { id: tenantAdminId },
-      select: { maxRebateRate: true },
-    })
-    if (admin) ceiling = Number(admin.maxRebateRate)
-  }
+  const ceiling = await getRebateCeiling(tenantAdminId)
 
   if (rebateRate < 0 || rebateRate > ceiling) {
     throw new Error(`讓利比例不可超過上限 ${(ceiling * 100).toFixed(0)}%`)
@@ -327,8 +330,11 @@ export async function getGroupByOwnerId(ownerId: string) {
   // 銀行帳號為機密：社群主本人在 LIFF 也只看遮罩（僅平台商後台可見完整帳號，供撥款）。
   // 分行/戶名非「帳號」，解密回傳供本人確認。bankName 為公開資訊不加密。
   const fullAccount = group.bankAccount ? safeDecrypt(group.bankAccount) : null
+  // 讓利上限（跟租戶 maxRebateRate 走）：供設定頁滑桿上限用。
+  const rebateCeiling = await getRebateCeiling(group.tenantAdminId)
   return {
     ...group,
+    rebateCeiling,
     bankAccount:    fullAccount ? maskBankAccount(fullAccount) : null,
     bankAccountSet: !!fullAccount,   // 前端用：已設定就顯示遮罩、不覆寫
     bankBranch:     group.bankBranch     ? safeDecrypt(group.bankBranch)     : null,

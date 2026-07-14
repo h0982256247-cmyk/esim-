@@ -8,6 +8,7 @@ type GroupSettings = {
   name: string
   description: string | null
   rebateRate: number
+  rebateCeiling?: number
   bankName: string | null
   bankBranch: string | null
   bankAccount: string | null
@@ -22,6 +23,7 @@ export default function GroupAdminSettingsPage() {
   const [loading, setLoading] = useState(true)
 
   const [rebateRate, setRebateRate] = useState('0')
+  const [rebateCeiling, setRebateCeiling] = useState(30)   // 讓利上限（%），跟租戶 maxRebateRate 走
   const [description, setDescription] = useState('')
   const [bankName, setBankName] = useState('')
   const [bankBranch, setBankBranch] = useState('')
@@ -34,6 +36,7 @@ export default function GroupAdminSettingsPage() {
       if (g) {
         setSettings(g)
         setRebateRate(String(Math.round(Number(g.rebateRate) * 100)))
+        if (g.rebateCeiling != null) setRebateCeiling(Math.round(Number(g.rebateCeiling) * 100))
         setDescription(g.description ?? '')
         setBankName(g.bankName ?? '')
         setBankBranch(g.bankBranch ?? '')
@@ -86,13 +89,16 @@ export default function GroupAdminSettingsPage() {
           <input
             type="range"
             min="0"
-            max="30"
+            max={rebateCeiling}
             value={rebateRate}
             onChange={e => setRebateRate(e.target.value)}
             className="flex-1"
           />
           <span className="text-xl font-bold w-16 text-right" style={{ color: C.primaryText }}>{rebateRate}%</span>
         </div>
+        {rebateCeiling < 30 && (
+          <p className="text-[11px] text-gray-400 mt-2">※ 平台設定讓利上限為 {rebateCeiling}%</p>
+        )}
         {(() => {
           const r = parseInt(rebateRate) || 0
           const memberDiscountPct = 100 - r  // 顯示成「X 折」就是 (100-r)/10 折
