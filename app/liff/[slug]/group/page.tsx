@@ -8,7 +8,7 @@ import PageSkeleton from '@/components/liff/PageSkeleton'
 
 type GroupMemberInfo = { id: string; joinedAt: string; user: { id: string; displayName: string; avatarUrl: string | null } }
 type GroupInfo  = { id: string; name: string; description: string | null; status: string; inviteCode: string; members: GroupMemberInfo[] }
-type Membership = { group: { id: string; name: string; description: string | null; rebateRate: number }; joinedAt: string }
+type Membership = { group: { id: string; name: string; description: string | null; inviteCode: string; rebateRate: number }; joinedAt: string }
 
 const S = {
   white: '#ffffff', ink: '#1a1a1a', muted: '#4b5563', faint: '#94a3b8',
@@ -50,6 +50,37 @@ function MemberBadge() {
   )
 }
 
+// 導引卡：左側固定寬 icon + 可伸縮文字區（minWidth:0 讓長副標單行截斷、不換行不撐版）+ 右箭頭。
+// 兩張卡片共用同一版型，確保高度/對齊一致（原本各自 inline、長副標會擠到箭頭而跑版）。
+function LinkCard({ iconBg, icon, title, subtitle, onClick }: {
+  iconBg: string
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%', background: S.white, border: `1px solid ${S.line}`,
+        borderRadius: 14, padding: '14px 16px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+      }}
+    >
+      <div style={{ width: 40, height: 40, borderRadius: 12, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: 0 }}>{title}</p>
+        <p style={{ fontSize: 12, color: S.faint, margin: '3px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subtitle}</p>
+      </div>
+      <ChevronRight />
+    </button>
+  )
+}
+
 // 折扣（0.90）→ 折數標籤（9 折 / 92 折 / 95 折）
 function zheLabel(d: number): string {
   const n = Math.round(d * 100)
@@ -82,27 +113,26 @@ export default function GroupPage() {
   const [sharing, setSharing] = useState(false)
 
   // 邀請連結單一來源：永久連結（liff.line.me）才會在 LINE 內開啟，一般 https 會被外部瀏覽器接走。
-  const buildInviteUrl = async () => {
-    if (!ownedGroup) return ''
-    const fullUrl = `${window.location.origin}${base}/group?invite=${ownedGroup.inviteCode}`
+  const buildInviteUrl = async (inviteCode: string) => {
+    const fullUrl = `${window.location.origin}${base}/group?invite=${inviteCode}`
     try { if (liff) return await liff.permanentLink.createUrlBy(fullUrl) } catch {}
     return fullUrl
   }
 
   // 一鍵邀請：用 LINE shareTargetPicker 分享含邀請碼的卡片；點開連結回到本頁並預填邀請碼。
-  const handleInvite = async () => {
-    if (!ownedGroup) return
+  // 社群主與一般會員共用（會員分享的是自己所屬社群的邀請碼）。
+  const handleInvite = async (group: { name: string; inviteCode: string }) => {
     if (!liff || !liff.isApiAvailable('shareTargetPicker')) {
-      window.alert(`請把邀請碼分享給朋友：${ownedGroup.inviteCode}`)
+      window.alert(`請把邀請碼分享給朋友：${group.inviteCode}`)
       return
     }
     setSharing(true)
     try {
-      const inviteUrl = await buildInviteUrl()
+      const inviteUrl = await buildInviteUrl(group.inviteCode)
       const brandName = tenant?.brandName ?? 'eSIM'
       const flex = {
         type: 'flex' as const,
-        altText: `邀請你加入「${ownedGroup.name}」社群`,
+        altText: `邀請你加入「${group.name}」社群`,
         contents: {
           type: 'bubble' as const,
           header: {
@@ -115,13 +145,13 @@ export default function GroupPage() {
           body: {
             type: 'box' as const, layout: 'vertical' as const, spacing: 'md', paddingAll: '20px' as const,
             contents: [
-              { type: 'text' as const, text: ownedGroup.name, size: 'lg' as const, weight: 'bold' as const, color: '#1a1a1a', wrap: true },
+              { type: 'text' as const, text: group.name, size: 'lg' as const, weight: 'bold' as const, color: '#1a1a1a', wrap: true },
               { type: 'text' as const, text: '加入後即可獲得入群優惠券，一起買 eSIM 更划算！', size: 'sm' as const, color: '#64748b', wrap: true },
               {
                 type: 'box' as const, layout: 'vertical' as const, margin: 'md' as const, paddingAll: '14px' as const, cornerRadius: '12px' as const, backgroundColor: '#f8fafc', spacing: 'xs',
                 contents: [
                   { type: 'text' as const, text: '邀請碼', size: 'xs' as const, color: '#94a3b8', align: 'center' as const },
-                  { type: 'text' as const, text: ownedGroup.inviteCode, size: 'xxl' as const, weight: 'bold' as const, color: '#1a1a1a', align: 'center' as const },
+                  { type: 'text' as const, text: group.inviteCode, size: 'xxl' as const, weight: 'bold' as const, color: '#1a1a1a', align: 'center' as const },
                 ],
               },
             ],
@@ -250,7 +280,7 @@ export default function GroupPage() {
                 </p>
               </div>
               <button
-                onClick={handleInvite}
+                onClick={() => handleInvite(ownedGroup)}
                 disabled={sharing}
                 style={{
                   width: '100%', border: 'none', borderRadius: 100, padding: '13px',
@@ -360,27 +390,53 @@ export default function GroupPage() {
           </div>
         )}
 
-        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* 邀請好友加入：會員也能把自己所屬社群的邀請碼分享給朋友（沿用社群主同一套分享邏輯）*/}
+        <div style={{ background: S.white, border: `1px solid ${S.line}`, borderRadius: 14, padding: 16, marginTop: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+          <p style={{ fontSize: 14, fontWeight: 800, color: S.ink, margin: 0 }}>邀請好友加入</p>
+          <p style={{ fontSize: 12, color: S.faint, margin: '4px 0 12px', lineHeight: 1.6 }}>把邀請碼分享給朋友，一起買 eSIM 更划算。</p>
+          <div style={{ background: C.light, border: `1.5px dashed ${C.border}`, borderRadius: 12, padding: '12px 14px', textAlign: 'center', marginBottom: 12 }}>
+            <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 24, fontWeight: 800, color: C.primaryText, letterSpacing: '0.2em', margin: 0 }}>
+              {membership.group.inviteCode}
+            </p>
+          </div>
           <button
+            onClick={() => handleInvite(membership.group)}
+            disabled={sharing}
+            style={{
+              width: '100%', border: 'none', borderRadius: 100, padding: '13px',
+              fontSize: 14, fontWeight: 800, cursor: sharing ? 'not-allowed' : 'pointer',
+              background: C.primary, color: C.onPrimary, opacity: sharing ? 0.6 : 1,
+            }}
+          >
+            {sharing ? '開啟分享…' : '分享邀請碼'}
+          </button>
+        </div>
+
+        <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <LinkCard
+            iconBg={C.light}
+            icon={
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.primaryText} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V8Z" />
+                <path d="M14 6v12" strokeDasharray="2 2.5" />
+              </svg>
+            }
+            title="我的優惠券"
+            subtitle="查看社群與官方發給你的折扣券"
             onClick={() => router.push(`${base}/coupons`)}
-            style={{ width: '100%', background: S.white, border: `1px solid ${S.line}`, borderRadius: 14, padding: '15px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
-          >
-            <div>
-              <p style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: 0 }}>我的優惠券</p>
-              <p style={{ fontSize: 12, color: S.faint, margin: '3px 0 0' }}>查看社群與官方發給你的折扣券</p>
-            </div>
-            <ChevronRight />
-          </button>
-          <button
+          />
+          <LinkCard
+            iconBg={C.light}
+            icon={
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.primaryText} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <polygon points="15.5 8.5 10.5 10.5 8.5 15.5 13.5 13.5" />
+              </svg>
+            }
+            title="探索 eSIM 方案"
+            subtitle="用優惠券購買更划算"
             onClick={() => router.push(`${base}/products`)}
-            style={{ width: '100%', background: S.white, border: `1px solid ${S.line}`, borderRadius: 14, padding: '15px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
-          >
-            <div>
-              <p style={{ fontSize: 14, fontWeight: 700, color: S.ink, margin: 0 }}>探索 eSIM 方案</p>
-              <p style={{ fontSize: 12, color: S.faint, margin: '3px 0 0' }}>用優惠券購買更划算</p>
-            </div>
-            <ChevronRight />
-          </button>
+          />
         </div>
         {joinedPopup}
       </div>
