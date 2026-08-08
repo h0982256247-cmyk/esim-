@@ -9,6 +9,18 @@ type Commission = {
   createdAt: string; group: { name: string }; order: { paidAt: string | null }
 }
 type GroupOption = { id: string; name: string; status: string }
+// 結算應付總覽：撥款狀態真相在 Withdrawal（見 getAllSettlementsForAdmin）
+type PayoutStatus = 'NONE' | 'PENDING' | 'APPROVED' | 'PAID'
+type Settlement = {
+  id: string; groupName: string; period: string; totalAmount: number
+  paidAmount: number; createdAt: string; payoutStatus: PayoutStatus
+}
+const PAYOUT_META: Record<PayoutStatus, { label: string; cls: string }> = {
+  NONE:     { label: '未提領',        cls: 'bg-gray-100 text-gray-500'  },
+  PENDING:  { label: '審核中',        cls: 'bg-amber-50 text-amber-600' },
+  APPROVED: { label: '已核准·待撥款', cls: 'bg-blue-50 text-blue-600'   },
+  PAID:     { label: '已撥款',        cls: 'bg-green-50 text-green-700' },
+}
 
 // Default to previous month (YYYY-MM)
 function defaultPeriod(): string {
@@ -20,6 +32,7 @@ function defaultPeriod(): string {
 export default function PlatformCommissionsPage() {
   const router = useRouter()
   const [commissions, setCommissions] = useState<Commission[]>([])
+  const [settlements, setSettlements] = useState<Settlement[]>([])
   const [loading, setLoading] = useState(true)
   const [groups, setGroups] = useState<GroupOption[]>([])
   const [settleForm, setSettleForm] = useState({groupId:'',period:defaultPeriod()})
@@ -39,7 +52,7 @@ export default function PlatformCommissionsPage() {
   useEffect(() => {
     fetch(`/api/admin/commissions${filterTenantId?`?tenantAdminId=${filterTenantId}`:''}`)
       .then(r=>r.status===401?(router.replace('/platform/login'),null):r.json())
-      .then(d=>{if(d)setCommissions(d.commissions)}).finally(()=>setLoading(false))
+      .then(d=>{if(d){setCommissions(d.commissions);setSettlements(d.settlements??[])}}).finally(()=>setLoading(false))
     // 載入該 tenant 內的 APPROVED 社群供下拉選單
     fetch(`/api/admin/groups?status=APPROVED${filterTenantId?`&tenantAdminId=${filterTenantId}`:''}`)
       .then(r=>r.json())
@@ -54,7 +67,7 @@ export default function PlatformCommissionsPage() {
     setSettling(false)
     if (r.ok) {
       setSettleMsg({ok:true,text:'月結執行完成'})
-      fetch(`/api/admin/commissions${filterTenantId?`?tenantAdminId=${filterTenantId}`:''}`).then(r=>r.json()).then(d=>{if(d)setCommissions(d.commissions)})
+      fetch(`/api/admin/commissions${filterTenantId?`?tenantAdminId=${filterTenantId}`:''}`).then(r=>r.json()).then(d=>{if(d){setCommissions(d.commissions);setSettlements(d.settlements??[])}})
     } else {
       setSettleMsg({ok:false,text:r.error??'執行失敗'})
     }
@@ -79,9 +92,11 @@ export default function PlatformCommissionsPage() {
       ok: r.errors.length === 0,
       text: `已結算 ${r.settled} / ${r.totalGroups} 個社群${r.errors.length>0?`，失敗 ${r.errors.length} 個：\n${errLines}`:''}`,
     })
-    fetch(`/api/admin/commissions${filterTenantId?`?tenantAdminId=${filterTenantId}`:''}`).then(r=>r.json()).then(d=>{if(d)setCommissions(d.commissions)})
+    fetch(`/api/admin/commissions${filterTenantId?`?tenantAdminId=${filterTenantId}`:''}`).then(r=>r.json()).then(d=>{if(d){setCommissions(d.commissions);setSettlements(d.settlements??[])}})
   }
   const totalPending = commissions.reduce((s,c)=>s+c.commissionAmount,0)
+  // 尚未撥款＝各結算單「應付 − 已撥款」的正差額總和（涵蓋已撥款後又補結算、金額變大的差額）
+  const unpaidTotal = settlements.reduce((sum,s)=>sum+Math.max(0,s.totalAmount-s.paidAmount),0)
   return (
     <div className="space-y-5">
       <div>
@@ -166,9 +181,68 @@ export default function PlatformCommissionsPage() {
         )}
       </div>
 
-      {/* Table */}
+      {/* 各社群應付明細（已結算）— 唯讀總覽；撥款仍走「提領審核」頁 */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-gray-800">各社群應付明細（已結算）</h2>
+            <p className="text-xs text-gray-400 mt-0.5">每月結算後應撥款給各社群主的金額。實際撥款與「已撥款」標記請至「提領審核」頁（社群主申請提領後操作）。</p>
+          </div>
+          {!loading && (
+            <div className="text-right flex-shrink-0">
+              <p className="text-xs text-gray-400">尚未撥款</p>
+              <p className="text-xl font-bold text-blue-600">NT${unpaidTotal.toLocaleString()}</p>
+            </div>
+          )}
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>
+        ) : (
+        <div className="rounded-xl border border-gray-100 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {['社群','結算月份','應付金額','撥款狀態'].map(h=>(
+                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {settlements.map(s=>{
+                const unpaid = Math.max(0, s.totalAmount - s.paidAmount)
+                // 已撥款後又補結算 → 狀態雖 PAID 但仍有差額，標「部分撥款」避免誤判全數付清
+                const partial = s.payoutStatus==='PAID' && unpaid>0
+                const meta = partial ? { label: '部分撥款', cls: 'bg-amber-50 text-amber-600' } : PAYOUT_META[s.payoutStatus]
+                return (
+                  <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-3.5 font-medium text-gray-800">{s.groupName}</td>
+                    <td className="px-5 py-3.5 text-gray-600">{s.period.replace('-','/')}</td>
+                    <td className="px-5 py-3.5">
+                      <span className="font-semibold text-blue-600">NT${s.totalAmount.toLocaleString()}</span>
+                      {partial && <span className="text-xs text-amber-600 ml-1.5">（待撥 NT${unpaid.toLocaleString()}）</span>}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${meta.cls}`}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"/>{meta.label}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          {settlements.length===0 && <div className="text-center py-10"><p className="text-gray-400 text-sm">尚無結算記錄；執行月結後這裡會列出各社群本月應付金額</p></div>}
+        </div>
+        )}
+      </div>
+
+      {/* 待結算明細（尚未月結的單筆分潤）*/}
       {loading ? <div className="flex justify-center py-16"><div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div> : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 pt-4 pb-1">
+            <h2 className="font-semibold text-gray-800">待結算明細</h2>
+            <p className="text-xs text-gray-400">尚未月結的單筆分潤（月結後會移入上方「已結算」總覽）</p>
+          </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">

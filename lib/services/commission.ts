@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db/prisma'
-import { CommissionStatus } from '@prisma/client'
+import { CommissionStatus, WithdrawalStatus } from '@prisma/client'
 
 // ─── 分潤計算（付款成功後呼叫）──────────────────────────────────
 
@@ -216,5 +216,56 @@ export async function getAllPendingCommissions(tenantAdminId?: string | null) {
       group: { select: { name: true } },
       order: { select: { paidAt: true } },
     },
+  })
+}
+
+// ─── Admin：各社群結算應付總覽 ─────────────────────────────────────
+// 月結後 PENDING 分潤變 SETTLED 就從「待結算」清單消失；此函式列出所有結算單
+// （CommissionSettlement），讓平台看到「每月該撥款給各社群主多少」。
+//
+// 撥款狀態的單一真相在 Withdrawal（CommissionSettlement.status 目前未被推進、恆為
+// PENDING），故不讀 settlement.status，改以 (groupId, period) 對應「非 REJECTED」的
+// 提領申請推導撥款進度：NONE=尚未提領 / PENDING=審核中 / APPROVED=待撥款 / PAID=已撥款。
+// tenant 隔離：Commission/Settlement 無直接欄位，走 group relation 過濾（無 RLS）。
+export async function getAllSettlementsForAdmin(tenantAdminId?: string | null) {
+  const settlements = await prisma.commissionSettlement.findMany({
+    where: tenantAdminId ? { group: { tenantAdminId } } : undefined,
+    orderBy: [{ period: 'desc' }, { createdAt: 'desc' }],
+    select: {
+      id: true,
+      groupId: true,
+      period: true,
+      totalAmount: true,
+      createdAt: true,
+      group: { select: { name: true } },
+    },
+  })
+  if (settlements.length === 0) return []
+
+  const groupIds = [...new Set(settlements.map(s => s.groupId))]
+  const withdrawals = await prisma.withdrawal.findMany({
+    where: {
+      groupId: { in: groupIds },
+      period: { not: null },
+      status: { not: WithdrawalStatus.REJECTED },
+    },
+    select: { groupId: true, period: true, status: true, amount: true },
+  })
+  // 每個 (groupId, period) 至多一筆非 REJECTED 提領（requestWithdrawalForPeriod 有擋重複）
+  const payoutMap = new Map(withdrawals.map(w => [`${w.groupId}|${w.period}`, w]))
+
+  return settlements.map(s => {
+    const w = payoutMap.get(`${s.groupId}|${s.period}`)
+    // 已撥款金額只認 PAID 提領；提領金額在申請時鎖定為當下結算額，若之後補結算讓
+    // totalAmount 增加、超過已撥款額，差額仍屬「尚未撥款」，不被 PAID 狀態整筆蓋掉。
+    return {
+      id: s.id,
+      groupName: s.group.name,
+      period: s.period,
+      totalAmount: s.totalAmount,
+      paidAmount: w?.status === WithdrawalStatus.PAID ? w.amount : 0,
+      createdAt: s.createdAt.toISOString(),
+      payoutStatus: w?.status ?? 'NONE',
+    }
   })
 }

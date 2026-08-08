@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePlatformAuth } from '@/lib/auth/platform'
-import { getAllPendingCommissions } from '@/lib/services/commission'
+import { getAllPendingCommissions, getAllSettlementsForAdmin } from '@/lib/services/commission'
 
-// GET /api/admin/commissions — 所有待結算分潤
+// GET /api/admin/commissions — 待結算分潤 + 各社群結算應付總覽
 export async function GET(req: NextRequest) {
   const auth = await requirePlatformAuth(req)
   if (auth instanceof NextResponse) return auth
@@ -11,6 +11,9 @@ export async function GET(req: NextRequest) {
     ? (req.nextUrl.searchParams.get('tenantAdminId') || null)
     : auth.tenantAdminId
 
-  const commissions = await getAllPendingCommissions(tenantAdminId)
-  return NextResponse.json({ commissions })
+  const [commissions, settlements] = await Promise.all([
+    getAllPendingCommissions(tenantAdminId),
+    getAllSettlementsForAdmin(tenantAdminId),
+  ])
+  return NextResponse.json({ commissions, settlements })
 }
