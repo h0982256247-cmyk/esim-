@@ -6,6 +6,8 @@ export interface Country {
   countryNameZh: string
   countryNameEn: string
   countryFlag: string | null
+  /** 該目的地所有方案「適用國家」token 聚合字串，供搜尋比對（可能為 null）。 */
+  coverage?: string | null
 }
 
 export interface Product {
@@ -52,6 +54,8 @@ export interface CartControls {
   has: (productId: string) => boolean
   /** Toggles cart membership. Parent handles country lookup + persistence. */
   toggle: (product: Product) => void
+  /** 目前購物車品項數；給模板判斷是否需為浮動購物車按鈕讓位（避免搜尋列被蓋）。 */
+  count: number
 }
 
 export interface ProductsTemplateProps {

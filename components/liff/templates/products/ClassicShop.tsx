@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { calcBestPrice } from '@/lib/utils/coupon-combo'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import { getCoverageList, CoveragePopup } from '@/components/liff/CoverageCountries'
@@ -8,6 +8,7 @@ import DayPicker from '@/components/liff/DayPicker'
 import { annotatePlans, sortByValue, TIER_COLOR } from '@/lib/utils/product-display'
 import { NetworkBadge, NativeSimBadge } from '@/components/liff/ProductBadges'
 import { resolveDestImage } from '@/lib/utils/dest-image'
+import { destinationMatches } from '@/lib/utils/destination-search'
 import type { ProductsTemplateProps } from './types'
 
 const S = {
@@ -77,10 +78,25 @@ export default function ClassicShop({
   const [showCoverage, setShowCoverage] = useState(false)
   const coverageList = useMemo(() => getCoverageList(coverageCountries), [coverageCountries])
 
+  // 目的地搜尋（僅國家選擇畫面）：即時篩選；比對名稱／國碼／方案適用國家（共用單一來源）
+  const [query, setQuery] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
+  const shownCountries = useMemo(
+    () => countries.filter(c => destinationMatches(query, c)),
+    [countries, query],
+  )
+
   // Country selection screen — 機票/登機證主視覺
   if (!selectedCountry) {
+    // 購物車非空時底部會出現浮動購物車按鈕（FloatingCart，bottom≈72px）；把搜尋 Bar
+    // 上移讓位、並加大列表底部留白，避免搜尋鈕被 FAB 蓋住而點不到。
+    const cartHasItems = cart.count > 0
+    const searchBarBottom = cartHasItems
+      ? 'calc(140px + env(safe-area-inset-bottom))'
+      : 'calc(68px + env(safe-area-inset-bottom))'
+    const listPadBottom = cartHasItems ? 200 : 140
     return (
-      <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: 96, background: S.bg, minHeight: '100vh' }}>
+      <div style={{ maxWidth: 520, margin: '0 auto', paddingBottom: listPadBottom, background: S.bg, minHeight: '100vh' }}>
         {/* Hero：登機證式紫色漸層 banner，呼應主頁 hero 風格 */}
         <div style={{ padding: '20px 16px 0' }}>
           <div style={{
@@ -139,9 +155,11 @@ export default function ClassicShop({
 
         {countries.length === 0 ? (
           <p style={{ textAlign: 'center', color: S.faint, padding: '48px 0', fontSize: 14 }}>目前沒有可購買的商品</p>
+        ) : shownCountries.length === 0 ? (
+          <p style={{ textAlign: 'center', color: S.faint, padding: '48px 20px', fontSize: 14 }}>找不到符合「{query.trim()}」的目的地</p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 16px' }}>
-            {countries.map((c) => {
+            {shownCountries.map((c) => {
               const { accent } = getAccent(c.countryCode)
               const img = resolveDestImage(c.countryCode, c.countryNameZh)
               return (
@@ -205,6 +223,65 @@ export default function ClassicShop({
         <style>{`
           .cs-country-card:active { transform: scale(0.97); box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
         `}</style>
+
+        {/* 浮動搜尋 Bar：目的地即時搜尋（含適用國家），固定於底部導覽列上方、毛玻璃半透明 */}
+        <div style={{
+          position: 'fixed', left: 0, right: 0,
+          bottom: searchBarBottom,
+          zIndex: 40, padding: '0 16px', pointerEvents: 'none',
+        }}>
+          <div style={{
+            maxWidth: 520, margin: '0 auto',
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'rgba(255,255,255,0.5)',
+            backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+            border: '1px solid rgba(255,255,255,0.55)',
+            borderRadius: 100, padding: '7px 7px 7px 18px',
+            boxShadow: '0 10px 30px rgba(15,23,42,0.16)',
+            pointerEvents: 'auto',
+          }}>
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="搜尋目的地，如：日本、韓國"
+              style={{
+                flex: 1, minWidth: 0, border: 'none', outline: 'none',
+                background: 'transparent', fontSize: 14, color: S.ink,
+                padding: '8px 0', WebkitAppearance: 'none',
+              }}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => { setQuery(''); searchRef.current?.focus() }}
+                aria-label="清除搜尋"
+                style={{
+                  flexShrink: 0, width: 24, height: 24, borderRadius: '50%',
+                  background: 'rgba(15,23,42,0.08)', color: S.muted, border: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => searchRef.current?.focus()}
+              aria-label="搜尋"
+              style={{
+                flexShrink: 0, width: 40, height: 40, borderRadius: '50%',
+                background: C.primary, color: C.onPrimary, border: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                boxShadow: `0 4px 12px ${C.primary}44`,
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
     )
   }

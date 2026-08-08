@@ -64,23 +64,51 @@ export async function getProductById(id: string, tenantAdminId?: string | null) 
   })
 }
 
-export async function getAvailableCountries(tenantAdminId?: string | null) {
-  const products = await prisma.product.findMany({
-    where: {
-      status: ProductStatus.ACTIVE,
-      supplierProduct: { status: SupplierProductStatus.ACTIVE },
-      ...(tenantAdminId != null ? { tenantAdminId } : {}),
-    },
-    select: {
-      countryCode: true,
-      countryNameZh: true,
-      countryNameEn: true,
-      countryFlag: true,
-    },
-    distinct: ['countryCode'],
-    orderBy: { sortOrder: 'asc' },
+// 各國「適用國家」聚合：把每國所有方案的 coverageCountries token 去重後併成一字串，
+// 供前台目的地搜尋比對（打「香港」→ coverage 含香港的「中港澳」也命中）。
+// 用 distinct(countryCode, coverageCountries) 壓縮列數，維持輕量；沿用呼叫端帶 tenant 的 where。
+async function coverageByCountry(where: Prisma.ProductWhereInput): Promise<Map<string, string>> {
+  const rows = await prisma.product.findMany({
+    where,
+    select: { countryCode: true, coverageCountries: true },
+    distinct: ['countryCode', 'coverageCountries'],
   })
-  return products
+  const sets = new Map<string, Set<string>>()
+  for (const r of rows) {
+    if (!r.coverageCountries) continue
+    let set = sets.get(r.countryCode)
+    if (!set) { set = new Set<string>(); sets.set(r.countryCode, set) }
+    for (const tok of r.coverageCountries.split(/[、,，;；/\n\s]+/)) {
+      const t = tok.trim()
+      if (t) set.add(t)
+    }
+  }
+  const out = new Map<string, string>()
+  for (const [code, set] of sets) out.set(code, [...set].join('、'))
+  return out
+}
+
+export async function getAvailableCountries(tenantAdminId?: string | null) {
+  const where: Prisma.ProductWhereInput = {
+    status: ProductStatus.ACTIVE,
+    supplierProduct: { status: SupplierProductStatus.ACTIVE },
+    ...(tenantAdminId != null ? { tenantAdminId } : {}),
+  }
+  const [products, coverage] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      select: {
+        countryCode: true,
+        countryNameZh: true,
+        countryNameEn: true,
+        countryFlag: true,
+      },
+      distinct: ['countryCode'],
+      orderBy: { sortOrder: 'asc' },
+    }),
+    coverageByCountry(where),
+  ])
+  return products.map(c => ({ ...c, coverage: coverage.get(c.countryCode) ?? null }))
 }
 
 // 主頁「熱門目的地」專用：只回國家清單 + 各國最低售價（約數十筆），不撈全部商品。
@@ -91,7 +119,7 @@ export async function getCountriesWithMinPrice(tenantAdminId?: string | null) {
     supplierProduct: { status: SupplierProductStatus.ACTIVE },
     ...(tenantAdminId != null ? { tenantAdminId } : {}),
   }
-  const [countries, mins] = await Promise.all([
+  const [countries, mins, coverage] = await Promise.all([
     prisma.product.findMany({
       where,
       select: { countryCode: true, countryNameZh: true, countryNameEn: true, countryFlag: true },
@@ -103,9 +131,14 @@ export async function getCountriesWithMinPrice(tenantAdminId?: string | null) {
       where,
       _min: { sellPrice: true },
     }),
+    coverageByCountry(where),
   ])
   const minMap = new Map(mins.map(m => [m.countryCode, m._min.sellPrice]))
-  return countries.map(c => ({ ...c, minPrice: minMap.get(c.countryCode) ?? null }))
+  return countries.map(c => ({
+    ...c,
+    minPrice: minMap.get(c.countryCode) ?? null,
+    coverage: coverage.get(c.countryCode) ?? null,
+  }))
 }
 
 // ─── Admin operations ────────────────────────────────────────────

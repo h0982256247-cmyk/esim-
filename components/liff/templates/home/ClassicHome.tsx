@@ -6,6 +6,7 @@ import { IconMyEsim, IconGuide, IconDataPlan, IconDevices } from './HomeIcons'
 import FilterDropdown from './FilterDropdown'
 import { CountryFlag } from '@/components/common/CountryFlag'
 import { resolveDestImage } from '@/lib/utils/dest-image'
+import { destinationMatches } from '@/lib/utils/destination-search'
 import type { HomePageProps } from './types'
 
 const QUICK_ACTIONS = [
@@ -46,10 +47,9 @@ export default function ClassicHome({
   const [searchOpen, setSearchOpen] = useState(true)   // 預設展開搜尋面板
   const brandName = tenant?.brandName ?? 'eSIM'
 
+  // 目的地搜尋（含方案「適用國家」）：打「香港」→ 香港與 coverage 含香港的中港澳都出現
   const filtered = query.trim()
-    ? countries.filter(c =>
-        c.countryNameZh.includes(query) ||
-        c.countryNameEn.toLowerCase().includes(query.toLowerCase()))
+    ? countries.filter(c => destinationMatches(query, c))
     : []
   // 熱門目的地：韓國、日本固定置頂兩格（HOT），其餘照原順序補滿 6 格。
   const HOT_PINNED = ['KR', 'JP']
@@ -63,8 +63,14 @@ export default function ClassicHome({
   ].slice(0, 6)
 
   function handleSearch() {
-    // 國家：優先用下拉點選的；沒點則用輸入字串比對到的第一個
-    const country = selCountry ?? (filtered[0] ? { code: filtered[0].countryCode, name: filtered[0].countryNameZh } : null)
+    // 國家：優先用下拉點選的；沒點則先找「名稱完全相同」者（避免打「香港」被 coverage
+    // 命中的區域包如中港澳搶先），再退回比對到的第一個。
+    const qn = query.trim().toLowerCase()
+    const exact = filtered.find(c =>
+      c.countryNameZh.toLowerCase() === qn || c.countryNameEn.toLowerCase() === qn)
+    const country = selCountry
+      ?? (exact ? { code: exact.countryCode, name: exact.countryNameZh } : null)
+      ?? (filtered[0] ? { code: filtered[0].countryCode, name: filtered[0].countryNameZh } : null)
     const p = new URLSearchParams()
     if (country) p.set('country', country.code)
     if (selDays) p.set('days', selDays.replace('天', ''))

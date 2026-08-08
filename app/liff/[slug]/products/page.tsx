@@ -195,6 +195,7 @@ function ProductsContent() {
 
   const cartControls: CartControls = useMemo(() => ({
     has: (id: string) => cart.has(id),
+    count: cart.count,
     toggle: (product: Product) => {
       if (cart.has(product.id)) {
         cart.remove(product.id)

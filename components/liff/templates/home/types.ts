@@ -6,6 +6,8 @@ export interface HomeCountry {
   countryNameEn: string
   countryFlag: string | null
   minPrice: number | null
+  /** 該目的地所有方案「適用國家」token 聚合字串，供搜尋比對（可能為 null）。 */
+  coverage?: string | null
 }
 
 export interface HomePageProps {
