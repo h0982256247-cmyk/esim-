@@ -246,9 +246,10 @@ export default function ClassicShop({
               onChange={e => setQuery(e.target.value)}
               placeholder="搜尋目的地，如：日本、韓國"
               style={{
+                // fontSize 必須 ≥ 16px：iOS 對 <16px 的輸入框在 focus 時會自動放大整個畫面
                 flex: 1, minWidth: 0, border: 'none', outline: 'none',
-                background: 'transparent', fontSize: 14, color: S.ink,
-                padding: '8px 0', WebkitAppearance: 'none',
+                background: 'transparent', fontSize: 16, color: S.ink,
+                padding: '7px 0', WebkitAppearance: 'none',
               }}
             />
             {query && (
