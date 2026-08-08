@@ -78,6 +78,31 @@ function formatData(mb: number, unit: string): string {
   return `${mb.toLocaleString()} MB`
 }
 
+// 手動安裝用：一個帶「複製」按鈕的唯讀欄位（位址／啟用碼／LPA）
+function CopyField({ label, value, sub, onCopy }: { label: string; value: string; sub?: string; onCopy: () => void }) {
+  return (
+    <div style={{ background: '#f8fafc', border: `1px solid ${S.line}`, borderRadius: 10, padding: '10px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <span style={{ fontSize: 12, color: S.muted, display: 'block', marginBottom: 4 }}>{label}</span>
+          <span style={{ fontFamily: 'ui-monospace, monospace', color: S.ink, fontWeight: 600, wordBreak: 'break-all', fontSize: 13, lineHeight: 1.5 }}>{value}</span>
+          {sub && <span style={{ fontSize: 11, color: S.faint, display: 'block', marginTop: 4 }}>{sub}</span>}
+        </div>
+        <button
+          onClick={onCopy}
+          style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: S.muted, background: S.white, border: `1px solid ${S.line}`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer' }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          複製
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // 偵測 iOS 17.4+（支援網頁一鍵安裝 eSIM）
 function supportsOneClickEsim(): boolean {
   if (typeof navigator === 'undefined') return false
@@ -94,6 +119,14 @@ function supportsOneClickEsim(): boolean {
 // 把 LPA 字串轉成 Apple 一鍵安裝 URL
 function buildAppleOneClickUrl(lpa: string): string {
   return `https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(lpa)}`
+}
+
+// 解析 WM 回傳的 LPA（格式 LPA:1$<SM-DP+ 位址>$<啟用碼>[$...]）成手動安裝欄位。
+// 位址＝第一段、啟用碼＝第二段；iOS 手動安裝的「確認碼」免填故不取後續段。
+function parseLpa(lpa: string): { smdp: string; activationCode: string } | null {
+  const parts = lpa.split('$')
+  if (parts.length < 3 || !parts[1] || !parts[2]) return null
+  return { smdp: parts[1], activationCode: parts[2] }
 }
 
 // 折扣（0.85）→ 折數標籤（9 折 / 85 折 / 92 折）
@@ -121,6 +154,8 @@ export default function OrderDetailPage() {
   const [redeemError, setRedeemError] = useState<string | null>(null)
   const [redeemTimeout, setRedeemTimeout] = useState(false)
   const [canOneClick, setCanOneClick] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
+  const [installTab, setInstallTab] = useState<'iphone' | 'android'>('iphone')
   const [repurchaseCoupon, setRepurchaseCoupon] = useState<{ discount: number } | null>(null)
   // 自訂確認彈窗（取代 window.confirm，避免 LINE 內建瀏覽器露出網址）
   const [dialog, setDialog] = useState<null | {
@@ -130,6 +165,27 @@ export default function OrderDetailPage() {
   // 輕量提示（取代 alert）
   const [toast, setToast] = useState<{ message: string; tone?: 'success' | 'error' | 'info' } | null>(null)
   const dismissToast = useCallback(() => setToast(null), [])
+
+  // 複製到剪貼簿：優先用 Clipboard API，LINE webview 不支援時退回 textarea + execCommand
+  const copyText = async (text: string, label: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      setToast({ message: `已複製${label}`, tone: 'success' })
+    } catch {
+      setToast({ message: '複製失敗，請長按文字手動複製', tone: 'error' })
+    }
+  }
 
   useEffect(() => { setCanOneClick(supportsOneClickEsim()) }, [])
 
@@ -612,25 +668,87 @@ export default function OrderDetailPage() {
               <IconInstall size={16} /> 一鍵安裝
             </a>
           )}
-          {order.esimLpa && !order.activatedAt && (
+          {canOneClick && order.esimLpa && !order.activatedAt && (
             <p style={{ fontSize: 11, color: S.faint, textAlign: 'center', margin: '0 0 14px', lineHeight: 1.6 }}>
               iOS 17.4 以上版本推薦使用
-              <br/>
-              或長按上方 QR 碼也可直接安裝
             </p>
           )}
 
-          {/* 安裝步驟指引（尚未啟用時顯示） */}
-          {!order.activatedAt && (
-            <div style={{ background: '#f8fafc', border: `1px solid ${S.line}`, borderRadius: 12, padding: '12px 14px', margin: '0 0 14px' }}>
-              <p style={{ fontSize: 12, fontWeight: 700, color: S.ink, margin: '0 0 8px' }}>安裝步驟</p>
-              <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: S.muted, lineHeight: 1.8 }}>
-                <li>用上方「一鍵安裝」或長按 QR 碼，把 eSIM 加入手機</li>
-                <li>到手機<strong style={{ color: S.ink }}>設定 → 行動服務／行動網路</strong>，開啟此 eSIM 的「行動數據」與「數據漫遊」</li>
-                <li>連上網路後，本頁會自動更新為 <strong style={{ color: '#047857' }}>使用中</strong></li>
-              </ol>
-            </div>
-          )}
+          {/* 手動安裝（可折疊）：iPhone / Android 分頁說明 + 依 WM 回傳 LPA 解析的複製欄位 */}
+          {order.esimLpa && !order.activatedAt && ((lpa: string) => {
+            const parsed = parseLpa(lpa)
+            return (
+              <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden', margin: '0 0 14px' }}>
+                <button
+                  onClick={() => setManualOpen(o => !o)}
+                  style={{
+                    width: '100%', background: S.white, border: 'none', padding: '14px 16px',
+                    fontSize: 15, fontWeight: 800, color: S.ink, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  手動安裝
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                    style={{ transform: manualOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+
+                {manualOpen && (
+                  <div style={{ borderTop: `1px solid ${C.border}`, padding: 16 }}>
+                    {/* iPhone / Android 分頁 */}
+                    <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 10, padding: 4, marginBottom: 14 }}>
+                      {(['iphone', 'android'] as const).map(t => (
+                        <button
+                          key={t}
+                          onClick={() => setInstallTab(t)}
+                          style={{
+                            flex: 1, border: 'none', borderRadius: 8, padding: '8px 0',
+                            fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                            background: installTab === t ? S.white : 'transparent',
+                            color: installTab === t ? S.ink : S.faint,
+                            boxShadow: installTab === t ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                            transition: 'color 0.15s, background 0.15s',
+                          }}
+                        >
+                          {t === 'iphone' ? 'iPhone' : 'Android'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {installTab === 'iphone' ? (
+                      <>
+                        <ol style={{ margin: '0 0 14px', paddingLeft: 18, fontSize: 13, color: S.muted, lineHeight: 1.9 }}>
+                          <li>到手機<strong style={{ color: S.ink }}>設定 → 行動服務 → 加入 eSIM</strong></li>
+                          <li>選「<strong style={{ color: S.ink }}>使用行動條碼</strong>」，拉到最底點「<strong style={{ color: S.ink }}>手動輸入詳細資料</strong>」</li>
+                          <li>貼上下方「<strong style={{ color: S.ink }}>位址</strong>」與「<strong style={{ color: S.ink }}>啟用碼</strong>」（確認碼免填），按右上角「<strong style={{ color: S.ink }}>下一步</strong>」安裝</li>
+                          <li>開啟此 eSIM 的「行動數據」與「數據漫遊」，連上網路後本頁會自動更新為 <strong style={{ color: '#047857' }}>使用中</strong></li>
+                        </ol>
+                        {parsed ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            <CopyField label="位址（SM-DP+ 位址）" value={parsed.smdp} onCopy={() => copyText(parsed.smdp, '位址')} />
+                            <CopyField label="啟用碼" value={parsed.activationCode} sub="確認碼免填" onCopy={() => copyText(parsed.activationCode, '啟用碼')} />
+                          </div>
+                        ) : (
+                          <CopyField label="LPA（手動輸入用）" value={lpa} onCopy={() => copyText(lpa, 'LPA')} />
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <ol style={{ margin: '0 0 14px', paddingLeft: 18, fontSize: 13, color: S.muted, lineHeight: 1.9 }}>
+                          <li>手機先<strong style={{ color: S.ink }}>連上網路</strong>（Wi-Fi 或其他門號）</li>
+                          <li>到<strong style={{ color: S.ink }}>設定 → 網路與網際網路</strong>，點 eSIM 旁的「<strong style={{ color: S.ink }}>＋</strong>」或「新增使用 eSIM 卡的號碼」</li>
+                          <li>點「繼續」→「需要協助嗎？」→「<strong style={{ color: S.ink }}>請手動輸入</strong>」，貼上下方 <strong style={{ color: S.ink }}>LPA</strong> 那一條完成安裝</li>
+                          <li>開啟此 eSIM 的「行動數據」與「數據漫遊」，連上網路後本頁會自動更新為 <strong style={{ color: '#047857' }}>使用中</strong></li>
+                        </ol>
+                        <CopyField label="LPA（手動輸入用）" value={lpa} onCopy={() => copyText(lpa, 'LPA')} />
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })(order.esimLpa)}
 
           {order.activationStart && order.activationEnd && (
             <div style={{ fontSize: 13, marginBottom: 4 }}>
@@ -640,22 +758,6 @@ export default function OrderDetailPage() {
               </span>
             </div>
           )}
-          {/* 技術資料（啟動碼／LPA）一般用一鍵安裝或掃 QR 即可，預設收合避免畫面雜亂 */}
-          <details style={{ marginTop: 4 }}>
-            <summary style={{ fontSize: 12, color: S.muted, cursor: 'pointer' }}>進階：手動安裝資料</summary>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, marginTop: 10 }}>
-              <div>
-                <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>啟動碼</span>
-                <span style={{ fontFamily: 'ui-monospace, monospace', color: S.ink, wordBreak: 'break-all', fontWeight: 600 }}>{order.esimRcode}</span>
-              </div>
-              {order.esimLpa && (
-                <div>
-                  <span style={{ color: S.muted, display: 'block', marginBottom: 2 }}>LPA</span>
-                  <span style={{ fontFamily: 'ui-monospace, monospace', color: S.ink, fontSize: 11, wordBreak: 'break-all' }}>{order.esimLpa}</span>
-                </div>
-              )}
-            </div>
-          </details>
 
           {/* 已激活提示（只有在 QR 已展示 + 已激活時出現在這個 block） */}
           {order.activatedAt && (
