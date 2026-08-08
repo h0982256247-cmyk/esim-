@@ -100,9 +100,11 @@ function ProductsContent() {
 
     const cached = peekCache<ProductsApiResponse>(productsCacheKey())
     if (cached) {
+      /* eslint-disable react-hooks/set-state-in-effect -- 掛載時若有跨頁快取則先同步顯示（cache 水合），非渲染衍生 */
       setCountries(cached.countries ?? [])
       setAllProducts(cached.products ?? [])
       setLoading(false)
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
 
     async function load() {
@@ -153,8 +155,10 @@ function ProductsContent() {
     if (availableDays.includes(pickerDays)) return
     const chosen = pickInitialDay(availableDays)
     if (chosen !== null) {
+      /* eslint-disable react-hooks/set-state-in-effect -- 可用天數改變時把選取天數校正到最近可用值（跨資料同步），非渲染衍生 */
       setPickerDays(chosen)
       setDayFilter(chosen)
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [availableDays, pickerDays])
 

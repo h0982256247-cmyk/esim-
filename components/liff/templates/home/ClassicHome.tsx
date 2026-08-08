@@ -96,6 +96,7 @@ export default function ClassicHome({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {tenant?.logoUrl
+              // eslint-disable-next-line @next/next/no-img-element -- 租戶 logo 為任意上傳網域，next/image 需設定網域白名單，此處用 img
               ? <img src={tenant.logoUrl} alt={brandName} style={{ width: 46, height: 46, objectFit: 'cover' }} />
               : <BeeLogoSVG size={26} />}
           </div>

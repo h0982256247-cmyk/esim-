@@ -187,7 +187,10 @@ export default function OrderDetailPage() {
     }
   }
 
-  useEffect(() => { setCanOneClick(supportsOneClickEsim()) }, [])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 掛載後才能讀 navigator 判斷 iOS 版本；放 effect 內以避免 SSR/hydration 不一致
+    setCanOneClick(supportsOneClickEsim())
+  }, [])
 
   // 從 TapPay (LINE Pay / 3DS) 跳轉回來時，網址會帶 ?status=<n>。
   // status=0 是付款成功（等 webhook fan-out），非零代表失敗或使用者取消。
