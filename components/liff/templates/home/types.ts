@@ -20,4 +20,6 @@ export interface HomePageProps {
   onSelectCountry: (code: string) => void
   onNavigate: (path: string) => void
   onSearch: (query: string) => void
+  /** 使用者所屬社群（社群主的 ownedGroup 或會員的 group）；有值才顯示邀請好友 Banner。 */
+  myGroup?: { name: string } | null
 }

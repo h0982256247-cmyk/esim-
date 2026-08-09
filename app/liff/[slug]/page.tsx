@@ -60,13 +60,20 @@ export default function LiffHomePage() {
   // lazy initializer 同步讀本機快取 → 回訪時熱門目的地「一開就顯示」，不必等網路
   const [countries, setCountries] = useState<HomeCountry[]>(() => readCachedHomeCountries(slug))
   const [showSetup, setShowSetup] = useState(false)
+  // 有社群碼可分享者（社群主 ownedGroup 或會員 group）才顯示「邀請好友」Banner
+  const [myGroup, setMyGroup] = useState<{ name: string } | null>(null)
 
   useEffect(() => {
     if (!isReady) return
     // me（是否彈設定視窗）、countries（熱門目的地）並行；商品全量背景預熱不阻塞畫面。
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null)
-      // profileComplete 在 me.user 底下（過去誤讀 me.profileComplete → 永遠 undefined）
-      .then(me => { if (me?.user && !me.user.profileComplete) setShowSetup(true) })
+      .then(me => {
+        if (!me) return
+        // profileComplete 在 me.user 底下（過去誤讀 me.profileComplete → 永遠 undefined）
+        if (me.user && !me.user.profileComplete) setShowSetup(true)
+        // 社群主優先，其次會員所屬社群；都沒有 → null（不顯示 Banner）
+        setMyGroup(me.ownedGroup ?? me.group ?? null)
+      })
       .catch(() => {})
     // 熱門目的地只需「國家 + 各國最低價」（約數十筆）→ 用輕量端點秒顯示，
     // 不再等上萬筆 /api/products。
@@ -81,7 +88,7 @@ export default function LiffHomePage() {
     fetch('/api/products').then(r => r.json())
       .then(data => setCache(productsCacheKey(), data))
       .catch(() => {})
-  }, [isReady])
+  }, [isReady, slug])
 
   function handleNavigate(path: string) {
     const routes: Record<string, string> = {
@@ -126,6 +133,7 @@ export default function LiffHomePage() {
             </svg>
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {tenant?.logoUrl
+                // eslint-disable-next-line @next/next/no-img-element -- 租戶 logo 為任意上傳網域，next/image 需設定網域白名單，此處用 img
                 ? <img src={tenant.logoUrl} alt={brandName} style={{ width: 60, height: 60, objectFit: 'contain', borderRadius: 16 }} />
                 : <BeeLogoSVG size={54} />
               }
@@ -170,6 +178,7 @@ export default function LiffHomePage() {
           onSelectCountry={code => router.push(`/liff/${slug}/products?country=${encodeURIComponent(code)}`)}
           onNavigate={handleNavigate}
           onSearch={q => router.push(`/liff/${slug}/products${q}`)}
+          myGroup={myGroup}
         />
       </div>
     </>

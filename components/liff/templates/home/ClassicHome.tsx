@@ -37,7 +37,7 @@ function getAccent(code: string) {
 }
 
 export default function ClassicHome({
-  tenant, countries, colors: C, onSelectCountry, onNavigate, onSearch,
+  tenant, countries, colors: C, onSelectCountry, onNavigate, onSearch, myGroup,
 }: HomePageProps) {
   const [query, setQuery]       = useState('')
   const [selDays, setSelDays]   = useState<string | null>(null)
@@ -243,6 +243,37 @@ export default function ClassicHome({
         </div>
       </div>
 
+      {/* ── 邀請好友 Banner（有社群碼可分享者才顯示；點按導向社群頁分享）── */}
+      {myGroup && (
+        <div style={{ padding: '18px 20px 0' }}>
+          <button
+            onClick={() => onNavigate('group')}
+            className="ch-invite-banner"
+            style={{
+              width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
+              borderRadius: 20, padding: '15px 16px',
+              display: 'flex', alignItems: 'center', gap: 13, color: '#fff',
+              background: `linear-gradient(135deg, ${C.primary}, ${C.primary}cc)`,
+              boxShadow: `0 10px 24px ${C.primary}40`,
+              WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation',
+            }}
+          >
+            <div style={{ width: 44, height: 44, borderRadius: 14, flexShrink: 0, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+              </svg>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 15, fontWeight: 900, margin: 0, letterSpacing: '-0.01em' }}>邀請好友加入社群</p>
+              <p style={{ fontSize: 12, margin: '3px 0 0', color: 'rgba(255,255,255,0.9)', lineHeight: 1.5 }}>好友加入即可獲得折扣券，一起買 eSIM 更划算</p>
+            </div>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.9 }} aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* ── 快速功能 ── */}
       <div style={{ padding: '22px 20px 0' }}>
         <p style={{ fontSize: 19, fontWeight: 900, color: '#1a1a1a', margin: '0 0 14px', letterSpacing: '-0.025em' }}>快速功能</p>
@@ -407,6 +438,8 @@ export default function ClassicHome({
         @keyframes dropIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
         .ch-dest-card:active { transform: scale(0.97); box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
         .ch-more-link:active { opacity: 0.55; }
+        .ch-invite-banner { transition: transform 0.12s ease, filter 0.2s ease; }
+        .ch-invite-banner:active { transform: scale(0.985); filter: brightness(0.96); }
         .ch-more-text { animation: moreFloat 2.6s ease-in-out infinite; }
         @keyframes moreFloat { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-4px) } }
         .ch-route-line { stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 2 5; opacity: 0.4; }
