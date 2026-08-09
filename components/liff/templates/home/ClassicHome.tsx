@@ -372,12 +372,44 @@ export default function ClassicHome({
             })}
           </div>
         )}
+
+        {/* 查看更多目的地 → 商城（純文字、醒目；箭頭輕微擺動吸睛） */}
+        {hot.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
+            <button
+              onClick={() => onNavigate('products')}
+              className="ch-more-link"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                color: C.primary, fontSize: 17, fontWeight: 900, letterSpacing: '0.01em',
+                padding: '8px 8px',
+                WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation',
+                animation: 'fadeUp 0.4s 0.36s ease both',
+              }}
+            >
+              更多目的地
+              <svg className="ch-more-plane" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M2.5 19l19-8L2.5 3v6l13 2-13 2v6z"/>
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
       <style>{`
         @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
         @keyframes dropIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
         .ch-dest-card:active { transform: scale(0.97); box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
+        .ch-more-link:active { opacity: 0.55; }
+        .ch-more-plane { animation: planeTakeoff 2.4s ease-in-out infinite; will-change: transform, opacity; }
+        @keyframes planeTakeoff {
+          0%,12%   { transform: translate(0,0) rotate(0deg); opacity: 1 }
+          55%      { transform: translate(9px,-9px) rotate(-16deg); opacity: 1 }
+          72%      { transform: translate(16px,-16px) rotate(-16deg); opacity: 0 }
+          73%      { transform: translate(-10px,7px) rotate(0deg); opacity: 0 }
+          90%,100% { transform: translate(0,0) rotate(0deg); opacity: 1 }
+        }
       `}</style>
     </div>
   )
