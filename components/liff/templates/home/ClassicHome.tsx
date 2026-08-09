@@ -388,10 +388,15 @@ export default function ClassicHome({
                 animation: 'fadeUp 0.4s 0.36s ease both',
               }}
             >
-              更多目的地
-              <svg className="ch-more-plane" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M2.5 19l19-8L2.5 3v6l13 2-13 2v6z"/>
-              </svg>
+              <span className="ch-more-text">更多目的地</span>
+              <span style={{ position: 'relative', display: 'inline-block', width: 52, height: 20 }} aria-hidden="true">
+                <svg viewBox="0 0 52 20" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}>
+                  <line className="ch-route-line" x1="2" y1="17" x2="46" y2="4" />
+                </svg>
+                <svg className="ch-more-plane" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: -2, top: -1 }}>
+                  <path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z" />
+                </svg>
+              </span>
             </button>
           </div>
         )}
@@ -402,13 +407,20 @@ export default function ClassicHome({
         @keyframes dropIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
         .ch-dest-card:active { transform: scale(0.97); box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
         .ch-more-link:active { opacity: 0.55; }
-        .ch-more-plane { animation: planeTakeoff 2.4s ease-in-out infinite; will-change: transform, opacity; }
-        @keyframes planeTakeoff {
-          0%,12%   { transform: translate(0,0) rotate(0deg); opacity: 1 }
-          55%      { transform: translate(9px,-9px) rotate(-16deg); opacity: 1 }
-          72%      { transform: translate(16px,-16px) rotate(-16deg); opacity: 0 }
-          73%      { transform: translate(-10px,7px) rotate(0deg); opacity: 0 }
-          90%,100% { transform: translate(0,0) rotate(0deg); opacity: 1 }
+        .ch-more-text { animation: moreFloat 2.6s ease-in-out infinite; }
+        @keyframes moreFloat { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-4px) } }
+        .ch-route-line { stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 2 5; opacity: 0.4; }
+        .ch-more-plane { animation: routeFly 3s cubic-bezier(.5,0,.35,1) infinite; will-change: transform, opacity; }
+        @keyframes routeFly {
+          0%,8%  { transform: translate(0,0); opacity: 0 }
+          18%    { opacity: 1 }
+          70%    { transform: translate(32px,-11px); opacity: 1 }
+          85%    { transform: translate(46px,-17px); opacity: 0 }
+          100%   { transform: translate(0,0); opacity: 0 }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ch-more-text, .ch-more-plane { animation: none; }
+          .ch-more-plane { opacity: 1; transform: none; }
         }
       `}</style>
     </div>
