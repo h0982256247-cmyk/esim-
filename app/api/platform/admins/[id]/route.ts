@@ -37,6 +37,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         primaryColor: true,
         lineAccessToken: true,
         lineOaUrl: true,
+        orderNotifyLineUid: true,
         _count: { select: { ownedGroups: true } },
       },
     })
@@ -106,7 +107,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   }
 
-  if (body.brandName !== undefined || body.tenantSlug !== undefined || body.liffId !== undefined || body.logoUrl !== undefined || body.primaryColor !== undefined || body.lineAccessToken !== undefined || body.lineOaUrl !== undefined) {
+  if (body.brandName !== undefined || body.tenantSlug !== undefined || body.liffId !== undefined || body.logoUrl !== undefined || body.primaryColor !== undefined || body.lineAccessToken !== undefined || body.lineOaUrl !== undefined || body.orderNotifyLineUid !== undefined) {
     const updateData: Record<string, unknown> = {}
     if (body.brandName !== undefined) updateData.brandName = body.brandName
     // Slug 一經設定即鎖死：避免後續變更 URL 後 LINE LIFF endpoint、TapPay
@@ -129,6 +130,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (body.liffId !== undefined) updateData.liffId = body.liffId
     if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl
     if (body.lineOaUrl !== undefined) updateData.lineOaUrl = (body.lineOaUrl as string)?.trim() || null
+    if (body.orderNotifyLineUid !== undefined) updateData.orderNotifyLineUid = (body.orderNotifyLineUid as string)?.trim() || null
     if (body.primaryColor !== undefined) updateData.primaryColor = body.primaryColor
     if (body.lineAccessToken !== undefined) {
       // If masked value passed back, keep existing encrypted value

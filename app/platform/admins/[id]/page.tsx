@@ -20,6 +20,7 @@ type AdminDetail = {
   primaryColor: string | null
   lineAccessToken: string | null
   lineOaUrl: string | null
+  orderNotifyLineUid: string | null
   _count: { ownedGroups: number }
 }
 
@@ -689,6 +690,7 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
     primaryColor: admin.primaryColor ?? '#FFC107',
     lineAccessToken: admin.lineAccessToken ?? '',
     lineOaUrl: admin.lineOaUrl ?? '',
+    orderNotifyLineUid: admin.orderNotifyLineUid ?? '',
   })
   // Slug 一經設定即鎖死：避免後續變更 URL 後 LINE LIFF endpoint、TapPay
   // result_url、群組分享連結、使用者書籤全部失效。後端也有同條 guard。
@@ -929,6 +931,17 @@ function BrandConfigTab({ admin, onSaved }: { admin: AdminDetail; onSaved: () =>
                   className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
                 />
                 <p className="text-xs text-gray-400 mt-1">前台「客服中心」的 LINE 客服按鈕會導向此連結。於 LINE 官方帳號後台「加入好友／分享」取得 lin.ee 連結；留空則前台不顯示客服按鈕。</p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">訂單通知對象（LINE UID）</label>
+                <input
+                  type="text"
+                  value={form.orderNotifyLineUid}
+                  onChange={e => setForm(p => ({ ...p, orderNotifyLineUid: e.target.value }))}
+                  placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  className="w-full border rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                />
+                <p className="text-xs text-gray-400 mt-1">有新訂單付款成功時，會用上方 Token 從你的官方帳號推播訂單摘要到這個 LINE。填平台商本人的 LINE userId（可在「會員管理」查到，U 開頭那串）。此人需先加此官方帳號為好友、且上方 Token 已填，留空則不通知。</p>
               </div>
             </div>
           </div>

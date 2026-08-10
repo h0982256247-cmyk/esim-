@@ -310,6 +310,32 @@ export async function notifyOrderPaid(
   })
 }
 
+// 平台商訂單通知：付款成功時推播訂單摘要給該租戶設定的 LINE UID（orderNotifyLineUid，後台手動貼上）。
+// 用該租戶自己的 LINE token 推播；未設定 UID 則靜默跳過。內容不含任何 eSIM 敏感碼（QR/LPA/啟用碼等）。
+export async function notifyMerchantOrderPaid(
+  tenantAdminId: string | null,
+  info: { orderNumber: string; items: { productName: string; qty: number }[]; amount: number; customerName?: string | null },
+): Promise<void> {
+  if (!tenantAdminId) return
+  const admin = await prisma.platformAdmin.findUnique({
+    where: { id: tenantAdminId },
+    select: { orderNotifyLineUid: true },
+  })
+  const uid = admin?.orderNotifyLineUid?.trim()
+  if (!uid) return   // 未設定通知對象 → 靜默跳過
+
+  const itemsText = info.items.map(i => `・${i.productName} ×${i.qty}`).join('\n')
+  const text = [
+    '🔔 新訂單付款成功',
+    `訂單編號：${info.orderNumber}`,
+    itemsText,
+    `金額：NT$${info.amount.toLocaleString()}`,
+    info.customerName ? `顧客：${info.customerName}` : null,
+  ].filter(Boolean).join('\n')
+
+  await sendLineMessage(uid, text, tenantAdminId)
+}
+
 // plan：由呼叫端帶入的結構化方案（拆卡片「國家大字＋方案細節」用）；缺省則退回整段 productName。
 export async function notifyEsimReady(
   userId: string,

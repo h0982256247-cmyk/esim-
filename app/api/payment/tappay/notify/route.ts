@@ -12,7 +12,7 @@ import {
 import { triggerEsimActivation } from '@/lib/services/esim'
 import { calculateAndSaveCommission } from '@/lib/services/commission'
 import { issueRepurchaseCouponForOrder } from '@/lib/services/coupon'
-import { notifyOrderPaid } from '@/lib/services/notification'
+import { notifyOrderPaid, notifyMerchantOrderPaid } from '@/lib/services/notification'
 import { recordAlert } from '@/lib/services/alert'
 import { fireAndLog } from '@/lib/utils/fire-and-log'
 import { tapPayRefund, tapPayQueryTrade } from '@/lib/services/tappay'
@@ -161,22 +161,29 @@ export async function POST(req: NextRequest) {
     catch (e) { console.error('[pay-notify] repurchase coupon failed', oid, e); await recordAlert('repurchase_coupon_failed', { orderId: oid, tenantAdminId, error: e instanceof Error ? e.message : String(e) }) }
   }
 
+  let notifyItems: { productName: string; qty: number }[]
+  let notifyAmount: number
   if (bundleId && paidOrderIds.length > 1) {
     // 整捆：列出整組所有方案 + 加總金額
     const [totalAggregate, bundleItems] = await Promise.all([
       prisma.order.aggregate({ where: { bundleId }, _sum: { totalPaid: true } }),
       prisma.orderItem.findMany({ where: { order: { bundleId } }, select: { productName: true, qty: true } }),
     ])
-    fireAndLog('notify_order_paid_failed', order.id, notifyOrderPaid(
-      order.userId,
-      bundleItems,
-      totalAggregate._sum.totalPaid ?? order.totalPaid,
-      tenantAdminId,
-    ))
+    notifyItems = bundleItems
+    notifyAmount = totalAggregate._sum.totalPaid ?? order.totalPaid
   } else {
-    const items = order.orderItems.map(it => ({ productName: it.productName, qty: it.qty }))
-    fireAndLog('notify_order_paid_failed', order.id, notifyOrderPaid(order.userId, items, order.totalPaid, tenantAdminId))
+    notifyItems = order.orderItems.map(it => ({ productName: it.productName, qty: it.qty }))
+    notifyAmount = order.totalPaid
   }
+  // 顧客通知（LINE Flex）
+  fireAndLog('notify_order_paid_failed', order.id, notifyOrderPaid(order.userId, notifyItems, notifyAmount, tenantAdminId))
+  // 平台商通知（僅在後台已設定 orderNotifyLineUid 時才送；未設定則函式內靜默跳過）
+  fireAndLog('notify_merchant_order_failed', order.id, notifyMerchantOrderPaid(tenantAdminId, {
+    orderNumber: order.orderNumber ?? `#${order.id.slice(-8).toUpperCase()}`,
+    items: notifyItems,
+    amount: notifyAmount,
+    customerName: order.user.displayName,
+  }))
 
   return NextResponse.json({ message: 'ok' })
 }
