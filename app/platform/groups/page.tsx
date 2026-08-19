@@ -62,6 +62,15 @@ function GroupsContent() {
   }, [])
   const handleApprove = async (id: string) => { setActionLoading(id+'_approve'); await fetch(`/api/admin/groups/${id}/approve`,{method:'POST'}); setActionLoading(null); load() }
   const handleReject = async (id: string) => { setActionLoading(id+'_reject'); await fetch(`/api/admin/groups/${id}/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}); setActionLoading(null); load() }
+  const handleDissolve = async (id: string, name: string) => {
+    if (!window.confirm(`確定解散「${name}」並把社群主退回「未加入」？\n\n僅限全新社群（無成員、無分潤／結算／提領）。此動作無法復原。`)) return
+    setActionLoading(id+'_dissolve')
+    const r = await fetch(`/api/admin/groups/${id}/dissolve`,{method:'POST'}).then(x=>x.json())
+    setActionLoading(null)
+    if (r.error) { window.alert(`解散失敗：${r.error}`); return }
+    window.alert('已解散社群，社群主已退回未加入')
+    load()
+  }
   const handleSuspend = async (id: string, name: string) => {
     const note = window.prompt(`停權「${name}」後，該社群的所有未使用優惠券將立即失效。\n停權原因（選填）：`, '')
     if (note === null) return
@@ -181,17 +190,20 @@ function GroupsContent() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      {g.status==='PENDING'&&(
-                        <div className="flex gap-1.5">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {g.status==='PENDING'&&(<>
                           <button onClick={()=>handleApprove(g.id)} disabled={!!actionLoading} className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">{actionLoading===g.id+'_approve'?'…':'核准'}</button>
                           <button onClick={()=>handleReject(g.id)} disabled={!!actionLoading} className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">{actionLoading===g.id+'_reject'?'…':'拒絕'}</button>
-                        </div>
-                      )}
-                      {g.status==='APPROVED'&&(
-                        <button onClick={()=>handleSuspend(g.id, g.name)} disabled={!!actionLoading} className="text-xs bg-orange-50 hover:bg-orange-100 text-orange-700 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">
-                          {actionLoading===g.id+'_suspend'?'…':'停權'}
+                        </>)}
+                        {g.status==='APPROVED'&&(
+                          <button onClick={()=>handleSuspend(g.id, g.name)} disabled={!!actionLoading} className="text-xs bg-orange-50 hover:bg-orange-100 text-orange-700 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">
+                            {actionLoading===g.id+'_suspend'?'…':'停權'}
+                          </button>
+                        )}
+                        <button onClick={()=>handleDissolve(g.id, g.name)} disabled={!!actionLoading} title="解散全新社群，社群主退回未加入（有成員/分潤則擋下）" className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg disabled:opacity-50 font-medium transition">
+                          {actionLoading===g.id+'_dissolve'?'…':'解散'}
                         </button>
-                      )}
+                      </div>
                     </td>
                     {currentUser?.role==='SUPER_ADMIN'&&(
                       <td className="px-5 py-3.5">

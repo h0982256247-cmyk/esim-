@@ -453,6 +453,46 @@ export async function rejectGroup(groupId: string, note?: string, tenantAdminId?
   return group
 }
 
+// ─── Admin：解散社群（社群主退回未加入）──────────────────────────
+// 僅限「全新、無任何活動」的社群：無成員、無分潤 / 結算 / 提領、無已使用的券。
+// 通過檢查才在同一交易內：作廢社群發出的（未使用）券 → 清掉社群主本人殘留的「已離開」
+// 成員列（避免 me.group 因 leftAt 未被過濾而仍抓到舊社群）→ 刪除社群，使 owner 回「未加入」。
+// 有任何活動一律擋下（請改用「停權」以保留記錄）。tenant 隔離比照 approve/suspend/reject。
+export type DissolveGroupResult = { ok: true } | { ok: false; reason: string }
+
+export async function dissolveGroup(
+  groupId: string,
+  tenantAdminId?: string | null,
+): Promise<DissolveGroupResult> {
+  return prisma.$transaction(async tx => {
+    const group = await tx.group.findUnique({
+      where: { id: groupId },
+      select: { id: true, ownerId: true, tenantAdminId: true },
+    })
+    if (!group) return { ok: false, reason: '社群不存在' }
+    if (tenantAdminId != null && group.tenantAdminId !== tenantAdminId) {
+      return { ok: false, reason: '無權操作此社群' }
+    }
+
+    // 安全鎖：一旦有成員 / 分潤 / 結算 / 提領 / 已使用券，就不可解散（避免毀損記錄）。
+    // 交易內序列查詢（不用 Promise.all，避免 interactive tx 併發查詢的邊界問題）。
+    const members = await tx.groupMember.count({ where: { groupId } })
+    const commissions = await tx.commission.count({ where: { groupId } })
+    const settlements = await tx.commissionSettlement.count({ where: { groupId } })
+    const withdrawals = await tx.withdrawal.count({ where: { groupId } })
+    const usedCoupons = await tx.coupon.count({ where: { sourceGroupId: groupId, usedAt: { not: null } } })
+    if (members > 0 || commissions > 0 || settlements > 0 || withdrawals > 0 || usedCoupons > 0) {
+      return { ok: false, reason: '此社群已有成員或分潤／結算／提領／用券記錄，無法解散，請改用「停權」' }
+    }
+
+    // 全新社群 → 安全解散
+    await tx.coupon.deleteMany({ where: { sourceGroupId: groupId } })                              // 作廢社群主 7 折券（未使用）
+    await tx.groupMember.deleteMany({ where: { userId: group.ownerId, leftAt: { not: null } } })   // 清社群主殘留的離群列 → me.group=null
+    await tx.group.delete({ where: { id: groupId } })
+    return { ok: true }
+  })
+}
+
 export async function getAllGroups(status?: GroupStatus, tenantAdminId?: string | null) {
   const where: Record<string, unknown> = {}
   if (status) where.status = status
