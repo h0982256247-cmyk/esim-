@@ -130,10 +130,10 @@ export async function requestWithdrawalForPeriod(
         period,
         status: WithdrawalStatus.PENDING,
         bankInfoSnapshot: {
-          bankName,
-          bankAccount:    safeDecrypt(bankAccount),
-          bankBranch:     bankBranch ? safeDecrypt(bankBranch) : '',
-          bankHolderName: safeDecrypt(bankHolderName),
+          bankName,                          // 公開資訊，明文
+          bankAccount,                       // 沿用 group 的「加密值」存快照，帳號不再明文落地；平台端讀取時解密
+          bankBranch:     bankBranch ?? '',  // 加密值（或空字串）
+          bankHolderName,                    // 加密值
         } satisfies Prisma.InputJsonValue,
       },
     })
@@ -180,8 +180,17 @@ export async function getWithdrawalsByGroup(groupId: string) {
   })
 }
 
+// bankInfoSnapshot 內帳號/分行/戶名為「加密值」（新資料）；safeDecrypt 對舊的明文快照會原樣返回，
+// 故新舊資料皆可正確讀出（雙讀相容）。bankName 為公開資訊、明文不動。
+function decryptBankSnapshot(snap: Prisma.JsonValue): Prisma.JsonValue {
+  if (!snap || typeof snap !== 'object' || Array.isArray(snap)) return snap
+  const s = snap as Record<string, Prisma.JsonValue>
+  const dec = (v: Prisma.JsonValue): Prisma.JsonValue => (typeof v === 'string' && v ? safeDecrypt(v) : v)
+  return { ...s, bankAccount: dec(s.bankAccount), bankBranch: dec(s.bankBranch), bankHolderName: dec(s.bankHolderName) }
+}
+
 export async function getAllWithdrawalsForAdmin(tenantAdminId?: string | null) {
-  return prisma.withdrawal.findMany({
+  const rows = await prisma.withdrawal.findMany({
     where: tenantAdminId ? { group: { tenantAdminId } } : undefined,
     orderBy: [{ status: 'asc' }, { appliedAt: 'desc' }],
     include: {
@@ -193,4 +202,6 @@ export async function getAllWithdrawalsForAdmin(tenantAdminId?: string | null) {
       },
     },
   })
+  // 平台端撥款需完整帳號 → 讀取時解密快照（僅此授權端點回傳明文）
+  return rows.map(w => ({ ...w, bankInfoSnapshot: decryptBankSnapshot(w.bankInfoSnapshot) }))
 }
