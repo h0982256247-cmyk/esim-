@@ -270,7 +270,7 @@ export async function getDashboardStats(tenantAdminId: string | null) {
 
   // Recent 6 months: revenue + grossProfit
   const now = new Date()
-  const monthlyRevenue: { month: string; revenue: number; grossProfit: number }[] = []
+  const monthlyRevenue: { month: string; revenue: number; grossProfit: number; cost: number }[] = []
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const nextD = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
@@ -289,6 +289,7 @@ export async function getDashboardStats(tenantAdminId: string | null) {
       month: `${d.getMonth() + 1}月`,
       revenue: agg._sum.totalPaid ?? 0,
       grossProfit: m.grossProfit,
+      cost: m.cost,
     })
   }
 

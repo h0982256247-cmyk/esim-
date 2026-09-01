@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import TenantScopeBar from '@/components/platform/TenantScopeBar'
 
-type MonthlyRevenue = { month: string; revenue: number; grossProfit: number }
+type MonthlyRevenue = { month: string; revenue: number; grossProfit: number; cost: number }
 
 type RecentOrder = {
   id: string
@@ -123,9 +123,10 @@ function TrendChart({ data }: { data: MonthlyRevenue[] }) {
   )
 }
 
-function MetricCard({ icon, tint, label, value, change, spark, sparkColor, foot }: {
+function MetricCard({ icon, tint, label, value, change, spark, sparkColor, foot, months }: {
   icon: React.ReactNode; tint: string; label: string; value: string
   change?: number | null; spark?: number[] | null; sparkColor?: string; foot?: string
+  months?: { label: string; value: string }[]   // 提供時顯示「近三月明細」，取代 change/走勢
 }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-all">
@@ -134,16 +135,27 @@ function MetricCard({ icon, tint, label, value, change, spark, sparkColor, foot 
         <p className="text-sm text-gray-400">{label}</p>
       </div>
       <p className="text-2xl font-extrabold text-gray-800 mt-3 leading-none">{value}</p>
-      <div className="flex items-end justify-between mt-2 h-[30px]">
-        {change != null ? (
-          <span className={`text-xs font-medium ${change >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-            較上月 {change >= 0 ? '↑' : '↓'} {Math.abs(change)}%
-          </span>
-        ) : foot ? (
-          <span className="text-xs text-gray-400">{foot}</span>
-        ) : <span />}
-        {spark && spark.length > 1 && <Sparkline values={spark} color={sparkColor ?? '#3b82f6'} />}
-      </div>
+      {months ? (
+        <div className="mt-3 space-y-1 border-t border-gray-100 pt-2.5">
+          {months.map((m, i) => (
+            <div key={m.label} className="flex items-center justify-between text-xs">
+              <span className={i === 0 ? 'text-gray-600 font-semibold' : 'text-gray-400'}>{m.label}</span>
+              <span className={i === 0 ? 'text-gray-800 font-bold' : 'text-gray-500 font-medium'}>{m.value}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-end justify-between mt-2 h-[30px]">
+          {change != null ? (
+            <span className={`text-xs font-medium ${change >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              較上月 {change >= 0 ? '↑' : '↓'} {Math.abs(change)}%
+            </span>
+          ) : foot ? (
+            <span className="text-xs text-gray-400">{foot}</span>
+          ) : <span />}
+          {spark && spark.length > 1 && <Sparkline values={spark} color={sparkColor ?? '#3b82f6'} />}
+        </div>
+      )}
     </div>
   )
 }
@@ -220,13 +232,14 @@ export default function PlatformDashboard() {
   const scoped = isSuper && !!filterTenantId
   const scopeLabel = isSuper ? (scoped ? (selectedAdmin?.brandName ?? selectedAdmin?.name ?? '單一白牌') : '全平台合計') : '本平台'
   const mr = stats.monthlyRevenue
-  const revThis = mr.at(-1)?.revenue ?? 0
-  const revPrev = mr.at(-2)?.revenue ?? 0
-  const proThis = mr.at(-1)?.grossProfit ?? 0
-  const proPrev = mr.at(-2)?.grossProfit ?? 0
-  const pct = (cur: number, prev: number) => prev === 0 ? null : Math.round(((cur - prev) / Math.abs(prev)) * 100)
-  const revChange = pct(revThis, revPrev)
-  const proChange = pct(proThis, proPrev)
+  const money = (n: number) => `NT$${n.toLocaleString()}`
+  // 近三月（當月 → 上上月）：當月為主，卡片內列出三個月明細
+  const last3 = mr.slice(-3).reverse()
+  const revThis = last3[0]?.revenue ?? 0
+  const proThis = last3[0]?.grossProfit ?? 0
+  const revMonths = last3.map(m => ({ label: m.month, value: money(m.revenue) }))
+  const proMonths = last3.map(m => ({ label: m.month, value: money(m.grossProfit) }))
+  const costMonths = last3.map(m => ({ label: m.month, value: money(m.cost) }))
 
   const today = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
 
@@ -291,12 +304,12 @@ export default function PlatformDashboard() {
 
       {/* KPI metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <MetricCard tint="bg-blue-50 text-blue-600" label="累計營收"
+        <MetricCard tint="bg-blue-50 text-blue-600" label="當月營收"
           icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 9v1m0-10c1.11 0 2.08.402 2.599 1M9.4 15c.52.6 1.49 1 2.6 1" /></svg>}
-          value={`NT$${stats.totalRevenue.toLocaleString()}`} change={revChange} spark={mr.map(d => d.revenue)} sparkColor="#3b82f6" />
-        <MetricCard tint="bg-emerald-50 text-emerald-600" label="累計毛利"
+          value={money(revThis)} months={revMonths} />
+        <MetricCard tint="bg-emerald-50 text-emerald-600" label="當月毛利"
           icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 17l6-6 4 4 8-8" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 7h-5m5 0v5" /></svg>}
-          value={`NT$${stats.grossProfit.toLocaleString()}`} change={proChange} spark={mr.map(d => Math.max(d.grossProfit, 0))} sparkColor="#10b981" />
+          value={money(proThis)} months={proMonths} />
         <MetricCard tint="bg-violet-50 text-violet-600" label="訂單總數"
           icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
           value={stats.totalOrders.toLocaleString()} foot={stats.esimPendingOrders > 0 ? `待發卡 ${stats.esimPendingOrders} 張` : '全部已處理'} />
@@ -332,7 +345,17 @@ export default function PlatformDashboard() {
             <QuickStat href="/platform/orders?status=PAID" label="付款成功・待發卡" value={`${stats.esimPendingOrders} 張`} tone={stats.esimPendingOrders > 0 ? 'text-red-500' : 'text-gray-700'} />
             <QuickStat href="/platform/groups?status=PENDING" label="待審社群申請" value={`${stats.pendingGroups} 件`} tone={stats.pendingGroups > 0 ? 'text-amber-600' : 'text-gray-700'} />
             <QuickStat href="/platform/groups" label="社群主人數" value={`${stats.totalGroupOwners} 人`} tone="text-gray-700" />
-            <QuickStat label="累計成本" value={`NT$${stats.totalCost.toLocaleString()}`} tone="text-gray-700" />
+            <div className="rounded-xl bg-gray-50/70 px-3.5 py-3">
+              <span className="text-sm text-gray-500">當月成本</span>
+              <div className="mt-2 space-y-1 border-t border-gray-100 pt-2">
+                {costMonths.map((m, i) => (
+                  <div key={m.label} className="flex items-center justify-between text-xs">
+                    <span className={i === 0 ? 'text-gray-600 font-semibold' : 'text-gray-400'}>{m.label}</span>
+                    <span className={i === 0 ? 'text-gray-800 font-bold' : 'text-gray-500 font-medium'}>{m.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
