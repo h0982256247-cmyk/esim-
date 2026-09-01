@@ -60,6 +60,12 @@ export default function RevenuePage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'commissions' | 'settlements' | 'withdraw'>('commissions')
   const [monthFilter, setMonthFilter] = useState<string>('all')
+  // 提領銀行帳戶（收益中心內直接設定）：帳號回傳為遮罩(••••末4)；bankAccountSet 表示已設定
+  const [bank, setBank] = useState<{ bankName: string; bankBranch: string; bankAccount: string; bankHolderName: string; bankAccountSet: boolean } | null>(null)
+  const [showBankModal, setShowBankModal] = useState(false)
+  const [bankForm, setBankForm] = useState({ bankName: '', bankBranch: '', bankAccount: '', bankHolderName: '' })
+  const [savingBank, setSavingBank] = useState(false)
+  const [bankMsg, setBankMsg] = useState<string | null>(null)
 
   const loadCommissions = () => fetch('/api/commissions').then(r => r.json()).then(d => {
     setCommissions(d.commissions ?? [])
@@ -74,8 +80,17 @@ export default function RevenuePage() {
     }
   })
 
+  const loadGroup = () => fetch('/api/groups').then(r => r.json()).then(d => {
+    const g = d.ownedGroup
+    if (g) setBank({
+      bankName: g.bankName ?? '', bankBranch: g.bankBranch ?? '',
+      bankAccount: g.bankAccount ?? '', bankHolderName: g.bankHolderName ?? '',
+      bankAccountSet: !!g.bankAccountSet,
+    })
+  }).catch(() => {})
+
   useEffect(() => {
-    Promise.all([loadCommissions(), loadWithdrawals()]).finally(() => setLoading(false))
+    Promise.all([loadCommissions(), loadWithdrawals(), loadGroup()]).finally(() => setLoading(false))
   }, [])
 
   // 只能整月提領：對某個結算月份送出申請（金額由後端鎖定為該月結算總額）。
@@ -89,6 +104,27 @@ export default function RevenuePage() {
     setRequesting(null)
     if (r.error) { window.alert(r.error); return }
     loadWithdrawals()
+  }
+
+  const openBankModal = () => {
+    setBankForm({
+      bankName: bank?.bankName ?? '', bankBranch: bank?.bankBranch ?? '',
+      bankAccount: bank?.bankAccount ?? '', bankHolderName: bank?.bankHolderName ?? '',
+    })
+    setBankMsg(null)
+    setShowBankModal(true)
+  }
+
+  const saveBank = async () => {
+    setSavingBank(true); setBankMsg(null)
+    const r = await fetch('/api/groups/settings', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bankForm),
+    }).then(x => x.json()).catch(() => ({ error: '連線失敗' }))
+    setSavingBank(false)
+    if (r.error) { setBankMsg(`❌ ${r.error}`); return }
+    await loadGroup()
+    setShowBankModal(false)
   }
 
   if (loading) return <div className="px-4 py-5"><PageSkeleton rows={4} /></div>
@@ -185,6 +221,25 @@ export default function RevenuePage() {
 
       {tab === 'withdraw' && (
         <div className="space-y-3">
+          {/* 提領銀行帳戶：未設定 → 提示；已設定 → 顯示遮罩；皆可點「設定/修改」在此補齊 */}
+          <div className="bg-white rounded-xl border p-4 shadow-sm flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs text-gray-400">提領銀行帳戶</p>
+              {bank?.bankAccountSet ? (
+                <p className="text-sm font-medium text-gray-800 truncate">{bank.bankName || '—'}　{bank.bankAccount}</p>
+              ) : (
+                <p className="text-sm font-medium text-amber-600">尚未設定，提領前請先補齊</p>
+              )}
+            </div>
+            <button
+              onClick={openBankModal}
+              className="shrink-0 text-xs font-semibold px-3 py-2 rounded-lg"
+              style={{ background: C.light, color: C.primaryText, border: `1px solid ${C.border}` }}
+            >
+              {bank?.bankAccountSet ? '修改' : '設定'}
+            </button>
+          </div>
+
           {!balance ? (
             <p className="text-center text-gray-400 py-8">尚無可提領資料</p>
           ) : (
@@ -254,6 +309,41 @@ export default function RevenuePage() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* 銀行帳戶設定 modal（存 /api/groups/settings，與設定頁同一支 API；帳號遮罩不覆寫）*/}
+      {showBankModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowBankModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h2 className="font-bold text-lg mb-1">提領銀行帳戶</h2>
+            <p className="text-xs text-gray-400 mb-4">填寫後即可申請提領撥款。</p>
+            {([
+              { key: 'bankName', label: '銀行名稱', ph: '例：國泰世華' },
+              { key: 'bankBranch', label: '分行', ph: '例：信義分行' },
+              { key: 'bankAccount', label: '帳號', ph: '請輸入完整帳號' },
+              { key: 'bankHolderName', label: '戶名', ph: '存摺上的戶名' },
+            ] as const).map(f => (
+              <div key={f.key} className="mb-3">
+                <label className="text-sm text-gray-600 block mb-1">{f.label}</label>
+                <input
+                  value={bankForm[f.key]}
+                  onChange={e => setBankForm(p => ({ ...p, [f.key]: e.target.value }))}
+                  placeholder={f.ph}
+                  style={{ fontSize: 16 }}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            ))}
+            <p className="text-xs text-gray-400 leading-relaxed mb-3">🔒 帳號為機密資料，這裡只顯示末 4 碼；完整帳號僅平台方在撥款時可見。要更改請直接輸入新的完整帳號。</p>
+            {bankMsg && <p className="text-sm text-center mb-2 text-red-500">{bankMsg}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => setShowBankModal(false)} className="flex-1 py-2.5 rounded-xl font-semibold border text-gray-600">取消</button>
+              <button onClick={saveBank} disabled={savingBank} className="flex-1 py-2.5 rounded-xl font-semibold disabled:opacity-50" style={{ background: C.primary, color: C.onPrimary }}>
+                {savingBank ? '儲存中…' : '儲存'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
