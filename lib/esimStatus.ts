@@ -45,13 +45,29 @@ export interface EsimStatusView {
 
 const DAY = 86_400_000
 const EXPIRING_DAYS = 3
+/** 台北時區固定 UTC+8、無 DST，所以偏移量可以寫死 */
+const TPE_OFFSET = 8 * 60 * 60 * 1000
 
-/** 距離到期還有幾天（無條件進位）；沒有到期日回 null */
+/** 把時間戳壓到「台北當日 00:00」（回傳仍是 UTC 毫秒） */
+function taipeiMidnight(ms: number): number {
+  return Math.floor((ms + TPE_OFFSET) / DAY) * DAY - TPE_OFFSET
+}
+
+/**
+ * 距離到期還有幾天；沒有到期日回 null。
+ *
+ * 兩端都先對齊「台北當日 00:00」再相減，所以同一個日曆日內顯示的天數固定不變、
+ * 一律在午夜換日，不受「當初幾點激活」影響（早上 6 點跟晚上 11 點開卡一樣算）。
+ * 也因為偏移量自己算，結果不受伺服器 / 手機所在時區影響。
+ *
+ * 0 = 今天到期、負數 = 已過期。兩端都是整點午夜 → 相減必為 DAY 的整數倍，
+ * 不會再出現 `Math.ceil` 那種 `-0`（`-0 < 0` 為 false，會讓過期卡多掛一天）。
+ */
 export function daysLeftOf(activationEnd?: string | null): number | null {
   if (!activationEnd) return null
   const end = new Date(activationEnd).getTime()
   if (Number.isNaN(end)) return null
-  return Math.ceil((end - Date.now()) / DAY)
+  return Math.round((taipeiMidnight(end) - taipeiMidnight(Date.now())) / DAY)
 }
 
 export function deriveEsimStatus(o: EsimStatusInput): EsimStatusView {
