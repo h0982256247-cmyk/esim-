@@ -567,8 +567,17 @@ export async function getUserOrders(userId: string) {
       },
     },
   })
-  // transferredAway：這張是「我買的、已轉贈出去」的訂單（currentOwnerId 已非我）
-  return orders.map(o => ({ ...o, transferredAway: o.currentOwnerId !== userId }))
+  // transferredAway：這張是「我買的、已轉贈出去」的訂單（currentOwnerId 已非我）。
+  // eSIM 已歸對方，rcode/QR/ICCID 與使用期間一律不回給原買家（列表也不需要）。
+  return orders.map(o => {
+    const transferredAway = o.currentOwnerId !== userId
+    if (!transferredAway) return { ...o, transferredAway }
+    return {
+      ...o, transferredAway,
+      esimRcode: null, esimQrcode: null, esimIccid: null,
+      activationStart: null, activationEnd: null, redeemedAt: null, activatedAt: null,
+    }
+  })
 }
 
 // LIFF 使用者存取「自己的」訂單的單一入口（fail-closed）：owner 條件進 where，
@@ -638,6 +647,53 @@ export async function getOrderByIdForUser(orderId: string, userId: string) {
       },
     },
   })
+}
+
+// 原買家查看「已轉贈出去」的訂單：只給訂單／付款資訊與轉贈對象，eSIM 欄位
+// （rcode/QR/LPA/ICCID）與對方的使用狀態一律不查、回 null，避免原買家拿到對方的卡。
+// 條件與 getUserOrders 的「已轉贈」分支一致：我是買家、擁有者已非我、gift 已被領取。
+export async function getTransferredOrderForBuyer(orderId: string, userId: string) {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, userId, NOT: { currentOwnerId: userId }, gift: { is: { claimedAt: { not: null } } } },
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      subtotal: true,
+      discountAmount: true,
+      totalPaid: true,
+      paymentMethod: true,
+      paidAt: true,
+      createdAt: true,
+      updatedAt: true,
+      userId: true,
+      currentOwnerId: true,
+      bundleId: true,
+      failureReason: true,
+      cancelReason: true,
+      orderItems: {
+        select: { productName: true, qty: true, unitPrice: true, product: { select: { dataCapacity: true } } },
+      },
+      gift: {
+        select: {
+          sharedAt: true,
+          expiresAt: true,
+          claimedAt: true,
+          cancelledAt: true,
+          recipientName: true,
+          toUser: { select: { displayName: true } },
+          fromUser: { select: { displayName: true } },
+        },
+      },
+    },
+  })
+  if (!order) return null
+  return {
+    ...order,
+    esimRcode: null, esimQrcode: null, esimLpa: null, esimIccid: null,
+    activationStart: null, activationEnd: null, redeemedAt: null, activatedAt: null,
+    transferredAway: true as const,
+  }
 }
 
 // ─── Retry 計數 ───────────────────────────────────────────────────

@@ -14,7 +14,7 @@ import { isPendingGift, canDetectShareCancel } from '@/lib/utils/gift-share'
 import type { ReactNode } from 'react'
 
 type GiftInfo = {
-  token: string
+  token?: string   // 已轉贈出去的訂單（原買家視角）不回 token
   sharedAt: string
   expiresAt: string
   claimedAt: string | null
@@ -49,6 +49,7 @@ type OrderDetail = {
   activatedAt: string | null
   orderItems: { productName: string; qty: number; unitPrice: number; product?: { dataCapacity: string | null } | null }[]
   gift: GiftInfo | null
+  transferredAway?: boolean   // 我買的、已轉贈出去：只有訂單資訊，eSIM 欄位後端一律回 null
 }
 
 type EsimUsage = {
@@ -504,6 +505,10 @@ export default function OrderDetailPage() {
 
   const sv = deriveEsimStatus(order)
   const sTone = TONE_STYLE[sv.tone]
+  // 已轉贈出去：狀態標籤改顯示「已轉贈」（配色同列表的轉贈紫）
+  const badge = order.transferredAway
+    ? { label: '已轉贈', bg: '#ede9fe', fg: '#6d28d9' }
+    : { label: sv.label, bg: sTone.bg, fg: sTone.fg }
 
   return (
     <div style={{ maxWidth: 520, margin: '0 auto', padding: '20px 16px 96px' }}>
@@ -520,10 +525,10 @@ export default function OrderDetailPage() {
           <h1 style={{ fontSize: 22, fontWeight: 800, color: S.ink, margin: 0, letterSpacing: '-0.02em' }}>訂單詳情</h1>
           <span style={{
             fontSize: 11, fontWeight: 700,
-            background: sTone.bg, color: sTone.fg,
+            background: badge.bg, color: badge.fg,
             padding: '3px 10px', borderRadius: 100,
           }}>
-            {sv.label}
+            {badge.label}
           </span>
         </div>
         <p style={{ fontSize: 12, color: S.faint, marginTop: 4 }}>{order.orderNumber ?? `#${order.id.slice(-8).toUpperCase()}`}</p>
@@ -538,6 +543,19 @@ export default function OrderDetailPage() {
             <p style={{ fontSize: 12, color: S.muted, margin: '2px 0 0' }}>下次購買即可使用，於「優惠券」查看</p>
           </div>
           <button onClick={() => router.push(`${base}/coupons`)} style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: C.primaryText, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 100, padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>查看</button>
+        </div>
+      )}
+
+      {/* === 已轉贈出去（原買家視角）：只說明轉給誰，不顯示 QR／安裝資訊 === */}
+      {order.transferredAway && (
+        <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 16, padding: '18px 20px', marginBottom: 12 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#6d28d9', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconShare size={14} /> 已轉贈給 {order.gift?.toUser?.displayName ?? order.gift?.recipientName ?? '朋友'}
+          </p>
+          <p style={{ fontSize: 13, color: '#5b21b6', margin: 0, lineHeight: 1.6 }}>
+            {order.gift?.claimedAt ? `對方已於 ${new Date(order.gift.claimedAt).toLocaleDateString('zh-TW')} 領取，` : ''}
+            這張 eSIM 已由對方使用，安裝 QR 碼僅對方可查看。
+          </p>
         </div>
       )}
 

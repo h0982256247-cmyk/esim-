@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireLiffAuth } from '@/lib/auth/liff'
-import { getOrderByIdForUser, markOrderCancelled, isOrderExpired } from '@/lib/services/order'
+import { getOrderByIdForUser, getTransferredOrderForBuyer, markOrderCancelled, isOrderExpired } from '@/lib/services/order'
 import { prisma } from '@/lib/db/prisma'
 import { OrderStatus } from '@prisma/client'
 
@@ -11,6 +11,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params
   const order = await getOrderByIdForUser(id, auth.userId)
+    // 已轉贈出去的訂單：原買家仍可看訂單資訊，但不含 eSIM 安裝資料（見 getTransferredOrderForBuyer）
+    ?? await getTransferredOrderForBuyer(id, auth.userId)
 
   if (!order) return NextResponse.json({ error: '訂單不存在' }, { status: 404 })
 
