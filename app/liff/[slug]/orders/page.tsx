@@ -16,6 +16,7 @@ import { IconSim, IconQr, IconInstall, IconShare, IconClock, IconGift } from '@/
 import ConfirmDialog from '@/components/liff/ConfirmDialog'
 import Toast from '@/components/liff/Toast'
 import { GiftIcon } from '@/components/liff/GiftIcon'
+import { isPendingGift, canDetectShareCancel } from '@/lib/utils/gift-share'
 import type { ReactNode } from 'react'
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -301,9 +302,14 @@ export default function OrdersPage() {
   }
 
   const handleRedeem = (o: Order) => {
+    // 分享中直接安裝：後端 triggerEsimRedemption 會在同一個 transaction 內把未領取的
+    // gift 自動取消，不用先叫使用者去取消分享，但要先講清楚對方連結會失效。
+    const pending = isPendingGift(o.gift)
     setDialog({
       title: '確定要安裝這張 eSIM 嗎？',
-      lines: ['安裝後會立即產生 QR 碼並綁定這支手機，', '綁定後就無法再轉贈給別人。'],
+      lines: pending
+        ? ['已送出的分享連結會立即失效，朋友將無法領取。', '安裝後會綁定這支手機，無法再轉贈。']
+        : ['安裝後會立即產生 QR 碼並綁定這支手機，', '綁定後就無法再轉贈給別人。'],
       confirmLabel: '確定安裝',
       tone: 'primary',
       icon: <IconInstall size={24} />,
@@ -329,10 +335,14 @@ export default function OrdersPage() {
       setToast({ message: '您的 LINE 版本不支援分享功能', tone: 'error' })
       return
     }
+    // 已在等待領取 → 這次是「再送一次同一條連結」，效期重算 7 天，不是新的轉贈
+    const pending = isPendingGift(o.gift)
     setDialog({
-      title: '確定要轉贈這張 eSIM 嗎？',
-      lines: ['轉贈後這張 eSIM 將由對方使用，', '你就無法自己安裝了。'],
-      confirmLabel: '確定轉贈',
+      title: pending ? '要再分享一次這張 eSIM 嗎？' : '確定要轉贈這張 eSIM 嗎？',
+      lines: pending
+        ? ['會送出同一條領取連結，效期重新算 7 天。', '先按下領取的人就是使用者。']
+        : ['轉贈後這張 eSIM 將由對方使用，', '你就無法自己安裝了。'],
+      confirmLabel: pending ? '再次分享' : '確定轉贈',
       tone: 'primary',
       icon: <IconShare size={22} />,
       onConfirm: () => { setDialog(null); doShare(o) },
@@ -342,6 +352,8 @@ export default function OrdersPage() {
   const doShare = async (o: Order) => {
     if (!liff) return   // handleShare 已驗過；此處再守一次讓型別收斂
     setActioning(o.id)
+    // 本來就有 pending gift（前一次真的送出去的）→ 這次就算取消面板也不能收回。
+    const hadPendingGift = isPendingGift(o.gift)
     try {
       const r = await fetch(`/api/orders/${o.id}/gift`, { method: 'POST' }).then(x => x.json())
       if (!r.ok) { setToast({ message: `分享失敗：${r.error}`, tone: 'error' }); setActioning(null); return }
@@ -382,7 +394,13 @@ export default function OrdersPage() {
         },
       }
 
-      await liff.shareTargetPicker([flex])
+      const result = await liff.shareTargetPicker([flex])
+      // 使用者在 LINE 分享面板按取消 → 沒有任何人收到連結，把這次剛建立的 gift 收回，
+      // 否則卡片會卡在「等待領取」卻沒人拿得到連結。舊版 LINE 分不出成功／取消時不動。
+      if (!result && !hadPendingGift && canDetectShareCancel(liff)) {
+        const c = await fetch(`/api/orders/${o.id}/gift`, { method: 'DELETE' }).then(x => x.json())
+        if (c.error) setToast({ message: `取消分享失敗：${c.error}`, tone: 'error' })
+      }
       await refresh()
     } catch (err) {
       setToast({ message: err instanceof Error ? err.message : '分享失敗', tone: 'error' })
@@ -719,15 +737,21 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
   const dataCapacity = order.orderItems[0]?.product?.dataCapacity
   const gift = giftBadge(order)
-  const hasPendingGift = order.gift && !order.gift.claimedAt && !order.gift.cancelledAt && new Date(order.gift.expiresAt) > new Date()
+  const hasPendingGift = isPendingGift(order.gift)
   const isReceived = !!order.gift?.claimedAt   // 轉贈進來的卡（已領取）→ 不可再轉贈
 
   return (
     <div style={{ background: S.white, border: `1.5px solid ${primary}`, borderRadius: 16, padding: '16px', boxShadow: `0 2px 10px ${primary}22` }}>
       <button onClick={onClick} style={{ background: 'none', border: 'none', padding: 0, width: '100%', textAlign: 'left', cursor: 'pointer' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, background: primary, color: onPrimary, padding: '3px 10px', borderRadius: 100 }}>
-            <IconSim size={11} /> 可以安裝
+          {/* 分享中時左上不能寫「可以安裝」（會跟右上的「等待領取」互相打架）→ 改中性的已就緒 */}
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
+            background: hasPendingGift ? '#f1f5f9' : primary,
+            color: hasPendingGift ? S.muted : onPrimary,
+            padding: '3px 10px', borderRadius: 100,
+          }}>
+            <IconSim size={11} /> {hasPendingGift ? 'eSIM 已就緒' : '可以安裝'}
           </span>
           {gift && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, background: gift.bg, color: gift.color, padding: '3px 10px', borderRadius: 100 }}>
@@ -766,11 +790,25 @@ function PendingCard({ order, primary, onPrimary, actioning, onRedeem, onShare, 
           )}
         </>
       ) : (
-        <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '8px 10px' }}>
-          <p style={{ fontSize: 11, color: '#9a3412', margin: 0, lineHeight: 1.5 }}>
-            已分享給朋友，等待領取。如要自己安裝，請進入訂單詳情取消分享。
-          </p>
-        </div>
+        // 等待領取中：仍可再次分享（同一條連結、效期續 7 天），也可直接自己安裝
+        // （後端 redeem 會自動取消未領取的 gift）。按鈕位置與未分享時一致。
+        <>
+          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '8px 10px', marginBottom: 10 }}>
+            <p style={{ fontSize: 11, color: '#9a3412', margin: 0, lineHeight: 1.5 }}>
+              已分享給朋友，等待領取。連結將於 {new Date(order.gift!.expiresAt).toLocaleDateString('zh-TW')} 過期。
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
+            <button onClick={onRedeem} disabled={actioning}
+              style={{ background: primary, color: onPrimary, border: 'none', borderRadius: 100, padding: '11px', fontSize: 14, fontWeight: 700, cursor: actioning ? 'wait' : 'pointer', opacity: actioning ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              {actioning ? '處理中…' : <><IconInstall size={15} /> 我要安裝</>}
+            </button>
+            <button onClick={onShare} disabled={actioning}
+              style={{ background: S.white, color: primary, border: `1.5px solid ${primary}`, borderRadius: 100, padding: '11px', fontSize: 13, fontWeight: 700, cursor: actioning ? 'wait' : 'pointer', opacity: actioning ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+              <IconShare size={14} /> 再次分享
+            </button>
+          </div>
+        </>
       )}
     </div>
   )
@@ -783,7 +821,7 @@ function ProcessingRow({ order, stage, boxed, onClick }: {
 }) {
   const productName = order.orderItems[0]?.productName ?? 'eSIM'
   const text = stage === 'awaiting' ? '等待付款確認中…'
-             : stage === 'ordered'  ? '正在準備 eSIM，請稍候…'
+             : stage === 'ordered'  ? '正在準備 eSIM，請稍等 1~3 分鐘…'
              :                         '正在生成 QR 碼，請稍候…'
   return (
     <button onClick={onClick}
